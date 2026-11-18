@@ -1,0 +1,158 @@
+{
+  "name": "oida",
+  "displayName": "OIDA",
+  "description": "Die Programmiersprache OIDA in VS Code: Einfärben, Fehler beim Tippen, Vorschläge, Übersetzen und Starten.",
+  "version": "0.1.0",
+  "publisher": "lelewithheart",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In einem Ordner, dem du nicht vertraust, wird kein Compiler aus dem Ordner selbst gestartet."
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "oida",
+        "aliases": [
+          "OIDA",
+          "oida"
+        ],
+        "extensions": [
+          ".oida"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "oida",
+        "scopeName": "source.oida",
+        "path": "./syntaxes/oida.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "oida",
+        "path": "./snippets/oida.json"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "wahrheitswert",
+        "superType": "keyword",
+        "description": "WOAHR und FOISCH"
+      },
+      {
+        "id": "endwort",
+        "superType": "keyword",
+        "description": "Das OIDA am Ende einer Anweisung"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "oida",
+        "scopes": {
+          "wahrheitswert": [
+            "constant.language.boolean.oida"
+          ],
+          "endwort": [
+            "keyword.other.endwort.oida"
+          ]
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "oida.starten",
+        "title": "OIDA: Programm starten",
+        "icon": "$(play)"
+      },
+      {
+        "command": "oida.uebersetzen",
+        "title": "OIDA: Programm übersetzen (.exe erzeugen)",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "oida.compilerAussuchen",
+        "title": "OIDA: Compiler (oida.exe) aussuchen"
+      },
+      {
+        "command": "oida.woerterbuchOeffnen",
+        "title": "OIDA: Wörterbuch öffnen"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "oida.starten",
+          "when": "resourceLangId == oida",
+          "group": "navigation@1"
+        },
+        {
+          "command": "oida.uebersetzen",
+          "when": "resourceLangId == oida",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "oida.starten",
+          "when": "editorLangId == oida"
+        },
+        {
+          "command": "oida.uebersetzen",
+          "when": "editorLangId == oida"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "oida.starten",
+        "key": "f5",
+        "when": "editorTextFocus && editorLangId == oida && !inDebugMode"
+      },
+      {
+        "command": "oida.uebersetzen",
+        "key": "ctrl+shift+b",
+        "when": "editorTextFocus && editorLangId == oida"
+      }
+    ],
+    "configuration": {
+      "title": "OIDA",
+      "properties": {
+        "oida.compiler": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Pfad zur `oida.exe`. Leer lassen, dann sucht die Erweiterung selbst: im geöffneten Ordner unter `target\\release` und `target\\debug`, dann dort, wo sie beim Bauen der Erweiterung lag, dann im `PATH`."
+        },
+        "oida.woerterbuch": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Pfad zu einem eigenen Wörterbuch. Leer lassen, dann nimmt der Compiler seines (`woerterbuch.txt` neben der `oida.exe` oder bis zu zwei Ordner darüber)."
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "oida"
+      }
+    ],
+    "configurationDefaults": {
+      "[oida]": {
+        "editor.semanticHighlighting.enabled": true,
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+      }
+    }
+  }
+}

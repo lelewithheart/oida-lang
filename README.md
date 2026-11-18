@@ -35,6 +35,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
 **Stand: v0.1, das Grundgerüst.** Was es schon kann und was noch fehlt, steht unten im [Fahrplan](#fahrplan).
+Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
 
 
@@ -112,6 +113,20 @@ target\release\oida beispiele\fizzbuzz.oida --renn
 | `--hilfe`, `--version`  |                                                              |
 
 `.oida`-Dateien müssen als UTF-8 gespeichert sein.
+
+
+## In VS Code programmieren
+
+Im Ordner [`vscode`](vscode) liegt eine Erweiterung für VS Code. Einmal `vscode/installieren.bat`
+doppelklicken, das baut sie und installiert sie. Danach in VS Code eine `.oida`-Datei aufmachen:
+
+- Die Wörter sind eingefärbt, Fehler werden schon beim Tippen rot unterstrichen.
+- **F5** (oder der Pfeil rechts oben) übersetzt das Programm und lässt es unten im Terminal laufen.
+- **Strg+Umschalt+B** legt die `.exe` neben die Datei.
+- Beim Tippen kommen Vorschläge für die Wörter der Sprache, dazu Schnipsel wie `wenn` und `solong`.
+
+Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem Wörterbuch.
+Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
 ## Die Sprache (v0.1)
@@ -293,11 +308,13 @@ uebersetzer/           der Compiler (Rust), ergibt oida.exe
   src/irgen.rs           Syntaxbaum -> LLVM-IR als Text
   src/treiber.rs         ruft clang auf, linkt die Laufzeit dazu
   src/fehler.rs          Fehlermeldungen mit Zeile und Spalte
+  src/editor.rs          Schnittstelle für Editoren (oida --editor)
   src/main.rs            der Befehl oida
   build.rs               baut die Laufzeit und packt sie in die oida.exe
   tests/                 Tests von Anfang bis Ende (.oida -> .exe -> Ausgabe)
 laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt:
                        Ausgabe, Texte, Umwandlungen, Fehler beim Laufen
+vscode/                Erweiterung für VS Code
 ```
 
 Der Compiler schreibt LLVM-IR als Text und lässt `clang` den Rest machen (Optimieren,
@@ -326,6 +343,7 @@ Noch nicht drin, in ungefähr dieser Reihenfolge geplant:
 4. **Der `oidasql(...)`-Block**: OIDA-SQL direkt in der Sprache, nicht als Text in Anführungszeichen,
    samt Anbindung an MySQL, etwa
    `oidasql( GIB MA name VON schuela WO schnitt < 2 )`
-5. **Editor-Unterstützung**: Einfärben und Vorschläge
+5. **Mehr Editor-Unterstützung**: Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon
+   (Ordner `vscode`). Offen sind Springen zur Definition, Umbenennen und ein Debugger.
 
 Dazu Kleineres: Schleifen verlassen, `FIA JEDE`, Eingabe, mehrere Dateien.

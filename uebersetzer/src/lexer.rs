@@ -57,6 +57,9 @@ struct Leser<'a> {
     zeile: u32,
     spalte: u32,
     wb: &'a Woerterbuch,
+    /// Alle Fehler bisher. Nach einem Fehler wird weitergelesen, damit der
+    /// Editor auch den Rest der Datei einfärben kann.
+    fehler: Vec<Fehler>,
 }
 
 impl Leser<'_> {
@@ -80,7 +83,7 @@ impl Leser<'_> {
         Some(c)
     }
 
-    fn roh(&mut self) -> Result<Vec<Roh>, Fehler> {
+    fn roh(&mut self) -> Vec<Roh> {
         let mut tokens = Vec::new();
         let mut klebt = false;
         while let Some(c) = self.schau(0) {
@@ -107,10 +110,11 @@ impl Leser<'_> {
                         }
                         Some(_) => {}
                         None => {
-                            return Err(Fehler::neu(
+                            self.fehler.push(Fehler::neu(
                                 anfang,
                                 "Der Kommentar hört nimma auf. Do fehlt des */ am End.",
                             ));
+                            break;
                         }
                     }
                 }
@@ -125,20 +129,29 @@ impl Leser<'_> {
                     wort.push(c);
                     self.nimm();
                 }
-                TokenArt::Name(wort)
+                Ok(TokenArt::Name(wort))
             } else if c.is_ascii_digit() {
-                self.zahl(pos)?
+                self.zahl(pos)
             } else if c == '"' || c == '\'' {
-                self.text(pos)?
+                self.text(pos)
             } else {
-                self.zeichen(pos)?
+                self.zeichen(pos)
+            };
+            let art = match art {
+                Ok(art) => art,
+                Err(fehler) => {
+                    // Das kaputte Stück ist schon überlesen; dahinter geht es weiter.
+                    self.fehler.push(fehler);
+                    klebt = false;
+                    continue;
+                }
             };
             tokens.push(Roh { token: Token { art, pos, ende: self.pos() }, klebt });
             klebt = true;
         }
         let ende = self.pos();
         tokens.push(Roh { token: Token { art: TokenArt::DateiEnde, pos: ende, ende }, klebt: false });
-        Ok(tokens)
+        tokens
     }
 
     fn zahl(&mut self, pos: Position) -> Result<TokenArt, Fehler> {
@@ -197,7 +210,8 @@ impl Leser<'_> {
                         Some('"') => inhalt.push('"'),
                         Some('\'') => inhalt.push('\''),
                         Some(c) => {
-                            return Err(Fehler::neu(
+                            // Merken und den Text trotzdem zu Ende lesen.
+                            self.fehler.push(Fehler::neu(
                                 stelle,
                                 format!("\\{c} kenn i ned. Es gibt nur \\n, \\t, \\\\, \\\" und \\'."),
                             ));
@@ -259,10 +273,19 @@ impl Leser<'_> {
 }
 
 /// Zerlegt den Quelltext in Tokens. Das letzte Token ist immer `DateiEnde`.
+/// Beim ersten Fehler ist Schluss.
 pub fn zerlegen(quelltext: &str, wb: &Woerterbuch) -> Result<Vec<Token>, Fehler> {
+    let (tokens, mut fehler) = zerlegen_nachsichtig(quelltext, wb);
+    if fehler.is_empty() { Ok(tokens) } else { Err(fehler.remove(0)) }
+}
+
+/// Wie [`zerlegen`], liest aber nach einem Fehler weiter und gibt alle Tokens
+/// zurück, die sich erkennen lassen, dazu alle Fehler. Für den Editor.
+pub fn zerlegen_nachsichtig(quelltext: &str, wb: &Woerterbuch) -> (Vec<Token>, Vec<Fehler>) {
     let quelltext = quelltext.strip_prefix('\u{feff}').unwrap_or(quelltext); // BOM vom Windows-Editor
-    let mut leser = Leser { zeichen: quelltext.chars().collect(), i: 0, zeile: 1, spalte: 1, wb };
-    let roh = leser.roh()?;
+    let mut leser =
+        Leser { zeichen: quelltext.chars().collect(), i: 0, zeile: 1, spalte: 1, wb, fehler: Vec::new() };
+    let roh = leser.roh();
 
     // Wortfolgen aus dem Wörterbuch zu Schlüsselwörtern zusammenfassen.
     let mut tokens = Vec::with_capacity(roh.len());
@@ -289,12 +312,12 @@ pub fn zerlegen(quelltext: &str, wb: &Woerterbuch) -> Result<Vec<Token>, Fehler>
         tokens.push(roh[i].token.clone());
         i += 1;
     }
-    Ok(tokens)
+    (tokens, leser.fehler)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{TokenArt, zerlegen};
+    use super::{TokenArt, zerlegen, zerlegen_nachsichtig};
     use crate::fehler::{Fehler, Position};
     use crate::woerterbuch::{Schluessel as S, Woerterbuch};
     use TokenArt::*;
@@ -420,6 +443,33 @@ mod tests {
     fn zu_grosse_zahl() {
         let f = fehler("99999999999999999999");
         assert!(f.meldung.contains("z'groß"), "{}", f.meldung);
+    }
+
+    #[test]
+    fn nachsichtig_liest_nach_fehlern_weiter() {
+        let wb = Woerterbuch::eingebaut();
+        let (tokens, fehler) = zerlegen_nachsichtig("x = \"offen\ny = 5 ? 3; z = \"a\\qb\" OIDA", &wb);
+        let arten: Vec<TokenArt> = tokens.into_iter().map(|t| t.art).collect();
+        assert_eq!(
+            arten,
+            vec![
+                name("x"),
+                Gleich,
+                name("y"),
+                Gleich,
+                Zoi(5),
+                Zoi(3),
+                name("z"),
+                Gleich,
+                Text("ab".into()),
+                Schluessel(S::Oida),
+                DateiEnde
+            ]
+        );
+        assert_eq!(
+            fehler.iter().map(|f| (f.pos.zeile, f.pos.spalte)).collect::<Vec<_>>(),
+            vec![(1, 5), (2, 7), (2, 10), (2, 18)]
+        );
     }
 
     #[test]

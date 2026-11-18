@@ -1,0 +1,33 @@
+{
+  "//": "Erzeugt mit: oida --editor-dateien <ordner>. Nicht von Hand ändern.",
+  "WENN": {
+    "prefix": "wenn",
+    "body": ["WENN ${1:bedingung} DAUN", "\t$0", "PASST SCHO"],
+    "description": "Verzweigung"
+  },
+  "WENN SUNST": {
+    "prefix": "wennsunst",
+    "body": ["WENN ${1:bedingung} DAUN", "\t$2", "SUNST", "\t$0", "PASST SCHO"],
+    "description": "Verzweigung mit Sonst-Teil"
+  },
+  "SOLONG": {
+    "prefix": "solong",
+    "body": ["SOLONG ${1:bedingung} TUA", "\t$0", "PASST SCHO"],
+    "description": "Schleife"
+  },
+  "FUNKTIAUN": {
+    "prefix": "funktiaun",
+    "body": ["FUNKTIAUN ${1:name}(${2:x} ${3:ZOI}) GIBT ZRUCK ${4:ZOI}", "\tGIB ZRUCK ${0:x} OIDA", "PASST SCHO"],
+    "description": "Funktion mit Rückgabewert"
+  },
+  "SOG AU": {
+    "prefix": "sogau",
+    "body": ["SOG AU ${1:name} = ${2:0} OIDA"],
+    "description": "Variable ansagen"
+  },
+  "SCHREIB": {
+    "prefix": "schreib",
+    "body": ["SCHREIB($1) OIDA"],
+    "description": "Ausgabe"
+  }
+}

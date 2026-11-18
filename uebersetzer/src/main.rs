@@ -1,9 +1,10 @@
 //! Der Befehl `oida`: übersetzt eine `.oida`-Datei in eine `.exe`.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use oida_uebersetzer::treiber;
+use oida_uebersetzer::{editor, treiber};
 use oida_uebersetzer::woerterbuch::{Schluessel, Woerterbuch};
 
 const HILFE: &str = "\
@@ -21,6 +22,11 @@ Optionen:
   --woerter               de Wörter von da Sproch auzagn
   --hilfe                 des do auzagn
   --version               de Version auzagn
+
+Fia Editoren (so redt de VS-Code-Erweiterung mit'm Compiler):
+  --editor                Programm von da Eingabe lesn, Fehler und Wortoatn ois JSON ausgebn
+  --editor-dateien <ordner>
+                          Grammatik, Einrückregln und Schnipsel fia VS Code erzeugn
 ";
 
 struct Optionen {
@@ -31,6 +37,8 @@ struct Optionen {
     optimieren: bool,
     woerterbuch: Option<PathBuf>,
     woerter: bool,
+    editor: bool,
+    editor_dateien: Option<PathBuf>,
 }
 
 fn optionen_lesen(argumente: &[String]) -> Result<Optionen, String> {
@@ -42,6 +50,8 @@ fn optionen_lesen(argumente: &[String]) -> Result<Optionen, String> {
         optimieren: true,
         woerterbuch: None,
         woerter: false,
+        editor: false,
+        editor_dateien: None,
     };
     let mut i = 0;
     while i < argumente.len() {
@@ -57,6 +67,8 @@ fn optionen_lesen(argumente: &[String]) -> Result<Optionen, String> {
             "--ir" => o.ir = true,
             "--ohne-optimierung" => o.optimieren = false,
             "--woerter" => o.woerter = true,
+            "--editor" => o.editor = true,
+            "--editor-dateien" => o.editor_dateien = Some(wert("--editor-dateien")?),
             _ if argument.starts_with('-') => {
                 return Err(format!("De Option {argument} kenn i ned. Schau mit --hilfe noch."));
             }
@@ -92,6 +104,23 @@ fn hauptprogramm() -> Result<ExitCode, String> {
     let wb = treiber::lade_woerterbuch(optionen.woerterbuch.as_deref())?;
     if optionen.woerter {
         woerter_anzeigen(&wb);
+        return Ok(ExitCode::SUCCESS);
+    }
+    if optionen.editor {
+        let mut bytes = Vec::new();
+        std::io::stdin().read_to_end(&mut bytes).map_err(|e| format!("I kaun de Eingabe ned lesn: {e}"))?;
+        let quelltext = String::from_utf8(bytes).map_err(|_| "De Eingabe is ka UTF-8.".to_string())?;
+        println!("{}", editor::untersuche(&quelltext, &wb));
+        return Ok(ExitCode::SUCCESS);
+    }
+    if let Some(ordner) = optionen.editor_dateien {
+        for (name, inhalt) in editor::dateien(&wb) {
+            let datei = ordner.join(name);
+            let fehler = |e: std::io::Error| format!("I kaun {} ned schreibn: {e}", datei.display());
+            std::fs::create_dir_all(datei.parent().unwrap_or(&ordner)).map_err(fehler)?;
+            std::fs::write(&datei, inhalt).map_err(fehler)?;
+            println!("{}", datei.display());
+        }
         return Ok(ExitCode::SUCCESS);
     }
 

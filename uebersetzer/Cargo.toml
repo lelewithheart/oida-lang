@@ -3,7 +3,6 @@ name = "oida"
 description = "Compiler der Programmiersprache OIDA"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
 build = "build.rs"
 
 [lib]

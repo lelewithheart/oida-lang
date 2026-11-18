@@ -7,3 +7,6 @@
 
 # Kopie vom OIDA-SQL-Projekt (hat ein eigenes Repository)
 /oida-sql/
+
+# Die gepackte VS-Code-Erweiterung (entsteht mit vscode/bauen.ps1)
+/vscode/*.vsix
