@@ -1,0 +1,146 @@
+# VAZEICHNIS: zu einem Schlüssel (Zahl oder Text) einen Wert merken.
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = 10
+PASST SCHO
+
+KLASSE Loga
+    bestand VAZEICHNIS VON KETTN UND ZOI = VAZEICHNIS VON KETTN UND ZOI()
+
+    FUNKTIAUN leg_drauf(wos KETTN, wievü ZOI)
+        SÖWA.bestand[wos] = (SÖWA.bestand[wos] ODA HOID 0) + wievü OIDA
+    PASST SCHO
+PASST SCHO
+
+# Zählt, wie oft jedes Wort vorkommt.
+FUNKTIAUN zöh(wörter LISTN VON KETTN) GIBT ZRUCK VAZEICHNIS VON KETTN UND ZOI
+    SOG AU wia_oft = VAZEICHNIS VON KETTN UND ZOI() OIDA
+    FIA JEDE w IN wörter TUA
+        wia_oft[w] = (wia_oft[w] ODA HOID 0) + 1 OIDA
+    PASST SCHO
+    GIB ZRUCK wia_oft OIDA
+PASST SCHO
+
+FUNKTIAUN summe VON K(v VAZEICHNIS VON K UND ZOI) GIBT ZRUCK ZOI
+    SOG AU s = 0 OIDA
+    FIA JEDE k IN v TUA
+        s += v[k] ODA HOID 0 OIDA
+    PASST SCHO
+    GIB ZRUCK s OIDA
+PASST SCHO
+
+SCHREIB("--- Texte ois Schlissl") OIDA
+SOG AU oida_von = VAZEICHNIS VON KETTN UND ZOI() OIDA
+SCHREIB(oida_von, LÄNGN(oida_von), oida_von["Hansi"]) OIDA
+oida_von["Hansi"] = 17 OIDA
+oida_von["Sepp"] = 40 OIDA
+oida_von["Re" + "si"] = 33 OIDA
+oida_von["Hansi"] = 18 OIDA
+SCHREIB(oida_von, LÄNGN(oida_von)) OIDA
+SCHREIB(oida_von["Hansi"], oida_von["Resi"] ODA HOID 0, oida_von["Neamd"], oida_von["Neamd"] ODA HOID -1) OIDA
+SCHREIB(oida_von["Sepp"] != NIX, oida_von["sepp"] != NIX) OIDA
+SOG AU wer = "Se" + "pp" OIDA
+SOG AU wia_oid = oida_von[wer] OIDA
+WENN wia_oid != NIX DAUN
+    SCHREIB(wer, "is", wia_oid, "und nächsts Joahr", wia_oid + 1) OIDA
+PASST SCHO
+FIA JEDE name IN oida_von TUA
+    SCHREIB(name, "->", oida_von[name] ODA HOID 0) OIDA
+PASST SCHO
+HAU AUSSE(oida_von, "Hansi") OIDA
+HAU AUSSE(oida_von, "gibt's ned") OIDA
+SCHREIB(oida_von, LÄNGN(oida_von), oida_von["Hansi"]) OIDA
+
+SCHREIB("--- Zoin ois Schlissl") OIDA
+SOG AU quadrat = VAZEICHNIS VON ZOI UND KOMMAZOI() OIDA
+FIA i VON -2 BIS 3 TUA
+    quadrat[i * 10] = i * i * 1.5 OIDA
+PASST SCHO
+SCHREIB(quadrat, quadrat[30], quadrat[31], summe(zöh(["a", "b", "a"]))) OIDA
+SOG AU zoin = VAZEICHNIS VON ZOI UND ZOI() OIDA
+FIA i VON 1 BIS 1000 TUA
+    zoin[i * 7919 % 1000] = i OIDA
+PASST SCHO
+FIA i VON 0 BIS 499 TUA
+    HAU AUSSE(zoin, i * 2) OIDA
+PASST SCHO
+SCHREIB(LÄNGN(zoin), zoin[1], zoin[2], zoin[999], summe(zoin)) OIDA
+
+SCHREIB("--- Werte, an denen wos hängt") OIDA
+SOG AU spitznom = VAZEICHNIS VON KETTN UND KETTN() OIDA
+spitznom["Johann"] = "Han" + "si" OIDA
+spitznom["Josef"] = "Sepp" OIDA
+spitznom["Johann"] = "Hans" + "l" OIDA
+SCHREIB(spitznom, spitznom["Johann"] ODA HOID "?", LÄNGN(spitznom["Josef"] ODA HOID "")) OIDA
+SOG AU wo = VAZEICHNIS VON KETTN UND Punkt() OIDA
+wo["daham"] = Punkt(1, 2) OIDA
+wo["Wirt"] = Punkt(5, 7) OIDA
+SCHREIB(wo, (wo["Wirt"] ODA HOID Punkt(0, 0)).y, wo["Schui"]) OIDA
+SOG AU leit = VAZEICHNIS VON ZOI UND Wesen() OIDA
+SOG AU hansi = Wesen("Hansi") OIDA
+leit[1] = hansi OIDA
+leit[2] = Wesen("Sepp") OIDA
+leit[1] = hansi OIDA
+SOG AU ana = leit[2] OIDA
+WENN ana != NIX DAUN
+    ana.lebn = 3 OIDA
+PASST SCHO
+SCHREIB(leit, leit[1] == hansi, leit[3] == NIX) OIDA
+leit[2] = Wesen("Resi") OIDA
+HAU AUSSE(leit, 1) OIDA
+SCHREIB(leit, hansi.name) OIDA
+SOG AU gruppn = VAZEICHNIS VON KETTN UND LISTN VON ZOI() OIDA
+gruppn["grod"] = [] OIDA
+gruppn["ungrod"] = [] OIDA
+FIA i VON 1 BIS 7 TUA
+    SOG AU wöche = "grod" OIDA
+    WENN i % 2 == 1 DAUN
+        wöche = "ungrod" OIDA
+    PASST SCHO
+    SOG AU gruppe = gruppn[wöche] OIDA
+    WENN gruppe != NIX DAUN
+        HAU EINE(gruppe, i) OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(gruppn) OIDA
+
+SCHREIB("--- in Klassen und Funktionen") OIDA
+SOG AU loga = Loga() OIDA
+loga.leg_drauf("Semmel", 12) OIDA
+loga.leg_drauf("Kipferl", 4) OIDA
+loga.leg_drauf("Semmel", -5) OIDA
+SCHREIB(loga.bestand, summe(loga.bestand), loga) OIDA
+SOG AU gezählt = zöh(["oida", "heast", "oida", "na", "oida", "heast"]) OIDA
+SCHREIB(gezählt, LÄNGN(gezählt), LÄNGN(zöh([]))) OIDA
+# Zwei Namen für dasselbe Verzeichnis.
+SOG AU nomoi = gezählt OIDA
+nomoi["neich"] = 1 OIDA
+SCHREIB(gezählt["neich"], LÄNGN(gezählt)) OIDA
+# Beim Durchgehen etwas herausnehmen: Die Schleife geht über die Schlüssel von vorher.
+FIA JEDE wort IN gezählt TUA
+    WENN (gezählt[wort] ODA HOID 0) < 3 DAUN
+        HAU AUSSE(gezählt, wort) OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(gezählt) OIDA
+
+SCHREIB("--- vü auf amoi") OIDA
+SOG AU vü = VAZEICHNIS VON KETTN UND KETTN() OIDA
+FIA i VON 1 BIS 3000 TUA
+    vü["k" + KETTN(i % 500)] = "w" + KETTN(i) OIDA
+    WENN i % 7 == 0 DAUN
+        HAU AUSSE(vü, "k" + KETTN(i % 300)) OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(LÄNGN(vü), vü["k499"], vü["k0"]) OIDA
+# Der Schlüssel wird erst beim Nachschauen gebaut, und das Verzeichnis kommt direkt aus einem Aufruf.
+SCHREIB(vü["k" + KETTN(499)], vü["gibt's" + " ned"], LÄNGN(vü["k" + KETTN(498)] ODA HOID "")) OIDA
+FIA JEDE wort IN zöh(["drei", "ans", "drei", "drei"]) TUA
+    SCHREIB(wort, zöh(["ans", wort])[wort]) OIDA
+PASST SCHO

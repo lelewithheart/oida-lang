@@ -1,0 +1,29 @@
+--- Texte ois Schlissl
+{} 0 NIX
+{"Hansi": 18, "Sepp": 40, "Resi": 33} 3
+18 33 NIX -1
+WOAHR FOISCH
+Sepp is 40 und nächsts Joahr 41
+Hansi -> 18
+Sepp -> 40
+Resi -> 33
+{"Sepp": 40, "Resi": 33} 2 NIX
+--- Zoin ois Schlissl
+{-20: 6.0, -10: 1.5, 0: 0.0, 10: 1.5, 20: 6.0, 30: 13.5} 13.5 NIX 3
+500 679 NIX 321 250000
+--- Werte, an denen wos hängt
+{"Johann": "Hansl", "Josef": "Sepp"} Hansl 4
+{"daham": Punkt(1, 2), "Wirt": Punkt(5, 7)} 7 NIX
+{1: Wesen("Hansi", 10), 2: Wesen("Sepp", 3)} WOAHR WOAHR
+{2: Wesen("Resi", 10)} Hansi
+{"grod": [2, 4, 6], "ungrod": [1, 3, 5, 7]}
+--- in Klassen und Funktionen
+{"Semmel": 7, "Kipferl": 4} 11 Loga({"Semmel": 7, "Kipferl": 4})
+{"oida": 3, "heast": 2, "na": 1} 3 0
+1 4
+{"oida": 3}
+--- vü auf amoi
+457 "w2999" "w3000"
+"w2999" NIX 5
+drei 1
+ans 2

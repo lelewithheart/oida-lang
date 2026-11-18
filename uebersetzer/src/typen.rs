@@ -652,6 +652,15 @@ impl Pruefer<'_> {
                 ausdruck.art = AusdruckArt::Aufruf { name, argumente };
                 self.bau(ausdruck, nummer, Some(typen))
             }
+            Typ::Verzeichnis(_) => {
+                if !argumente.is_empty() {
+                    let meldung = format!("A neichs {} is laa: In de Klammer ghört nix.", self.wort(Schluessel::Map));
+                    self.melde(pos, meldung);
+                }
+                ausdruck.art = AusdruckArt::Erzeug { angabe, argumente: Vec::new() };
+                ausdruck.typ = typ;
+                typ
+            }
             Typ::Fehler => Typ::Fehler,
             _ => {
                 let meldung = format!("{} kaun ma so ned aulegn.", self.typ_name(typ).replacen("a ", "A ", 1));
@@ -821,9 +830,32 @@ impl Pruefer<'_> {
                     Typ::Fehler
                 }
             }
-            TypAngabe::Verzeichnis { pos, .. } => {
-                self.melde(*pos, "Des kummt no.");
-                Typ::Fehler
+            TypAngabe::Verzeichnis { schluessel, wert, pos } => {
+                let k = self.typ_aus(schluessel);
+                let w = self.typ_aus(wert);
+                if k == Typ::Fehler || w == Typ::Fehler {
+                    Typ::Fehler
+                } else if !matches!(k, Typ::Zoi | Typ::Kettn) {
+                    let meldung = format!(
+                        "Ois Schlissl in an {} geht nur {} oda {}, ned {}.",
+                        self.wort(Schluessel::Map),
+                        self.typ_name(Typ::Zoi),
+                        self.typ_name(Typ::Kettn),
+                        self.typ_name(k)
+                    );
+                    self.melde(*pos, meldung);
+                    Typ::Fehler
+                } else if matches!(w, Typ::Vielleicht { .. }) {
+                    let meldung = format!(
+                        "Da Wert in an {m} kaun ned {} sei: Wos fehlt, steht afoch ned drin.",
+                        self.wort(Schluessel::Maybe),
+                        m = self.wort(Schluessel::Map)
+                    );
+                    self.melde(*pos, meldung);
+                    Typ::Fehler
+                } else {
+                    self.typen.verzeichnis_von(k, w)
+                }
             }
         }
     }
@@ -1593,6 +1625,25 @@ impl Pruefer<'_> {
                     sicher_auspacken(ziel);
                     ziel_typ = ziel.typ;
                 }
+                // verzeichnis[schlüssel] = wert: Hinein kommt ein Wert, auch wenn beim
+                // Lesen VIELLEICHT herauskommt (der Schlüssel könnte ja fehlen).
+                if let AusdruckArt::Stelle { liste, .. } = &ziel.art
+                    && matches!(liste.typ, Typ::Verzeichnis(_))
+                    && ziel_typ != Typ::Fehler
+                {
+                    if op.is_some() {
+                        let meldung = format!(
+                            "Bei an {} geht nur '=': Da Schlissl kunnt jo fehln. Schreib zum Beispü: \
+                             v[k] = (v[k] {} 0) + 1 {}",
+                            self.wort(Schluessel::Map),
+                            self.wort(Schluessel::OrElse),
+                            self.wort(Schluessel::Oida)
+                        );
+                        self.melde(pos, meldung);
+                        return;
+                    }
+                    ziel_typ = self.typen.innen(ziel_typ).unwrap_or(ziel_typ);
+                }
                 // Danach gilt für die Variable, was hineingekommen ist.
                 if op.is_none()
                     && matches!(ziel_typ, Typ::Vielleicht { .. })
@@ -1756,7 +1807,13 @@ impl Pruefer<'_> {
                 let listen_typ = self.ausdruck(liste);
                 let mut element = Typ::Fehler;
                 if listen_typ != Typ::Fehler && self.fertig_verlangt(liste) {
-                    match self.typen.element(listen_typ) {
+                    // Bei einem Verzeichnis geht die Schleife über die Schlüssel.
+                    let schluessel = self.typen.verzeichnis(listen_typ).map(|(k, _)| k);
+                    if let Some(k) = schluessel {
+                        // Die IR-Erzeugung holt die Schlüssel als Liste; den Typ dafür muss es geben.
+                        self.typen.liste_von(k);
+                    }
+                    match self.typen.element(listen_typ).or(schluessel) {
                         Some(typ) => element = typ,
                         None => {
                             let meldung = format!(
@@ -2316,7 +2373,19 @@ impl Pruefer<'_> {
             AusdruckArt::Stelle { liste, index } => {
                 let listen_typ = self.ausdruck(liste);
                 let index_typ = self.ausdruck(index);
-                if index_typ != Typ::Zoi && index_typ != Typ::Fehler {
+                if let Some((k, w)) = self.typen.verzeichnis(listen_typ) {
+                    // verzeichnis[schlüssel]: der Wert, oder NIX, wenn es den Schlüssel nicht gibt.
+                    if index_typ != Typ::Fehler && !self.anpassen(index, k) {
+                        let meldung = format!(
+                            "Da Schlissl von dem {} is {}, des do is oba {}.",
+                            self.wort(Schluessel::Map),
+                            self.typ_name(k),
+                            self.typ_name(index_typ)
+                        );
+                        self.melde(index.pos, meldung);
+                    }
+                    self.typen.vielleicht_von(w)
+                } else if index_typ != Typ::Zoi && index_typ != Typ::Fehler {
                     let meldung = format!(
                         "De Stö in ana {} muass {} sei, des do is oba {}.",
                         self.wort(Schluessel::List),
@@ -2324,8 +2393,8 @@ impl Pruefer<'_> {
                         self.typ_name(index_typ)
                     );
                     self.melde(index.pos, meldung);
-                }
-                if listen_typ == Typ::Fehler || !self.fertig_verlangt(liste) {
+                    Typ::Fehler
+                } else if listen_typ == Typ::Fehler || !self.fertig_verlangt(liste) {
                     Typ::Fehler
                 } else if let Some(element) = self.typen.element(listen_typ) {
                     element
@@ -2710,6 +2779,7 @@ impl Pruefer<'_> {
         // Die Funktionen für Listen: Ihr Typ hängt davon ab, was in der Liste ist.
         match funktion {
             Eingebaut::Dazu | Eingebaut::Raus => return self.listen_funktion(funktion, &name, argumente, &typen, pos),
+            Eingebaut::Laenge if typen.len() == 1 && matches!(typen[0], Typ::Verzeichnis(_)) => return Typ::Zoi,
             Eingebaut::Laenge if typen.len() == 1 && matches!(typen[0], Typ::Liste(_) | Typ::LeereListe) => {
                 self.fertig_verlangt(&argumente[0]);
                 return Typ::Zoi;
@@ -2797,6 +2867,21 @@ impl Pruefer<'_> {
             return Typ::Nix;
         }
         if !self.fertig_verlangt(&argumente[0]) {
+            return Typ::Nix;
+        }
+        // HAU AUSSE(verzeichnis, schlüssel): den Eintrag entfernen (fehlt er, passiert nichts).
+        if funktion == Eingebaut::Raus
+            && let Some((k, _)) = self.typen.verzeichnis(typen[0])
+        {
+            if !self.anpassen(&mut argumente[1], k) {
+                let meldung = format!(
+                    "Da Schlissl von dem {} is {}, des do is oba {}.",
+                    self.wort(Schluessel::Map),
+                    self.typ_name(k),
+                    self.typ_name(typen[1])
+                );
+                self.melde(argumente[1].pos, meldung);
+            }
             return Typ::Nix;
         }
         let Some(element) = self.typen.element(typen[0]) else {
@@ -3011,6 +3096,18 @@ mod tests {
         let wb = Woerterbuch::eingebaut();
         let mut programm = parsen(zerlegen(quelltext, &wb).unwrap(), &wb).unwrap();
         pruefen(&mut programm, &wb).map(|_| programm)
+    }
+
+    /// Für Tests: der Typ "Liste von diesem Typ", wenn es ihn im Programm gibt.
+    trait AlsListe {
+        fn pipe_liste(self, typen: &Typen) -> Typ;
+    }
+
+    impl AlsListe for Typ {
+        fn pipe_liste(self, typen: &Typen) -> Typ {
+            let nummer = typen.listen.iter().position(|t| *t == self).expect("so eine Liste kommt im Programm vor");
+            Typ::Liste(nummer as u32)
+        }
     }
 
     fn ok(quelltext: &str) -> Programm {
@@ -3649,6 +3746,87 @@ mod tests {
         let f = fehler("FUNKTIAUN f() GIBT ZRUCK ZOI ODA FEHLA\nPASST SCHO");
         assert!(f.meldung.contains("ned jeda Weg hört mit GIB ZRUCK auf"), "{}", f.meldung);
         ok("FUNKTIAUN f() GIBT ZRUCK NIX ODA FEHLA\nPASST SCHO");
+    }
+
+    #[test]
+    fn funktionen_als_werte() {
+        let programm = ok("FUNKTIAUN doppelt(x ZOI) GIBT ZRUCK ZOI\n GIB ZRUCK x * 2 OIDA\nPASST SCHO\n\
+             SOG AU f = doppelt OIDA\nSOG AU a = 5 OIDA\nSOG AU t = \"x\" OIDA\n\
+             SOG AU g = FUNKTIAUN(x ZOI) => x + a + LÄNGN(t) + a OIDA\nSOG AU h = FUNKTIAUN(x ZOI) => x OIDA\n\
+             SCHREIB(f(1), g(2), h(3)) OIDA");
+        let wert = |n: usize| match &programm.haupt[n].art {
+            AnweisungArt::Deklaration { wert, .. } => wert,
+            _ => panic!(),
+        };
+        // Eine Funktion mit Namen als Wert; alle drei haben denselben Typ.
+        assert!(matches!(&wert(0).art, AusdruckArt::FunktionsWert { name } if name == "doppelt"));
+        assert_eq!(wert(0).typ, wert(3).typ);
+        assert_eq!(wert(3).typ, wert(4).typ);
+        let f = programm.typen.funktions_typ(wert(0).typ).unwrap();
+        assert_eq!((f.parameter.clone(), f.rueckgabe), (vec![Typ::Zoi], Typ::Zoi));
+        // g nimmt a und t mit, jedes einmal; h nichts. Drinnen haben sie eigene Nummern.
+        let AusdruckArt::Lambda { fang, nummer, funktion, .. } = &wert(3).art else { panic!() };
+        let namen: Vec<(&str, Typ)> = fang.iter().map(|f| (f.name.as_str(), f.typ)).collect();
+        assert_eq!(namen, vec![("a", Typ::Zoi), ("t", Typ::Kettn)]);
+        let AusdruckArt::Variable { id: aussen, .. } = &fang[0].wert.art else { panic!() };
+        assert_ne!(*aussen, fang[0].id);
+        assert_eq!(funktion.rueckgabe, Typ::Zoi);
+        let AusdruckArt::Lambda { fang: fang_h, nummer: nummer_h, .. } = &wert(4).art else { panic!() };
+        assert!(fang_h.is_empty());
+        assert_ne!(nummer, nummer_h);
+        // Aufrufen: über die Variable.
+        let AnweisungArt::Schreib { argumente } = &programm.haupt[5].art else { panic!() };
+        assert!(matches!(&argumente[0].art, AusdruckArt::WertAufruf { funktion, .. } if matches!(funktion.art, AusdruckArt::Variable { .. })));
+
+        let f = fehler("SOG AU a = 1 OIDA\nSOG AU f = FUNKTIAUN() => a += 1 OIDA");
+        assert!(f.meldung.starts_with("'a' kummt von außn"), "{}", f.meldung);
+        let f = fehler("SOG AU a = 1 OIDA\na(2) OIDA");
+        assert_eq!(f.meldung, "A ZOI kaun ma ned aufruafn, des is ka FUNKTIAUN.");
+    }
+
+    #[test]
+    fn vorlagen_werden_je_typ_einmal_gebaut() {
+        let programm = ok("FUNKTIAUN erstes VON T(liste LISTN VON T) GIBT ZRUCK T\n GIB ZRUCK liste[0] OIDA\nPASST SCHO\n\
+             KLASSE Stopl VON T\n drin LISTN VON T = []\n FUNKTIAUN drauf(wos T)\n  HAU EINE(SÖWA.drin, wos) OIDA\n PASST SCHO\nPASST SCHO\n\
+             STRUKTUR Paar VON A UND B\n links A\n rechts B\nPASST SCHO\n\
+             SCHREIB(erstes([1]), erstes([2, 3]), erstes([\"a\"])) OIDA\n\
+             SOG AU s = Stopl VON ZOI() OIDA\nSOG AU t Stopl VON ZOI = Stopl VON ZOI() OIDA\nSOG AU u = Stopl VON KETTN() OIDA\n\
+             SOG AU p = Paar(1, \"a\") OIDA\nSOG AU q = Paar VON ZOI UND KETTN(2, \"b\") OIDA");
+        // Die Vorlage selbst fällt weg; je Typ gibt es eine Fassung.
+        let namen: Vec<&str> = programm.funktionen.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(namen.len(), 2);
+        assert!(namen.contains(&"erstes VON ZOI") && namen.contains(&"erstes VON KETTN"), "{namen:?}");
+        let klassen: Vec<(&str, bool)> = programm.typen.klassen.iter().map(|k| (k.name.as_str(), k.vorlage)).collect();
+        assert_eq!(klassen, vec![("Stopl", true), ("Stopl VON ZOI", false), ("Stopl VON KETTN", false)]);
+        // Die Klassen stehen im Programm in der Reihenfolge ihrer Nummern.
+        let im_programm: Vec<&str> = programm.klassen.iter().map(|k| k.name.as_str()).collect();
+        assert_eq!(im_programm, vec!["Stopl", "Stopl VON ZOI", "Stopl VON KETTN"]);
+        assert_eq!(programm.typen.klassen[1].felder[0].typ, programm.typen.klassen[1].methoden[0].parameter[0].pipe_liste(&programm.typen));
+        let strukturen: Vec<&str> = programm.typen.strukturen.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(strukturen, vec!["Paar VON ZOI UND KETTN"]);
+        assert_eq!(programm.typen.strukturen[0].felder, vec![("links".to_string(), Typ::Zoi), ("rechts".to_string(), Typ::Kettn)]);
+
+        // Ob der Rumpf zum Typ passt, zeigt sich erst beim Verwenden.
+        let f = fehler("STRUKTUR P\n x ZOI\nPASST SCHO\nFUNKTIAUN klana VON T(a T, b T) GIBT ZRUCK JONA\n GIB ZRUCK a < b OIDA\nPASST SCHO\n\
+             SCHREIB(klana(1, 2), klana(P(1), P(2))) OIDA");
+        assert_eq!(f.meldung, "A P < a P? Des geht si ned aus. (bei 'klana VON P')");
+        let f = fehler("FUNKTIAUN erstes VON T(liste LISTN VON T) GIBT ZRUCK T\n GIB ZRUCK liste[0] OIDA\nPASST SCHO\nSCHREIB(erstes(5)) OIDA");
+        assert!(f.meldung.starts_with("Bei 'erstes' waaß i ned, wos 'T' sei soll"), "{}", f.meldung);
+    }
+
+    #[test]
+    fn verzeichnis() {
+        let programm = ok("SOG AU v = VAZEICHNIS VON KETTN UND ZOI() OIDA\nv[\"a\"] = 1 OIDA\nSOG AU x = v[\"a\"] OIDA\n\
+             FIA JEDE k IN v TUA\n SCHREIB(k + \"!\") OIDA\nPASST SCHO\nHAU AUSSE(v, \"a\") OIDA\nSCHREIB(LÄNGN(v)) OIDA");
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[0].art else { panic!() };
+        assert_eq!(programm.typen.verzeichnis(wert.typ), Some((Typ::Kettn, Typ::Zoi)));
+        // Lesen gibt VIELLEICHT, weil der Schlüssel fehlen kann.
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[2].art else { panic!() };
+        assert_eq!(programm.typen.innen(wert.typ), Some(Typ::Zoi));
+        let f = fehler("SOG AU v = VAZEICHNIS VON KETTN UND ZOI() OIDA\nSCHREIB(v[\"a\"] + 1) OIDA");
+        assert!(f.meldung.starts_with("A VIELLEICHT ZOI + a ZOI?"), "{}", f.meldung);
+        let f = fehler("SOG AU v = VAZEICHNIS VON JONA UND ZOI() OIDA");
+        assert_eq!(f.meldung, "Ois Schlissl in an VAZEICHNIS geht nur a ZOI oda a KETTN, ned a JONA.");
     }
 
     #[test]

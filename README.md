@@ -34,8 +34,8 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.5.** Zahlen, Texte, Strukturen, Listen, Klassen mit Vererbung, fehlende Werte (`NIX`)
-und Fehler ohne Absturz, Schleifen, Funktionen, Eingabe und Ausgabe sind da.
+**Stand: v0.6.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+(Generics), Funktionen als Werte, fehlende Werte (`NIX`) und Fehler ohne Absturz sind da.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -131,7 +131,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.5)
+## Die Sprache (v0.6)
 
 ### Typen
 
@@ -472,6 +472,131 @@ PASST SCHO
 
 Ein Beispiel mit beidem steht in [`beispiele/loga.oida`](beispiele/loga.oida).
 
+### Funktionen als Werte
+
+Eine Funktion kann man in eine Variable tun, einer anderen Funktion mitgeben, in eine Liste oder
+ein Feld stecken und später aufrufen.
+
+```
+FUNKTIAUN doppelt(x ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK x * 2 OIDA
+PASST SCHO
+
+FUNKTIAUN zwamoi(f FUNKTIAUN(ZOI) GIBT ZRUCK ZOI, x ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK f(f(x)) OIDA
+PASST SCHO
+
+SCHREIB(zwamoi(doppelt, 3)) OIDA                       # 12: eine Funktion mit Namen als Wert
+SCHREIB(zwamoi(FUNKTIAUN(x ZOI) => x + 1, 3)) OIDA     # 5: eine Funktion ohne Namen, kurz
+
+SOG AU griaß = FUNKTIAUN(wen KETTN)                    # eine Funktion ohne Namen, mit Block
+    SCHREIB("Servas " + wen + "!") OIDA
+PASST SCHO OIDA
+griaß("Hansi") OIDA
+```
+
+- Der **Typ** einer Funktion: `FUNKTIAUN(<typen>) GIBT ZRUCK <typ>`, ohne Rückgabe nur `FUNKTIAUN(<typen>)`.
+- **Ohne Namen** gibt es zwei Formen: kurz `FUNKTIAUN(x ZOI) => ausdruck` (was der Ausdruck ergibt,
+  kommt zurück; auch `=> SCHREIB(...)` und `=> ziel += wert` gehen) oder mit Block bis `PASST SCHO`.
+- Eine Funktion ohne Namen **nimmt mit, was sie von außen braucht**: Variablen und in einer Methode
+  auch `SÖWA`. Sie bekommt davon eine Kopie in dem Moment, in dem sie entsteht:
+
+  ```
+  SOG AU grenz = 3 OIDA
+  SOG AU groß = FUNKTIAUN(x ZOI) => x > grenz OIDA
+  grenz = 100 OIDA
+  SCHREIB(groß(5)) OIDA           # WOAHR: Die Funktion hat ihre eigene 3
+  ```
+
+  Die Kopie kann sie lesen, aber nicht ändern. Zeigt sie auf eine Liste oder ein Objekt, ist das
+  dasselbe wie draußen; was dort geändert wird, sehen beide.
+- Steckt eine Funktion in einem Feld, ruft man sie wie eine Methode auf: `kortn.wirkung(spiela)`.
+- Zwei Funktionen kann man nicht vergleichen. `SCHREIB` gibt `<FUNKTIAUN>` aus.
+
+### Vorlagen: VON T
+
+Manches ist für jeden Typ gleich: das erste Element einer Liste, ein Stapel, ein Paar. Dafür
+lässt man den Typ offen und gibt ihm einen Namen (üblich: `T`):
+
+```
+FUNKTIAUN nur VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA JEDE x IN liste TUA
+        WENN passt(x) DAUN
+            HAU EINE(aus, x) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+SCHREIB(nur([4, 9, 2], FUNKTIAUN(z ZOI) => z > 3)) OIDA                        # [4, 9]
+SCHREIB(nur(["Sepp", "Hansi"], FUNKTIAUN(n KETTN) => LÄNGN(n) == 4)) OIDA      # ["Sepp"]
+```
+
+Beim Aufruf einer solchen Funktion liest OIDA aus den Werten ab, wofür `T` steht. Dasselbe gibt es
+für Klassen und Strukturen; mehrere offene Typen trennt `UND`:
+
+```
+KLASSE Stopl VON T
+    drin LISTN VON T = []
+
+    FUNKTIAUN drauf(wos T)
+        HAU EINE(SÖWA.drin, wos) OIDA
+    PASST SCHO
+PASST SCHO
+
+STRUKTUR Paar VON A UND B
+    ans A
+    zwa B
+PASST SCHO
+
+SOG AU zoin = Stopl VON ZOI() OIDA             # der Typ steht dabei
+zoin.drauf(5) OIDA
+SOG AU p = Paar("Hansi", 17) OIDA              # ein Paar VON KETTN UND ZOI: aus den Werten abgelesen
+SOG AU olle LISTN VON Paar VON KETTN UND ZOI = [p] OIDA
+```
+
+- `Stopl VON ZOI` und `Stopl VON KETTN` sind zwei verschiedene Typen; der eine passt nicht, wo der
+  andere verlangt ist.
+- Lässt sich der Typ nicht aus den Werten ablesen (wie bei `Stopl()`), schreibt man ihn dazu.
+- Eine Vorlage wird für jeden Typ, mit dem sie verwendet wird, einmal übersetzt und dabei
+  geprüft. Ob etwa `a < b` mit dem Typ geht, zeigt sich also erst beim Verwenden; die Meldung
+  sagt dann dazu, bei welcher Fassung (`bei 'größtes VON Punkt'`). Der Vorteil: In einer Vorlage
+  geht alles, was der Typ kann, und sie ist so schnell wie von Hand für diesen Typ geschrieben.
+- Eine Klasse mit `VON` kann nicht erben und nicht vererbt werden.
+- Eine Funktion mit `VON` kann man nicht als Wert verwenden; man packt den Aufruf in eine Funktion ohne Namen.
+
+### Verzeichnis
+
+Ein `VAZEICHNIS` merkt sich zu einem Schlüssel einen Wert. Der Schlüssel ist eine `ZOI` oder eine
+`KETTN`, der Wert kann alles sein.
+
+```
+SOG AU oida_von = VAZEICHNIS VON KETTN UND ZOI() OIDA      # Schlüssel KETTN, Wert ZOI; am Anfang leer
+oida_von["Hansi"] = 17 OIDA
+oida_von["Sepp"] = 40 OIDA
+oida_von["Hansi"] = 18 OIDA                                 # ersetzt den alten Wert
+
+SCHREIB(oida_von["Hansi"], oida_von["Resi"]) OIDA           # 18 NIX
+SCHREIB(oida_von["Resi"] ODA HOID 0) OIDA                   # 0
+FIA JEDE name IN oida_von TUA                               # geht die Schlüssel durch
+    SCHREIB(name, oida_von[name] ODA HOID 0) OIDA
+PASST SCHO
+HAU AUSSE(oida_von, "Sepp") OIDA
+SCHREIB(oida_von, LÄNGN(oida_von)) OIDA                     # {"Hansi": 18} 1
+```
+
+- Lesen gibt `VIELLEICHT <wert>` zurück, weil es den Schlüssel nicht geben muss: Man schaut nach
+  (`!= NIX`) oder gibt einen Ersatz an (`ODA HOID`). Zählen geht so:
+  `wia_oft[wort] = (wia_oft[wort] ODA HOID 0) + 1 OIDA`.
+- Die Schlüssel bleiben in der Reihenfolge, in der sie dazugekommen sind.
+- Wie eine Liste ist ein Verzeichnis ein **Verweis**: Zwei Variablen können dasselbe meinen.
+- `FIA JEDE` geht über die Schlüssel, wie sie am Anfang der Schleife waren; man darf in der
+  Schleife also Einträge herausnehmen.
+- `HAU AUSSE` bei einem Schlüssel, den es nicht gibt, tut nichts.
+
+Ein Beispiel mit allem aus diesem und den zwei Abschnitten davor: [`beispiele/woatzöhla.oida`](beispiele/woatzöhla.oida).
+
 ### Ausgabe
 
 ```
@@ -517,6 +642,8 @@ Für Listen:
 | `LÄNGN(liste)`             | Anzahl der Elemente                                |
 | `HAU EINE(liste, wert)`    | hängt den Wert hinten an (auch: `DAZUA`)           |
 | `HAU AUSSE(liste, stelle)` | nimmt das Element an der Stelle heraus             |
+| `LÄNGN(verzeichnis)`       | Anzahl der Einträge                                |
+| `HAU AUSSE(verzeichnis, schlüssel)` | nimmt den Eintrag heraus, wenn es ihn gibt |
 
 Zum Rechnen (wo eine `KOMMAZOI` verlangt ist, geht auch eine `ZOI`):
 
@@ -666,7 +793,10 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 - Ob etwas `NIX` ist, merkt sich der Compiler nur bei Variablen, nicht bei Feldern und Listenstellen.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - Strukturen und Listen kann man nicht mit `=` vergleichen.
-- Listen kann man nicht sortieren oder durchsuchen lassen; das schreibt man vorerst selbst.
+- Sortieren, filtern und Ähnliches schreibt man vorerst selbst (als Vorlage, siehe
+  [`beispiele/woatzöhla.oida`](beispiele/woatzöhla.oida)); eine mitgelieferte Sammlung kommt mit Schritt 6.
+- Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
+- Bei einem Verzeichnis geht als Schlüssel nur `ZOI` oder `KETTN`.
 - Keine Dateien, kein Fenster, keine Grafik.
 - Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0 und `ZOI("abc")` brechen das
   Programm weiterhin mit einer Meldung ab (für Texte gibt es stattdessen `ZOI AUS`).
@@ -690,7 +820,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 2 | Strukturen als direkte Werte und Listen, `FIA JEDE` | fertig |
 | 3 | Klassen mit Feldern, Methoden und Vererbung | fertig |
 | 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | fertig |
-| 5 | Generics für eigene Typen, Funktionen als Werte, ein Wörterbuch-Typ | offen |
+| 5 | Vorlagen (Generics), Funktionen als Werte, das Verzeichnis (Schlüssel → Wert) | fertig |
 | 6 | Programme aus mehreren Dateien, Standardbibliothek in OIDA | offen |
 | 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | offen |
 | 8 | Das Spiel nachbauen | offen |

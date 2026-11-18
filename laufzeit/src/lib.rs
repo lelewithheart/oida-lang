@@ -528,6 +528,245 @@ pub unsafe extern "C" fn oida_liste_frei(liste_zeiger: *mut ListenKopf, groesse:
     }
 }
 
+// -------------------------------------------------------------- Verzeichnis
+
+/// Ein Verzeichnis (Schlüssel -> Wert) am Heap. Die ersten vier Felder kennt
+/// auch der erzeugte Code; Länge steht an derselben Stelle wie bei einer Liste.
+#[repr(C)]
+pub struct WbKopf {
+    zaehler: i64,
+    laenge: i64,
+    /// Die Schlüssel in der Reihenfolge, in der sie dazugekommen sind:
+    /// ganze Zahlen, oder Zeiger auf Texte (dann zählt das Verzeichnis die Texte mit).
+    schluessel: *mut i64,
+    /// Die Werte dazu, dicht hintereinander. Ihre Größe gibt der Compiler mit.
+    werte: *mut u8,
+    platz: i64,
+    text: bool,
+    /// Zum schnellen Finden: Prüfsumme des Schlüssels -> Stellen mit dieser Prüfsumme.
+    index: *mut std::collections::HashMap<u64, Vec<usize>>,
+}
+
+/// Prüft, dass das Verzeichnis noch lebt.
+unsafe fn verzeichnis<'a>(zeiger: *mut WbKopf) -> &'a mut WbKopf {
+    let v = unsafe { &mut *zeiger };
+    if v.zaehler <= TOT {
+        abbruch_compiler("a VAZEICHNIS wird no verwendet, obwohl's scho freigebn is");
+    }
+    v
+}
+
+/// Die Prüfsumme eines Schlüssels. Texte zählen nach ihrem Inhalt (FNV-1a).
+unsafe fn wb_summe(text: bool, schluessel: i64) -> u64 {
+    if !text {
+        return (schluessel as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    }
+    let mut summe: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in unsafe { bytes(schluessel as *const TextKopf) } {
+        summe = (summe ^ *b as u64).wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    summe
+}
+
+unsafe fn wb_gleich(text: bool, a: i64, b: i64) -> bool {
+    if text { unsafe { bytes(a as *const TextKopf) == bytes(b as *const TextKopf) } } else { a == b }
+}
+
+fn schluessel_layout(platz: i64) -> Layout {
+    Layout::array::<i64>(platz as usize).expect("Verzeichnis zu groß")
+}
+
+/// Ein Text wird an einer weiteren Stelle gebraucht (feste Texte werden nicht gezählt).
+unsafe fn text_behalten(text: *mut TextKopf) {
+    unsafe {
+        if (*text).zaehler >= 0 {
+            (*text).zaehler += 1;
+        }
+    }
+}
+
+unsafe fn text_loslassen(text: *mut TextKopf) {
+    unsafe {
+        if (*text).zaehler > 0 {
+            (*text).zaehler -= 1;
+            if (*text).zaehler == 0 {
+                oida_text_frei(text);
+            }
+        }
+    }
+}
+
+/// Ein neues, leeres Verzeichnis. `text` sagt, ob die Schlüssel Texte sind (sonst ganze Zahlen).
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_wb_neu(text: i64) -> *mut WbKopf {
+    zustand().lebende_texte += 1;
+    Box::into_raw(Box::new(WbKopf {
+        zaehler: 1,
+        laenge: 0,
+        schluessel: std::ptr::NonNull::dangling().as_ptr(),
+        werte: std::ptr::without_provenance_mut(ELEMENT_AUSRICHTUNG),
+        platz: 0,
+        text: text != 0,
+        index: Box::into_raw(Box::default()),
+    }))
+}
+
+/// An welcher Stelle der Schlüssel steht, oder -1.
+///
+/// # Safety
+/// `zeiger` muss ein gültiges Verzeichnis sein und `schluessel` zu seiner Art passen.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_wb_finde(zeiger: *mut WbKopf, schluessel: i64) -> i64 {
+    unsafe {
+        let v = verzeichnis(zeiger);
+        let summe = wb_summe(v.text, schluessel);
+        if let Some(stellen) = (*v.index).get(&summe) {
+            for &stelle in stellen {
+                if wb_gleich(v.text, *v.schluessel.add(stelle), schluessel) {
+                    return stelle as i64;
+                }
+            }
+        }
+        -1
+    }
+}
+
+/// Hängt einen neuen Schlüssel an und gibt seine Stelle zurück. Den Wert
+/// schreibt der Aufrufer dorthin. (Dass es den Schlüssel noch nicht gibt,
+/// hat er vorher mit [`oida_wb_finde`] geprüft.)
+///
+/// # Safety
+/// `zeiger` muss ein gültiges Verzeichnis mit Werten dieser Größe sein.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_wb_dazu(zeiger: *mut WbKopf, schluessel: i64, groesse: i64) -> i64 {
+    unsafe {
+        let v = verzeichnis(zeiger);
+        if v.laenge == v.platz {
+            // Voll: doppelt so viel Platz holen und alles umziehen.
+            let neuer_platz = (v.platz * 2).max(4);
+            let schluessel_neu = alloc(schluessel_layout(neuer_platz)) as *mut i64;
+            if schluessel_neu.is_null() {
+                handle_alloc_error(schluessel_layout(neuer_platz));
+            }
+            let werte_neu = neue_daten(neuer_platz, groesse);
+            std::ptr::copy_nonoverlapping(v.schluessel, schluessel_neu, v.laenge as usize);
+            std::ptr::copy_nonoverlapping(v.werte, werte_neu, (v.laenge * groesse) as usize);
+            if v.platz > 0 {
+                dealloc(v.schluessel as *mut u8, schluessel_layout(v.platz));
+                let alt = daten_layout(v.platz, groesse);
+                if alt.size() > 0 {
+                    dealloc(v.werte, alt);
+                }
+            }
+            v.schluessel = schluessel_neu;
+            v.werte = werte_neu;
+            v.platz = neuer_platz;
+        }
+        let stelle = v.laenge as usize;
+        *v.schluessel.add(stelle) = schluessel;
+        if v.text {
+            text_behalten(schluessel as *mut TextKopf);
+        }
+        (*v.index).entry(wb_summe(v.text, schluessel)).or_default().push(stelle);
+        v.laenge += 1;
+        stelle as i64
+    }
+}
+
+/// Nimmt den Eintrag an der Stelle heraus und rückt die dahinter nach.
+/// (Was am Wert hängt, hat der Aufrufer vorher losgelassen.)
+///
+/// # Safety
+/// `zeiger` muss ein gültiges Verzeichnis mit Werten dieser Größe sein, `stelle` eine Stelle darin.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_wb_raus(zeiger: *mut WbKopf, stelle: i64, groesse: i64) {
+    unsafe {
+        let v = verzeichnis(zeiger);
+        let (stelle, laenge) = (stelle as usize, v.laenge as usize);
+        let schluessel = *v.schluessel.add(stelle);
+        let summe = wb_summe(v.text, schluessel);
+        let index = &mut *v.index;
+        if let Some(stellen) = index.get_mut(&summe) {
+            stellen.retain(|s| *s != stelle);
+            if stellen.is_empty() {
+                index.remove(&summe);
+            }
+        }
+        // Alles dahinter rückt um eins nach vorne, auch im Index.
+        for stellen in index.values_mut() {
+            for s in stellen.iter_mut() {
+                if *s > stelle {
+                    *s -= 1;
+                }
+            }
+        }
+        std::ptr::copy(v.schluessel.add(stelle + 1), v.schluessel.add(stelle), laenge - stelle - 1);
+        let g = groesse as usize;
+        std::ptr::copy(v.werte.add((stelle + 1) * g), v.werte.add(stelle * g), (laenge - stelle - 1) * g);
+        v.laenge -= 1;
+        if v.text {
+            text_loslassen(schluessel as *mut TextKopf);
+        }
+    }
+}
+
+/// Die Schlüssel als neue Liste, in der Reihenfolge, in der sie dazugekommen sind.
+///
+/// # Safety
+/// `zeiger` muss ein gültiges Verzeichnis sein.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_wb_schluessel(zeiger: *mut WbKopf) -> *mut ListenKopf {
+    unsafe {
+        let v = verzeichnis(zeiger);
+        let liste = oida_liste_neu(8, v.laenge);
+        std::ptr::copy_nonoverlapping(v.schluessel, (*liste).daten as *mut i64, v.laenge as usize);
+        (*liste).laenge = v.laenge;
+        if v.text {
+            for i in 0..v.laenge as usize {
+                text_behalten(*v.schluessel.add(i) as *mut TextKopf);
+            }
+        }
+        liste
+    }
+}
+
+/// Gibt ein Verzeichnis frei. Der erzeugte Code ruft das auf, sobald der
+/// Zähler auf 0 gefallen ist und er die Werte losgelassen hat.
+///
+/// # Safety
+/// `zeiger` muss ein Verzeichnis mit Werten dieser Größe sein, das niemand mehr braucht.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_wb_frei(zeiger: *mut WbKopf, groesse: i64) {
+    unsafe {
+        let v = &mut *zeiger;
+        if v.zaehler != 0 {
+            abbruch_compiler("a VAZEICHNIS wird freigebn, obwohl's no braucht wird");
+        }
+        if v.text {
+            for i in 0..v.laenge as usize {
+                text_loslassen(*v.schluessel.add(i) as *mut TextKopf);
+            }
+        }
+        let z = zustand();
+        z.lebende_texte -= 1;
+        if z.pruefen {
+            // Als tot markieren und leeren: Jeder spätere Zugriff fällt dann auf.
+            v.zaehler = TOT;
+            v.laenge = 0;
+            return;
+        }
+        if v.platz > 0 {
+            dealloc(v.schluessel as *mut u8, schluessel_layout(v.platz));
+            let layout = daten_layout(v.platz, groesse);
+            if layout.size() > 0 {
+                dealloc(v.werte, layout);
+            }
+        }
+        drop(Box::from_raw(v.index));
+        drop(Box::from_raw(zeiger));
+    }
+}
+
 // ------------------------------------------------------------------ Objekte
 
 /// So beginnt jedes Objekt einer Klasse: Zähler, dann der Zeiger auf die
@@ -916,6 +1155,61 @@ mod tests {
         unsafe {
             (*l).zaehler = 0;
             oida_liste_frei(l, 0);
+        }
+    }
+
+    #[test]
+    fn verzeichnis_mit_zahlen() {
+        let v = oida_wb_neu(0);
+        unsafe {
+            // 100 Einträge: Schlüssel i * 7, Wert i * i (8 Bytes).
+            for i in 0..100i64 {
+                assert_eq!(oida_wb_finde(v, i * 7), -1);
+                let stelle = oida_wb_dazu(v, i * 7, 8);
+                *((*v).werte as *mut i64).add(stelle as usize) = i * i;
+            }
+            assert_eq!((*v).laenge, 100);
+            let wert = |schluessel: i64| {
+                let stelle = oida_wb_finde(v, schluessel);
+                (stelle >= 0).then(|| *((*v).werte as *mut i64).add(stelle as usize))
+            };
+            assert_eq!((wert(0), wert(7 * 9), wert(7 * 99), wert(5)), (Some(0), Some(81), Some(9801), None));
+            // Einen in der Mitte heraus: Die dahinter rücken nach, und jeder wird noch gefunden.
+            oida_wb_raus(v, oida_wb_finde(v, 7 * 50), 8);
+            assert_eq!((*v).laenge, 99);
+            assert_eq!((wert(7 * 50), wert(7 * 49), wert(7 * 51), wert(7 * 99)), (None, Some(2401), Some(2601), Some(9801)));
+            // Die Schlüssel kommen in der Reihenfolge, in der sie dazugekommen sind.
+            let liste = oida_wb_schluessel(v);
+            let schluessel = std::slice::from_raw_parts((*liste).daten as *const i64, (*liste).laenge as usize);
+            assert_eq!((schluessel.len(), schluessel[0], schluessel[50], schluessel[98]), (99, 0, 7 * 51, 7 * 99));
+            (*liste).zaehler = 0;
+            oida_liste_frei(liste, 8);
+            (*v).zaehler = 0;
+            oida_wb_frei(v, 8);
+        }
+    }
+
+    #[test]
+    fn verzeichnis_mit_texten() {
+        let v = oida_wb_neu(1);
+        let (hansi, sepp, hansi2) = (neuer_text(b"Hansi"), neuer_text(b"Sepp"), neuer_text(b"Hansi"));
+        unsafe {
+            let a = oida_wb_dazu(v, hansi as i64, 0);
+            let b = oida_wb_dazu(v, sepp as i64, 0);
+            assert_eq!((a, b), (0, 1));
+            // Das Verzeichnis braucht seine Schlüssel selbst.
+            assert_eq!(((*hansi).zaehler, (*sepp).zaehler), (2, 2));
+            // Gefunden wird nach dem Inhalt, nicht nach dem Zeiger.
+            assert_eq!(oida_wb_finde(v, hansi2 as i64), 0);
+            oida_wb_raus(v, 0, 0);
+            assert_eq!(((*hansi).zaehler, oida_wb_finde(v, hansi2 as i64), oida_wb_finde(v, sepp as i64)), (1, -1, 0));
+            (*v).zaehler = 0;
+            oida_wb_frei(v, 0);
+            assert_eq!((*sepp).zaehler, 1);
+            for text in [hansi, sepp, hansi2] {
+                (*text).zaehler = 0;
+                oida_text_frei(text);
+            }
         }
     }
 

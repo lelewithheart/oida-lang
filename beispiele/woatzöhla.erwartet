@@ -1,0 +1,10 @@
+9 verschiedene Wörter: {"heast": 2, "oida": 3, "des": 2, "is": 1, "jo": 2, "a": 1, "wahnsinn": 1, "gibts": 1, "ned": 1}
+
+Mindestns 2 moi:
+  3 x oida
+  2 x heast
+  2 x des
+  2 x jo
+
+["bitte", "geh", "heast", "na", "oida"]
+[9, 6, 5, 4, 3, 2, 1, 1]

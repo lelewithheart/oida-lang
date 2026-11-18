@@ -65,6 +65,21 @@
     "body": ["PROBIER ${1:wert} = ${2:funktion()}", "\t$3", "WONNS SCHIEFGEHT ${4:fehla}", "\t$0", "PASST SCHO"],
     "description": "Etwas probieren und den Fehler auffangen"
   },
+  "FUNKTIAUN =>": {
+    "prefix": "funktiaunkurz",
+    "body": ["FUNKTIAUN(${1:x} ${2:ZOI}) => ${0:x}"],
+    "description": "Kurze Funktion ohne Namen"
+  },
+  "FUNKTIAUN VON T": {
+    "prefix": "funktiaunvon",
+    "body": ["FUNKTIAUN ${1:name} VON T(${2:liste} LISTN VON T) GIBT ZRUCK T", "\t$0", "PASST SCHO"],
+    "description": "Vorlage: eine Funktion für jeden Typ"
+  },
+  "VAZEICHNIS": {
+    "prefix": "vazeichnis",
+    "body": ["SOG AU ${1:name} = VAZEICHNIS VON ${2:KETTN} UND ${3:ZOI}() OIDA"],
+    "description": "Verzeichnis: zu einem Schlüssel einen Wert merken"
+  },
   "SCHREIB": {
     "prefix": "schreib",
     "body": ["SCHREIB($1) OIDA"],

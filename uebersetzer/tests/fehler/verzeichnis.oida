@@ -1,0 +1,16 @@
+SOG AU oida_von = VAZEICHNIS VON KETTN UND ZOI() OIDA
+SCHREIB(oida_von[5]) OIDA
+oida_von["Hansi"] = "siebzehn" OIDA
+oida_von["Hansi"] += 1 OIDA
+SCHREIB(oida_von["Hansi"] + 1) OIDA
+oida_von["Hansi"] = NIX OIDA
+SOG AU a = VAZEICHNIS VON KOMMAZOI UND ZOI() OIDA
+SOG AU b = VAZEICHNIS VON KETTN UND VIELLEICHT ZOI() OIDA
+SOG AU c = VAZEICHNIS VON KETTN UND ZOI(1) OIDA
+HAU EINE(oida_von, 3) OIDA
+HAU AUSSE(oida_von, 3) OIDA
+FIA JEDE name IN oida_von TUA
+    SCHREIB(name + 1) OIDA
+PASST SCHO
+SOG AU d VAZEICHNIS VON ZOI UND ZOI = oida_von OIDA
+SCHREIB(oida_von == oida_von) OIDA

@@ -1,0 +1,82 @@
+# Wörter zählen: ein VAZEICHNIS, Vorlagen (VON T) und Funktionen als Werte.
+
+STRUKTUR Paar VON A UND B
+    ans A
+    zwa B
+PASST SCHO
+
+# Zerlegt einen Text an den Leerzeichen.
+FUNKTIAUN wörter(zeile KETTN) GIBT ZRUCK LISTN VON KETTN
+    SOG AU aus LISTN VON KETTN = [] OIDA
+    SOG AU rest = STUTZ(zeile) OIDA
+    SOLONG LÄNGN(rest) > 0 TUA
+        SOG AU lucke = SUACH(rest, " ") OIDA
+        WENN lucke < 0 DAUN
+            HAU EINE(aus, rest) OIDA
+            HAU OB OIDA
+        PASST SCHO
+        HAU EINE(aus, STICKL(rest, 0, lucke)) OIDA
+        rest = STUTZ(STICKL(rest, lucke)) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Eine sortierte Kopie der Liste. Was vorne stehen soll, sagt die Funktion `vuaher`.
+# Geht mit jeder Liste: T steht für das, was drin ist.
+FUNKTIAUN sortiert VON T(liste LISTN VON T, vuaher FUNKTIAUN(T, T) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA JEDE x IN liste TUA
+        HAU EINE(aus, x) OIDA
+    PASST SCHO
+    FIA i VON 1 BIS LÄNGN(aus) - 1 TUA
+        SOG AU j = i OIDA
+        SOLONG j > 0 UND vuaher(aus[j], aus[j - 1]) TUA
+            SOG AU merk = aus[j] OIDA
+            aus[j] = aus[j - 1] OIDA
+            aus[j - 1] = merk OIDA
+            j -= 1 OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Nur die Elemente, bei denen `passt` WOAHR sagt.
+FUNKTIAUN nur VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA JEDE x IN liste TUA
+        WENN passt(x) DAUN
+            HAU EINE(aus, x) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+SOG AU gsogt = "heast oida des is jo a wahnsinn oida heast des gibts jo ned oida" OIDA
+
+# Zu jedem Wort merken, wie oft es vorkommt.
+SOG AU wia_oft = VAZEICHNIS VON KETTN UND ZOI() OIDA
+FIA JEDE wort IN wörter(gsogt) TUA
+    wia_oft[wort] = (wia_oft[wort] ODA HOID 0) + 1 OIDA
+PASST SCHO
+SCHREIB(LÄNGN(wia_oft), "verschiedene Wörter:", wia_oft) OIDA
+
+# Als Liste von Paaren (Wort, Anzahl), die häufigsten zuerst.
+SOG AU paare LISTN VON Paar VON KETTN UND ZOI = [] OIDA
+FIA JEDE wort IN wia_oft TUA
+    HAU EINE(paare, Paar(wort, wia_oft[wort] ODA HOID 0)) OIDA
+PASST SCHO
+SOG AU noch_zoi = sortiert(paare, FUNKTIAUN(a Paar VON KETTN UND ZOI, b Paar VON KETTN UND ZOI) => a.zwa > b.zwa) OIDA
+
+# Die Funktion nimmt `mindest` von außen mit.
+SOG AU mindest = 2 OIDA
+SOG AU öfta = nur(noch_zoi, FUNKTIAUN(p Paar VON KETTN UND ZOI) => p.zwa >= mindest) OIDA
+SCHREIB() OIDA
+SCHREIB("Mindestns", mindest, "moi:") OIDA
+FIA JEDE p IN öfta TUA
+    SCHREIB(" ", p.zwa, "x", p.ans) OIDA
+PASST SCHO
+
+# Dieselbe Vorlage, anderer Typ: Texte nach dem Alphabet, Zahlen absteigend.
+SCHREIB() OIDA
+SCHREIB(sortiert(wörter("oida heast na geh bitte"), FUNKTIAUN(a KETTN, b KETTN) => a < b)) OIDA
+SCHREIB(sortiert([3, 1, 4, 1, 5, 9, 2, 6], FUNKTIAUN(a ZOI, b ZOI) => a > b)) OIDA

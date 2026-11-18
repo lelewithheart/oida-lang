@@ -1491,6 +1491,58 @@ mod tests {
     }
 
     #[test]
+    fn funktionen_ohne_namen() {
+        assert_eq!(ausdruck("FUNKTIAUN(x ZOI) => x * 2"), "FUNKTIAUN(x) => (x * 2)");
+        assert_eq!(ausdruck("f(FUNKTIAUN(a ZOI, b KETTN) => a > 1 UND g(b))"), "f(FUNKTIAUN(a, b) => ((a > 1) UND g(b)))");
+        // Was ein Aufruf zurückgibt oder was in einer Liste steht, kann man gleich wieder aufrufen.
+        assert_eq!(ausdruck("mach(1)(2)(3)"), "mach(1)(2)(3)");
+        assert_eq!(ausdruck("liste[0](x) + ding.feld(y)"), "(liste[0](x) + ding.feld(y))");
+        // Mit Block; das OIDA dahinter gehört zur Anweisung rundherum.
+        let p = parse(
+            "SOG AU f = FUNKTIAUN(x ZOI) GIBT ZRUCK ZOI\n SOG AU y = x + 1 OIDA\n GIB ZRUCK y OIDA\nPASST SCHO OIDA\n\
+             SOG AU g = FUNKTIAUN() => SCHREIB(1) OIDA\nSOG AU h = FUNKTIAUN(z Zöhla) => z.stand += 1 OIDA",
+        );
+        let AnweisungArt::Deklaration { wert, .. } = &p.haupt[0].art else { panic!() };
+        let AusdruckArt::Lambda { funktion, kurz: false, .. } = &wert.art else { panic!() };
+        assert_eq!((funktion.parameter.len(), funktion.rumpf.len(), funktion.rueckgabe), (1, 2, Typ::Zoi));
+        // SCHREIB und += gehen auch in der kurzen Form.
+        for n in [1, 2] {
+            let AnweisungArt::Deklaration { wert, .. } = &p.haupt[n].art else { panic!() };
+            let AusdruckArt::Lambda { funktion, kurz: false, .. } = &wert.art else { panic!() };
+            assert_eq!(funktion.rumpf.len(), 1);
+        }
+        let f = fehler("SOG AU f = FUNKTIAUN(x ZOI)\n GIB ZRUCK x OIDA\n");
+        assert!(f.meldung.starts_with("De FUNKTIAUN ohne Nom hört nimma auf."), "{}", f.meldung);
+    }
+
+    #[test]
+    fn vorlagen_und_ihre_typen() {
+        let p = parse(
+            "FUNKTIAUN nur VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK VAZEICHNIS VON KETTN UND T\nPASST SCHO\n\
+             KLASSE Merka VON K UND W\n werte LISTN VON W\nPASST SCHO\nSTRUKTUR Paar VON A UND B\n links A\nPASST SCHO\n\
+             SOG AU s Stapel VON Paar VON ZOI UND KETTN = Stapel VON ZOI() OIDA\nSOG AU v = VAZEICHNIS VON ZOI UND KETTN() OIDA",
+        );
+        let f = &p.funktionen[0];
+        assert_eq!(f.typ_parameter, vec!["T"]);
+        let TypAngabe::Funktion { parameter, rueckgabe: Some(rueckgabe), .. } = &f.parameter[1].angabe else { panic!() };
+        assert!(matches!(&parameter[0], TypAngabe::Name { name, .. } if name == "T"));
+        assert_eq!(**rueckgabe, TypAngabe::Einfach(Typ::Jona));
+        assert!(matches!(&f.rueckgabe_angabe, Some(TypAngabe::Verzeichnis { .. })));
+        assert_eq!(p.klassen[0].typ_parameter, vec!["K", "W"]);
+        assert_eq!(p.strukturen[0].typ_parameter, vec!["A", "B"]);
+        // Stapel VON (Paar VON ZOI UND KETTN): Das UND gehört zur inneren Vorlage.
+        let AnweisungArt::Deklaration { angabe: Some(TypAngabe::Generisch { name, argumente, .. }), wert, .. } = &p.haupt[0].art
+        else {
+            panic!()
+        };
+        assert_eq!((name.as_str(), argumente.len()), ("Stapel", 1));
+        assert!(matches!(&argumente[0], TypAngabe::Generisch { name, argumente, .. } if name == "Paar" && argumente.len() == 2));
+        assert!(matches!(&wert.art, AusdruckArt::Erzeug { angabe: TypAngabe::Generisch { .. }, argumente } if argumente.is_empty()));
+        let AnweisungArt::Deklaration { wert, .. } = &p.haupt[1].art else { panic!() };
+        assert!(matches!(&wert.art, AusdruckArt::Erzeug { angabe: TypAngabe::Verzeichnis { .. }, .. }));
+    }
+
+    #[test]
     fn fia_ohne_von() {
         let f = fehler("FIA i BIS 3 TUA PASST SCHO");
         assert_eq!(f.meldung, "Do ghört VON her, ned BIS.");

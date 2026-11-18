@@ -1,0 +1,14 @@
+:2:18: Da Schlissl von dem VAZEICHNIS is a KETTN, des do is oba a ZOI.
+:3:21: 'oida_von[...]' is a ZOI, do kaunst ka KETTN einetuan.
+:4:1: Bei an VAZEICHNIS geht nur '=': Da Schlissl kunnt jo fehln. Schreib zum Beispü: v[k] = (v[k] ODA HOID 0) + 1 OIDA
+:5:27: A VIELLEICHT ZOI + a ZOI? Des geht si ned aus. Wos NIX sei kunnt, muasst z'erst nochschaun (WENN x != NIX DAUN ...) oda mit ODA HOID an Ersotz augebn.
+:6:21: 'oida_von[...]' is a ZOI, do kaunst ka NIX einetuan.
+:7:12: Ois Schlissl in an VAZEICHNIS geht nur a ZOI oda a KETTN, ned a KOMMAZOI.
+:8:12: Da Wert in an VAZEICHNIS kaun ned VIELLEICHT sei: Wos fehlt, steht afoch ned drin.
+:9:12: A neichs VAZEICHNIS is laa: In de Klammer ghört nix.
+:10:10: 'HAU EINE' wü ois 1. Wert a LISTN, du gibst eam a VAZEICHNIS VON KETTN UND ZOI.
+:11:21: Da Schlissl von dem VAZEICHNIS is a KETTN, des do is oba a ZOI.
+:13:18: A KETTN + a ZOI? Des geht si ned aus. Nimm KETTN(...) zum Umwandln.
+:15:39: 'd' soll a VAZEICHNIS VON ZOI UND ZOI sei, oba des do is a VAZEICHNIS VON KETTN UND ZOI.
+:16:18: A VAZEICHNIS VON KETTN UND ZOI == a VAZEICHNIS VON KETTN UND ZOI? Des geht si ned aus.
+Na, des wird nix: 13 Fehler.

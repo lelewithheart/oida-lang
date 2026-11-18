@@ -31,6 +31,11 @@
 //!    Dahinter liegen die Werte, die eine Funktion ohne Namen von außen
 //!    mitgenommen hat. Der Code bekommt die Hülle als ersten Wert.
 //!
+//!  - Ein Verzeichnis ist ein Zeiger auf `%oida.Wb`: Zähler, Länge, die
+//!    Schlüssel (je 8 Bytes: eine Zahl oder ein Zeiger auf einen Text) und
+//!    die Werte dicht hintereinander. Suchen, anhängen und entfernen macht
+//!    die Laufzeit; die Werte liest und schreibt der erzeugte Code selbst.
+//!
 //! # Klassen und Methoden
 //!
 //! Eine Methode ist eine Funktion, die das Objekt als ersten Wert bekommt
@@ -104,6 +109,15 @@ declare ptr @oida_liste_neu(i64, i64)
 declare ptr @oida_liste_neuer_platz(ptr, i64)
 declare void @oida_liste_raus(ptr, i64, i64, i64)
 declare void @oida_liste_frei(ptr, i64)
+
+; Verzeichnisse (Schlüssel -> Wert): Zähler, Länge, Schlüssel, Werte. (Dahinter kommt noch, was nur die Laufzeit braucht.)
+%oida.Wb = type { i64, i64, ptr, ptr }
+declare ptr @oida_wb_neu(i64)
+declare i64 @oida_wb_finde(ptr, i64)
+declare i64 @oida_wb_dazu(ptr, i64, i64)
+declare void @oida_wb_raus(ptr, i64, i64)
+declare ptr @oida_wb_schluessel(ptr)
+declare void @oida_wb_frei(ptr, i64)
 
 ; Objekte
 declare ptr @oida_objekt_neu(i64)
@@ -356,7 +370,9 @@ fn weiter_unten_ersetzt(typen: &Typen, klasse: u32, name: &str) -> bool {
 /// Der Befehl, der den Wert für eine weitere Stelle mitzählt (keiner, wenn es nichts zu zählen gibt).
 fn behalt_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
     match typ {
-        Typ::Kettn | Typ::Liste(_) | Typ::Fehla => Some(format!("call void @oida.behalt(ptr {wert})")),
+        Typ::Kettn | Typ::Liste(_) | Typ::Fehla | Typ::Verzeichnis(_) => {
+            Some(format!("call void @oida.behalt(ptr {wert})"))
+        }
         // Die Hülle einer Funktion beginnt wie ein Objekt.
         Typ::Klasse(_) | Typ::Funktion(_) => Some(format!("call void @oida.behalt.objekt(ptr {wert})")),
         Typ::Vielleicht { nummer, .. } if typen.verwaltet(typ) => {
@@ -378,6 +394,7 @@ fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
         Typ::Ergebnis(n) => Some(format!("call void @oida.lass.e{n}(%e{n} {wert})")),
         Typ::Liste(n) => Some(format!("call void @oida.lass.l{n}(ptr {wert})")),
         Typ::Funktion(_) => Some(format!("call void @oida.lass.objekt(ptr {wert})")),
+        Typ::Verzeichnis(n) => Some(format!("call void @oida.lass.w{n}(ptr {wert})")),
         // Kann es nur genau diese Klasse sein, steht fest, wie freigegeben wird.
         Typ::Klasse(n) if hat_kinder(typen, n) => Some(format!("call void @oida.lass.objekt(ptr {wert})")),
         Typ::Klasse(n) => Some(format!("call void @oida.lass.k{n}(ptr {wert})")),
@@ -469,7 +486,7 @@ impl Modul<'_> {
             Typ::Struktur(n) => format!("  call void @oida.schreib.s{n}(%s{n} {wert})\n"),
             Typ::Liste(n) => format!("  call void @oida.schreib.l{n}(ptr {wert})\n"),
             Typ::Klasse(_) | Typ::Funktion(_) => format!("  call void @oida.schreib.objekt(ptr {wert})\n"),
-            Typ::Verzeichnis(_) => unreachable!("kommt mit dem Verzeichnis-Typ"),
+            Typ::Verzeichnis(n) => format!("  call void @oida.schreib.w{n}(ptr {wert})\n"),
             Typ::Fehla => {
                 let anfang = format!("{}(", self.fehla);
                 let (anfang, ende) = (self.text(&anfang), self.text(")"));
@@ -505,6 +522,61 @@ impl Modul<'_> {
              call void @oida_objekt_frei(ptr %huelle, i64 24)\n  ret void\n}}\n\n\
              @oida.huelle.fest = internal constant {{ ptr, ptr }} {{ ptr @oida.frei.fest, ptr @oida.schreib.funktion }}\n"
         );
+
+        // Verzeichnisse: loslassen (samt den Werten) und ausgeben als {schlüssel: wert, ...}.
+        for (n, (k, w)) in typen.verzeichnisse.iter().enumerate() {
+            if !brauchbar(*k) || !brauchbar(*w) {
+                continue;
+            }
+            let (kt, wt) = (ir_typ(*k), ir_typ(*w));
+            let lesen = "  %lp = getelementptr inbounds %oida.Wb, ptr %v, i32 0, i32 1\n  %laenge = load i64, ptr %lp\n  \
+                         %wp = getelementptr inbounds %oida.Wb, ptr %v, i32 0, i32 3\n  %werte = load ptr, ptr %wp\n";
+            let _ = writeln!(aus, "define internal void @oida.lass.w{n}(ptr %v) {{\nstart:");
+            aus.push_str(
+                "  %z = load i64, ptr %v\n  %weniger = sub i64 %z, 1\n  store i64 %weniger, ptr %v\n  \
+                 %keiner = icmp eq i64 %weniger, 0\n  br i1 %keiner, label %frei, label %ende\nfrei:\n",
+            );
+            if let Some(befehl) = lass_befehl(typen, *w, "%e") {
+                aus.push_str(lesen);
+                let _ = writeln!(
+                    aus,
+                    "  br label %kopf\nkopf:\n  %i = phi i64 [ 0, %frei ], [ %i2, %rumpf ]\n  \
+                     %weiter = icmp slt i64 %i, %laenge\n  br i1 %weiter, label %rumpf, label %raus\nrumpf:\n  \
+                     %p = getelementptr inbounds {wt}, ptr %werte, i64 %i\n  %e = load {wt}, ptr %p\n  {befehl}\n  \
+                     %i2 = add i64 %i, 1\n  br label %kopf\nraus:"
+                );
+            }
+            let _ = writeln!(
+                aus,
+                "  call void @oida_wb_frei(ptr %v, i64 {})\n  br label %ende\nende:\n  ret void\n}}\n",
+                groesse(*w)
+            );
+
+            let (auf, komma, doppelpunkt, zu) = (self.text("{"), self.text(", "), self.text(": "), self.text("}"));
+            let _ = writeln!(aus, "define internal void @oida.schreib.w{n}(ptr %v) {{\nstart:");
+            let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {auf})");
+            aus.push_str(lesen);
+            let _ = writeln!(
+                aus,
+                "  %sp = getelementptr inbounds %oida.Wb, ptr %v, i32 0, i32 2\n  %schluessel = load ptr, ptr %sp\n  \
+                 br label %kopf\nkopf:\n  %i = phi i64 [ 0, %start ], [ %i2, %eintrag ]\n  \
+                 %weiter = icmp slt i64 %i, %laenge\n  br i1 %weiter, label %rumpf, label %ende\nrumpf:\n  \
+                 %erstes = icmp eq i64 %i, 0\n  br i1 %erstes, label %eintrag, label %komma\nkomma:\n  \
+                 call void @oida_schreib_text(ptr {komma})\n  br label %eintrag\neintrag:\n  \
+                 %kp = getelementptr inbounds i64, ptr %schluessel, i64 %i\n  %k = load {kt}, ptr %kp"
+            );
+            aus.push_str(&self.schreib_befehle(*k, "%k", true, "jk"));
+            let _ = writeln!(
+                aus,
+                "  call void @oida_schreib_text(ptr {doppelpunkt})\n  \
+                 %p = getelementptr inbounds {wt}, ptr %werte, i64 %i\n  %e = load {wt}, ptr %p"
+            );
+            aus.push_str(&self.schreib_befehle(*w, "%e", true, "jw"));
+            let _ = writeln!(
+                aus,
+                "  %i2 = add i64 %i, 1\n  br label %kopf\nende:\n  call void @oida_schreib_text(ptr {zu})\n  ret void\n}}\n"
+            );
+        }
 
         // VIELLEICHT: nur etwas tun, wenn etwas da ist.
         for (n, innen) in typen.vielleicht.iter().enumerate() {
@@ -904,6 +976,12 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.zeile(&format!("store {} {w}, ptr %v{id}{}", ir_typ(wert.typ), wert_hinweis(wert.typ)));
             }
             AnweisungArt::Zuweisung { ziel, op: None, wert } => {
+                if let AusdruckArt::Stelle { liste, index } = &ziel.art
+                    && matches!(liste.typ, Typ::Verzeichnis(_))
+                {
+                    self.wb_schreiben(liste, index, wert);
+                    return;
+                }
                 // Erst den Wert ausrechnen, dann erst das Ziel suchen: Beim
                 // Ausrechnen könnte sich eine Liste ändern, in der das Ziel liegt.
                 let w = self.ausdruck(wert);
@@ -1147,17 +1225,32 @@ impl<'m, 't> FunktionsBau<'m, 't> {
     /// `FIA JEDE x IN liste`: geht die Liste der Reihe nach durch. `x` ist in
     /// jedem Durchlauf eine Kopie des Elements und gilt nur in diesem Durchlauf.
     fn fia_jede(&mut self, id: usize, liste: &Ausdruck, rumpf: &[Anweisung]) {
-        let element = self.modul.typen.element(liste.typ).expect("die Typprüfung verlangt eine Liste");
+        let typen = self.modul.typen;
+        // Bei einem Verzeichnis geht es über die Schlüssel: Die Laufzeit gibt
+        // sie als neue Liste her, die danach wie jede Liste durchgegangen wird.
+        let (l, element, listen_typ) = match typen.verzeichnis(liste.typ) {
+            Some((k, _)) => {
+                let (v, v_eigen) = self.geliehen(liste);
+                let l = self.temp();
+                self.zeile(&format!("{l} = call ptr @oida_wb_schluessel(ptr {v})"));
+                self.lass_wenn_eigen(&v, liste.typ, v_eigen);
+                let nummer = typen.listen.iter().position(|t| *t == k).expect("die Typprüfung legt den Listentyp an");
+                (l, k, Typ::Liste(nummer as u32))
+            }
+            None => {
+                let element = typen.element(liste.typ).expect("die Typprüfung verlangt eine Liste");
+                (self.ausdruck(liste), element, liste.typ)
+            }
+        };
         let t = ir_typ(element);
 
         // Die Liste gehört für die Dauer der Schleife uns, auch wenn die
         // Variable inzwischen eine andere Liste bekommt. Sie liegt in einem
         // versteckten Platz, damit HAU OB und GIB ZRUCK sie mit loslassen.
-        let l = self.ausdruck(liste);
         self.verwaltet.push(Vec::new());
         let l_platz = self.versteckter_platz("ptr");
         self.zeile(&format!("store ptr {l}, ptr {l_platz}"));
-        self.verwaltet.last_mut().expect("gerade angelegt").push((l_platz, liste.typ));
+        self.verwaltet.last_mut().expect("gerade angelegt").push((l_platz, listen_typ));
         let i_platz = self.versteckter_platz("i64");
         self.zeile(&format!("store i64 0, ptr {i_platz}"));
 
@@ -1358,6 +1451,9 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             AusdruckArt::Kommazoi(wert) => format!("0x{:016X}", wert.to_bits()),
             AusdruckArt::Jona(wert) => wert.to_string(),
             AusdruckArt::Text(inhalt) => self.modul.text(inhalt),
+            AusdruckArt::Stelle { liste, index } if matches!(liste.typ, Typ::Verzeichnis(_)) => {
+                self.wb_lesen(liste, index, ausdruck.typ)
+            }
             AusdruckArt::Variable { .. }
             | AusdruckArt::Feld { .. }
             | AusdruckArt::Stelle { .. }
@@ -1645,7 +1741,14 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_wenn_eigen(&h, funktion.typ, h_eigen);
                 t
             }
-            AusdruckArt::Erzeug { .. } => unreachable!("die Typprüfung macht daraus einen Bau oder ein neues Objekt"),
+            AusdruckArt::Erzeug { .. } => {
+                // Bei Strukturen und Klassen hat die Typprüfung daraus einen Bau oder
+                // ein neues Objekt gemacht; übrig bleibt das leere Verzeichnis.
+                let (k, _) = self.modul.typen.verzeichnis(ausdruck.typ).expect("nur Verzeichnisse kommen hier an");
+                let t = self.temp();
+                self.zeile(&format!("{t} = call ptr @oida_wb_neu(i64 {})", (k == Typ::Kettn) as i64));
+                t
+            }
             AusdruckArt::Nix => match ausdruck.typ {
                 Typ::Vielleicht { zeiger: true, .. } => "null".to_string(),
                 _ => "zeroinitializer".to_string(),
@@ -1687,6 +1790,108 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 }
             }
         }
+    }
+
+    /// Der Schlüssel, wie ihn die Laufzeit haben will: 8 Bytes, bei Texten der Zeiger als Zahl.
+    fn wb_schluessel(&mut self, wert: &str, typ: Typ) -> String {
+        if typ != Typ::Kettn {
+            return wert.to_string();
+        }
+        let t = self.temp();
+        self.zeile(&format!("{t} = ptrtoint ptr {wert} to i64"));
+        t
+    }
+
+    /// Wo im Verzeichnis `v` der Wert an der Stelle `stelle` liegt.
+    fn wb_wert_platz(&mut self, v: &str, stelle: &str, wert_typ: Typ) -> String {
+        let (wp, werte, p) = (self.temp(), self.temp(), self.temp());
+        self.zeile(&format!("{wp} = getelementptr inbounds %oida.Wb, ptr {v}, i32 0, i32 3"));
+        self.zeile(&format!("{werte} = load ptr, ptr {wp}"));
+        self.zeile(&format!("{p} = getelementptr inbounds {}, ptr {werte}, i64 {stelle}", ir_typ(wert_typ)));
+        p
+    }
+
+    /// `verzeichnis[schlüssel]`: der Wert, oder NIX, wenn es den Schlüssel nicht gibt.
+    fn wb_lesen(&mut self, verzeichnis: &Ausdruck, schluessel: &Ausdruck, ergebnis: Typ) -> String {
+        let (k_typ, w_typ) = self.modul.typen.verzeichnis(verzeichnis.typ).expect("von der Typprüfung geprüft");
+        let (v, v_eigen) = self.geliehen(verzeichnis);
+        let (k, k_eigen) = self.geliehen(schluessel);
+        let roh = self.wb_schluessel(&k, k_typ);
+        let (stelle, da) = (self.temp(), self.temp());
+        let m_da = self.marke("wb_da");
+        let m_ende = self.marke("wb_ende");
+        self.zeile(&format!("{stelle} = call i64 @oida_wb_finde(ptr {v}, i64 {roh})"));
+        self.zeile(&format!("{da} = icmp sge i64 {stelle}, 0"));
+        let von_vorne = self.block.clone();
+        self.zeile(&format!("br i1 {da}, label %{m_da}, label %{m_ende}"));
+
+        self.beginne_block(&m_da);
+        let p = self.wb_wert_platz(&v, &stelle, w_typ);
+        let w = self.temp();
+        let (wt, et) = (ir_typ(w_typ), ir_typ(ergebnis));
+        self.zeile(&format!("{w} = load {wt}, ptr {p}"));
+        self.behalt(&w, w_typ);
+        // Als VIELLEICHT: ein Zeiger bleibt, wie er ist; sonst kommt der Merker "ist da" dazu.
+        let gefunden = if matches!(ergebnis, Typ::Vielleicht { zeiger: true, .. }) {
+            w
+        } else {
+            let (a, b) = (self.temp(), self.temp());
+            self.zeile(&format!("{a} = insertvalue {et} zeroinitializer, i1 true, 0"));
+            self.zeile(&format!("{b} = insertvalue {et} {a}, {wt} {w}, 1"));
+            b
+        };
+        self.zeile(&format!("br label %{m_ende}"));
+
+        self.beginne_block(&m_ende);
+        let nix = if matches!(ergebnis, Typ::Vielleicht { zeiger: true, .. }) { "null" } else { "zeroinitializer" };
+        let t = self.temp();
+        self.zeile(&format!("{t} = phi {et} [ {gefunden}, %{m_da} ], [ {nix}, %{von_vorne} ]"));
+        self.lass_wenn_eigen(&k, k_typ, k_eigen);
+        self.lass_wenn_eigen(&v, verzeichnis.typ, v_eigen);
+        t
+    }
+
+    /// `verzeichnis[schlüssel] = wert`: ersetzt den Wert oder legt einen neuen Eintrag an.
+    fn wb_schreiben(&mut self, verzeichnis: &Ausdruck, schluessel: &Ausdruck, wert: &Ausdruck) {
+        let (k_typ, w_typ) = self.modul.typen.verzeichnis(verzeichnis.typ).expect("von der Typprüfung geprüft");
+        let wt = ir_typ(w_typ);
+        // Erst den Wert ausrechnen (er gehört danach dem Verzeichnis), dann erst suchen.
+        let w = self.ausdruck(wert);
+        let (v, v_eigen) = self.geliehen(verzeichnis);
+        let (k, k_eigen) = self.geliehen(schluessel);
+        let roh = self.wb_schluessel(&k, k_typ);
+        let (stelle, da) = (self.temp(), self.temp());
+        let m_da = self.marke("wb_ersetzen");
+        let m_neu = self.marke("wb_neu");
+        let m_ende = self.marke("wb_ende");
+        self.zeile(&format!("{stelle} = call i64 @oida_wb_finde(ptr {v}, i64 {roh})"));
+        self.zeile(&format!("{da} = icmp sge i64 {stelle}, 0"));
+        self.zeile(&format!("br i1 {da}, label %{m_da}, label %{m_neu}"));
+
+        // Den Schlüssel gibt es schon: Der alte Wert wird nicht mehr gebraucht.
+        self.beginne_block(&m_da);
+        let p = self.wb_wert_platz(&v, &stelle, w_typ);
+        if self.modul.typen.verwaltet(w_typ) {
+            let alt = self.temp();
+            self.zeile(&format!("{alt} = load {wt}, ptr {p}"));
+            self.zeile(&format!("store {wt} {w}, ptr {p}"));
+            self.lass(&alt, w_typ);
+        } else {
+            self.zeile(&format!("store {wt} {w}, ptr {p}"));
+        }
+        self.zeile(&format!("br label %{m_ende}"));
+
+        // Ein neuer Eintrag: Die Laufzeit macht Platz (und merkt sich den Schlüssel).
+        self.beginne_block(&m_neu);
+        let neu = self.temp();
+        self.zeile(&format!("{neu} = call i64 @oida_wb_dazu(ptr {v}, i64 {roh}, i64 {})", groesse(w_typ)));
+        let p = self.wb_wert_platz(&v, &neu, w_typ);
+        self.zeile(&format!("store {wt} {w}, ptr {p}"));
+        self.zeile(&format!("br label %{m_ende}"));
+
+        self.beginne_block(&m_ende);
+        self.lass_wenn_eigen(&k, k_typ, k_eigen);
+        self.lass_wenn_eigen(&v, verzeichnis.typ, v_eigen);
     }
 
     /// Ist bei einem `VIELLEICHT`-Wert etwas da?
@@ -1798,6 +2003,32 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_wenn_eigen(&l, argumente[0].typ, l_eigen);
                 return String::new();
             }
+            Eingebaut::Raus if matches!(argumente[0].typ, Typ::Verzeichnis(_)) => {
+                // Den Eintrag mit dem Schlüssel entfernen; gibt es ihn nicht, passiert nichts.
+                let (k_typ, w_typ) = self.modul.typen.verzeichnis(argumente[0].typ).expect("gerade geprüft");
+                let (v, v_eigen) = self.geliehen(&argumente[0]);
+                let (k, k_eigen) = self.geliehen(&argumente[1]);
+                let roh = self.wb_schluessel(&k, k_typ);
+                let (stelle, da) = (self.temp(), self.temp());
+                let m_da = self.marke("wb_raus");
+                let m_ende = self.marke("wb_ende");
+                self.zeile(&format!("{stelle} = call i64 @oida_wb_finde(ptr {v}, i64 {roh})"));
+                self.zeile(&format!("{da} = icmp sge i64 {stelle}, 0"));
+                self.zeile(&format!("br i1 {da}, label %{m_da}, label %{m_ende}"));
+                self.beginne_block(&m_da);
+                if self.modul.typen.verwaltet(w_typ) {
+                    let p = self.wb_wert_platz(&v, &stelle, w_typ);
+                    let alt = self.temp();
+                    self.zeile(&format!("{alt} = load {}, ptr {p}", ir_typ(w_typ)));
+                    self.lass(&alt, w_typ);
+                }
+                self.zeile(&format!("call void @oida_wb_raus(ptr {v}, i64 {stelle}, i64 {})", groesse(w_typ)));
+                self.zeile(&format!("br label %{m_ende}"));
+                self.beginne_block(&m_ende);
+                self.lass_wenn_eigen(&k, k_typ, k_eigen);
+                self.lass_wenn_eigen(&v, argumente[0].typ, v_eigen);
+                return String::new();
+            }
             Eingebaut::Raus => {
                 let element = self.modul.typen.element(argumente[0].typ).expect("von der Typprüfung geprüft");
                 let (l, l_eigen) = self.geliehen(&argumente[0]);
@@ -1836,7 +2067,8 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_wenn_eigen(&text, Typ::Kettn, eigen);
                 return b;
             }
-            Eingebaut::Laenge if matches!(argumente[0].typ, Typ::Liste(_)) => {
+            // Bei einem Verzeichnis steht die Länge an derselben Stelle wie bei einer Liste.
+            Eingebaut::Laenge if matches!(argumente[0].typ, Typ::Liste(_) | Typ::Verzeichnis(_)) => {
                 let (l, l_eigen) = self.geliehen(&argumente[0]);
                 let (lp, t) = (self.temp(), self.temp());
                 self.zeile(&format!("{lp} = getelementptr inbounds %oida.Liste, ptr {l}, i32 0, i32 1"));
@@ -2307,6 +2539,51 @@ mod tests {
         assert!(zwamoi.contains("insertvalue %e1 zeroinitializer, ptr %t"), "{zwamoi}");
         // Am Ende ohne GIB ZRUCK: hat geklappt.
         assert!(zwamoi.trim_end().ends_with("ret %e1 zeroinitializer"), "{zwamoi}");
+    }
+
+    #[test]
+    fn funktionen_als_werte_im_speicher() {
+        let ir = ir("FUNKTIAUN doppelt(x ZOI) GIBT ZRUCK ZOI\n GIB ZRUCK x * 2 OIDA\nPASST SCHO\n\
+             SOG AU a = 5 OIDA\nSOG AU t = \"x\" OIDA\nSOG AU f = FUNKTIAUN(x ZOI) => x + a + LÄNGN(t) OIDA\n\
+             SOG AU g = doppelt OIDA\nSCHREIB(f(1), g(2)) OIDA");
+        // Die Hülle: wie ein Objekt, dann der Code, dann was mitgenommen wurde (eine Zahl, ein Text).
+        assert!(ir.contains("%h0 = type { i64, ptr, ptr, i64, ptr }"), "{ir}");
+        assert!(ir.contains("define internal i64 @oida.l.0(ptr %huelle, i64 %p0)"), "{ir}");
+        // Beim Freigeben der Hülle wird der Text losgelassen, die Zahl braucht nichts.
+        let anfang = ir.find("define internal void @oida.frei.h0").unwrap();
+        let frei = &ir[anfang..anfang + ir[anfang..].find("\n}\n").unwrap()];
+        assert_eq!(frei.matches("call void @oida.lass(").count(), 1, "{frei}");
+        // Eine Funktion mit Namen bekommt einen Umweg, der die Hülle entgegennimmt.
+        assert!(ir.contains("define internal i64 @\"oida.fw.doppelt\"(ptr %huelle, i64 %p0)"), "{ir}");
+        assert!(haupt(&ir).contains("store ptr @\"oida.fw.doppelt\", ptr"), "{ir}");
+    }
+
+    #[test]
+    fn vorlagen_ergeben_nur_code_fuer_ihre_fassungen() {
+        let ir = ir("FUNKTIAUN erstes VON T(liste LISTN VON T) GIBT ZRUCK T\n GIB ZRUCK liste[0] OIDA\nPASST SCHO\n\
+             KLASSE Stopl VON T\n drin LISTN VON T = []\n FUNKTIAUN wievü() GIBT ZRUCK ZOI\n  GIB ZRUCK LÄNGN(SÖWA.drin) OIDA\n PASST SCHO\nPASST SCHO\n\
+             SCHREIB(erstes([1]), erstes([\"a\"]), Stopl VON ZOI().wievü()) OIDA");
+        assert!(ir.contains("define internal i64 @\"oida.f.erstes\\20VON\\20ZOI\"(ptr %p0)"), "{ir}");
+        assert!(ir.contains("define internal ptr @\"oida.f.erstes\\20VON\\20KETTN\"(ptr %p0)"), "{ir}");
+        assert!(!ir.contains("@\"oida.f.erstes\""), "{ir}");
+        assert!(ir.contains("define internal i64 @\"oida.m.Stopl\\20VON\\20ZOI.wiev\\C3\\BC\"(ptr %selbst)"), "{ir}");
+        // Für die Vorlage selbst (Klasse 0) gibt es weder einen Typ noch Angaben.
+        assert!(!ir.contains("%k0 = type") && ir.contains("%k1 = type { i64, ptr, ptr }"), "{ir}");
+        assert!(!ir.contains("@oida.klasse.0 ") && ir.contains("@oida.klasse.1 "), "{ir}");
+    }
+
+    #[test]
+    fn verzeichnis_im_speicher() {
+        let ir = ir("SOG AU v = VAZEICHNIS VON KETTN UND ZOI() OIDA\nv[\"a\"] = 1 OIDA\nSCHREIB(v[\"a\"] ODA HOID 0, LÄNGN(v)) OIDA\n\
+             SOG AU w = VAZEICHNIS VON ZOI UND KETTN() OIDA\nw[1] = \"x\" OIDA");
+        let haupt = haupt(&ir);
+        // Texte als Schlüssel (1) und Zahlen als Schlüssel (0).
+        assert!(haupt.contains("call ptr @oida_wb_neu(i64 1)") && haupt.contains("call ptr @oida_wb_neu(i64 0)"), "{haupt}");
+        // Schreiben: erst suchen, dann ersetzen oder anhängen.
+        assert_eq!(haupt.matches("call i64 @oida_wb_dazu(").count(), 2, "{haupt}");
+        assert!(haupt.matches("call i64 @oida_wb_finde(").count() >= 3, "{haupt}");
+        // Beim Ersetzen eines Texts wird der alte losgelassen, bei einer Zahl nicht.
+        assert_eq!(haupt.matches("call void @oida.lass(").count(), 1, "{haupt}");
     }
 
     #[test]

@@ -301,12 +301,19 @@ fn sprach_einstellungen(wb: &Woerterbuch) -> String {
     let auffangen = auswahl(wb, &[Schluessel::Catch]);
     let probier = auswahl(wb, &[Schluessel::Try]);
     let oida = auswahl(wb, &[Schluessel::Oida]);
+    let nur_funktion = auswahl(wb, &[Schluessel::Function]);
+    let zruck = auswahl(wb, &[Schluessel::Return]);
     let ende = auswahl(wb, &[Schluessel::End]);
     // Eine Zeile weiter einrücken nach: FUNKTIAUN ..., STRUKTUR ..., KLASSE ..., ... DAUN, ... TUA, SUNST
     // und nach PROBIER ..., wenn die Zeile nicht mit OIDA aufhört (dann folgt der Block),
-    // und nach WONNS SCHIEFGEHT [name].
+    // und nach WONNS SCHIEFGEHT [name],
+    // und nach einer Funktion ohne Namen mit Block: "... = FUNKTIAUN(x ZOI) GIBT ZRUCK ZOI"
+    // (sie steht hinter =, einer Klammer, einem Beistrich oder GIB ZRUCK; kurz mit => und fertig mit OIDA zählt nicht).
+    let ohne_nom = format!(
+        r".*(?:[=(,]|{davor}{zruck})\s*{nur_funktion}\s*\((?!.*=>)(?!.*{davor}{oida}\s*(?:#.*)?$).*"
+    );
     let mehr = format!(
-        r"^\s*(?:{funktion}{danach}.*|.*{davor}{oeffner}|{sunst}|{auffangen}{danach}.*|{probier}{danach}(?!.*{davor}{oida}\s*(?:#.*)?$).*)\s*(?:#.*)?$"
+        r"^\s*(?:{funktion}{danach}.*|.*{davor}{oeffner}|{sunst}|{auffangen}{danach}.*|{probier}{danach}(?!.*{davor}{oida}\s*(?:#.*)?$).*|{ohne_nom})\s*(?:#.*)?$"
     );
     // Zurückrücken bei: PASST SCHO, SUNST, WONNS SCHIEFGEHT
     let weniger = format!(r"^\s*(?:{ende}|{sunst}|{auffangen}){danach}");
@@ -464,6 +471,44 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             "Etwas probieren und den Fehler auffangen",
         ),
         (
+            format!("{} =>", w(Function)),
+            format!("{}kurz", w(Function)),
+            vec![format!("{}(${{1:x}} ${{2:{}}}) => ${{0:x}}", w(Function), w(Int))],
+            "Kurze Funktion ohne Namen",
+        ),
+        (
+            format!("{} {} T", w(Function), w(From)),
+            format!("{}{}", w(Function), w(From)),
+            vec![
+                format!(
+                    "{} ${{1:name}} {} T(${{2:liste}} {} {} T) {} T",
+                    w(Function),
+                    w(From),
+                    w(List),
+                    w(From),
+                    w(Returns)
+                ),
+                "\t$0".into(),
+                w(End).to_string(),
+            ],
+            "Vorlage: eine Funktion für jeden Typ",
+        ),
+        (
+            w(Map).to_string(),
+            w(Map).to_string(),
+            vec![format!(
+                "{} ${{1:name}} = {} {} ${{2:{}}} {} ${{3:{}}}() {}",
+                w(Declare),
+                w(Map),
+                w(From),
+                w(Text),
+                w(And),
+                w(Int),
+                w(Oida)
+            )],
+            "Verzeichnis: zu einem Schlüssel einen Wert merken",
+        ),
+        (
             w(Print).to_string(),
             w(Print).to_string(),
             vec![format!("{}($1) {}", w(Print), w(Oida))],
@@ -563,6 +608,20 @@ mod tests {
         assert!(tokens.contains("[3,9,10,0],[3,20,3,1]") && tokens.contains("[3,26,3,6]"), "{tokens}");
         // PROBIER und WONNS SCHIEFGEHT (zwei Wörter, ein Stück).
         assert!(tokens.contains("[4,0,7,0]") && tokens.contains("[5,0,16,0]"), "{tokens}");
+    }
+
+    #[test]
+    fn funktionen_vorlagen_und_verzeichnis() {
+        let json = untersuche(
+            "FUNKTIAUN erstes VON T(liste LISTN VON T) GIBT ZRUCK T\n GIB ZRUCK liste[0] OIDA\nPASST SCHO\n\
+             SOG AU f = FUNKTIAUN(x ZOI) => x + erstes([1]) OIDA\nSOG AU v = VAZEICHNIS VON KETTN UND ZOI() OIDA\nv[\"a\"] = f(2) OIDA",
+            &wb(),
+        );
+        assert_eq!(feld(&json, "fehler"), "[]");
+        let tokens = feld(&json, "tokens");
+        // FUNKTIAUN ohne Namen und VAZEICHNIS sind Wörter der Sprache, f(2) ist ein Aufruf.
+        assert!(tokens.contains("[3,11,9,0]") && tokens.contains("[4,11,10,0]"), "{tokens}");
+        assert!(tokens.contains("[5,9,1,2]"), "{tokens}");
     }
 
     #[test]
