@@ -1,0 +1,660 @@
+# RogueWave: alles fürs Auge. Der weiche Schein, Ringe, Nachbilder, der
+# Hintergrund der drei Gebiete, die gezeichneten Symbole, und die Power-ups,
+# die Gegner manchmal fallen lassen.
+
+BRAUCH fensta OIDA
+BRAUCH mathe OIDA
+BRAUCH listen OIDA
+BRAUCH "werte.oida" OIDA
+BRAUCH "dinge.oida" OIDA
+BRAUCH "gegna.oida" OIDA
+BRAUCH "spü.oida" OIDA
+
+# ------------------------------------------------------------------ Schein
+
+# Ein weicher Lichtfleck, `größe` Bildpunkte breit. Am schönsten mit mischn_dazua():
+# Dann wird es dort, wo sich mehrere überlagern, heller.
+FUNKTIAUN schein(x KOMMAZOI, y KOMMAZOI, größe KOMMAZOI, hex KETTN, stärke KOMMAZOI)
+    valauf_rund(x, y, 0, größe / 2) OIDA
+    valauf_foab(0, hex, 0.55) OIDA
+    valauf_foab(0.35, hex, 0.55) OIDA
+    valauf_foab(1, hex, 0) OIDA
+    deckung(stärke) OIDA
+    kreis(x, y, größe / 2) OIDA
+    deckung(1) OIDA
+    foab_hex(hex) OIDA
+PASST SCHO
+
+# Zwei Stellen in Hex für einen Wert von 0 bis 1.
+FUNKTIAUN hex_zwa(wert KOMMAZOI) GIBT ZRUCK KETTN
+    SOG AU ziffan = "0123456789abcdef" OIDA
+    SOG AU n = klemm(ZOI(RUNDN(wert * 255)), 0, 255) OIDA
+    GIB ZRUCK STICKL(ziffan, n / 16, 1) + STICKL(ziffan, n % 16, 1) OIDA
+PASST SCHO
+
+# Eine Farbe aus Farbton (0 bis 360), Sättigung und Helligkeit (0 bis 1), als "#rrggbb".
+FUNKTIAUN foab_aus_ton(ton KOMMAZOI, sott KOMMAZOI, hell KOMMAZOI) GIBT ZRUCK KETTN
+    SOG AU t = (ton - 360 * OBRUNDN(ton / 360)) / 60 OIDA
+    SOG AU kroft = (1 - BETROG(2 * hell - 1)) * sott OIDA
+    SOG AU zwischn_wert = kroft * (1 - BETROG(t - 2 * OBRUNDN(t / 2) - 1)) OIDA
+    SOG AU grund = hell - kroft / 2 OIDA
+    SOG AU r = 0.0 OIDA
+    SOG AU g = 0.0 OIDA
+    SOG AU b = 0.0 OIDA
+    WENN t < 1 DAUN
+        r = kroft OIDA
+        g = zwischn_wert OIDA
+    SUNST WENN t < 2 DAUN
+        r = zwischn_wert OIDA
+        g = kroft OIDA
+    SUNST WENN t < 3 DAUN
+        g = kroft OIDA
+        b = zwischn_wert OIDA
+    SUNST WENN t < 4 DAUN
+        g = zwischn_wert OIDA
+        b = kroft OIDA
+    SUNST WENN t < 5 DAUN
+        r = zwischn_wert OIDA
+        b = kroft OIDA
+    SUNST
+        r = kroft OIDA
+        b = zwischn_wert OIDA
+    PASST SCHO
+    GIB ZRUCK "#" + hex_zwa(r + grund) + hex_zwa(g + grund) + hex_zwa(b + grund) OIDA
+PASST SCHO
+
+# ----------------------------------------------------------------- Symbole
+
+# Gezeichnete Symbole, damit die Anzeige nicht von der Emoji-Schrift abhängt.
+# Jedes ist für ein Feld von 24 mal 24 gedacht und wird auf `größe` gebracht.
+FUNKTIAUN symbol(nam KETTN, x KOMMAZOI, y KOMMAZOI, größe KOMMAZOI, hex KETTN, dicke KOMMAZOI)
+    lage_merkn() OIDA
+    schiab(x, y) OIDA
+    vergrößa(größe / 24) OIDA
+    foab_hex(hex) OIDA
+    linien_rund(WOAHR) OIDA
+    form_anfang() OIDA
+    WENN nam == "magnet" DAUN
+        form_bogn(0, -1, 8, PI, 2 * PI) OIDA
+        form_linie(8, 8) OIDA
+        form_geh(-8, -1) OIDA
+        form_linie(-8, 8) OIDA
+        form_geh(-8, 4) OIDA
+        form_linie(-3, 4) OIDA
+        form_geh(8, 4) OIDA
+        form_linie(3, 4) OIDA
+        form_geh(-3, -1) OIDA
+        form_bogn(0, -1, 3, PI, 2 * PI) OIDA
+        form_linie(3, 8) OIDA
+        form_geh(-3, -1) OIDA
+        form_linie(-3, 8) OIDA
+        form_rand(dicke) OIDA
+    SUNST WENN nam == "heart" DAUN
+        form_geh(0, 8) OIDA
+        form_kurvn3(-13, -2, -6, -11, 0, -4) OIDA
+        form_kurvn3(6, -11, 13, -2, 0, 8) OIDA
+        form_fülln() OIDA
+    SUNST WENN nam == "lightning" DAUN
+        form_geh(2, -10) OIDA
+        form_linie(-6, 2) OIDA
+        form_linie(0, 2) OIDA
+        form_linie(-2, 10) OIDA
+        form_linie(6, -2) OIDA
+        form_linie(0, -2) OIDA
+        form_zua() OIDA
+        form_fülln() OIDA
+    SUNST WENN nam == "flame" DAUN
+        form_geh(0, -10) OIDA
+        form_kurvn(9, 0, 6, 6) OIDA
+        form_kurvn(0, 13, -6, 6) OIDA
+        form_kurvn(-9, 0, 0, -10) OIDA
+        form_fülln() OIDA
+    SUNST WENN nam == "orbit" DAUN
+        kreis_rand(0, 0, 9, dicke) OIDA
+        kreis(9, 0, 3) OIDA
+    SUNST WENN nam == "frost" DAUN
+        FIA i VON 0 BIS 2 TUA
+            SOG AU w = i / 3.0 * PI OIDA
+            form_geh(KOSINUS(w) * 10, SINUS(w) * 10) OIDA
+            form_linie(-KOSINUS(w) * 10, -SINUS(w) * 10) OIDA
+        PASST SCHO
+        form_rand(dicke) OIDA
+    SUNST WENN nam == "easy" DAUN
+        form_geh(-9, 9) OIDA
+        form_kurvn(-9, -8, 9, -9) OIDA
+        form_kurvn(9, 8, -9, 9) OIDA
+        form_geh(-9, 9) OIDA
+        form_linie(3, -3) OIDA
+        form_rand(dicke) OIDA
+    SUNST WENN nam == "normal" DAUN
+        form_geh(-9, 9) OIDA
+        form_linie(8, -8) OIDA
+        form_geh(4, -9) OIDA
+        form_linie(9, -9) OIDA
+        form_linie(9, -4) OIDA
+        form_geh(-7, 2) OIDA
+        form_linie(-2, 7) OIDA
+        form_rand(dicke) OIDA
+    SUNST WENN nam == "hard" DAUN
+        form_bogn(0, -2, 8, PI * 0.85, PI * 2.15) OIDA
+        form_linie(4, 9) OIDA
+        form_linie(-4, 9) OIDA
+        form_zua() OIDA
+        form_rand(dicke) OIDA
+        kreis_rand(-3, -1, 1, dicke) OIDA
+        kreis_rand(3, -1, 1, dicke) OIDA
+    SUNST WENN nam == "stats" DAUN
+        form_geh(-8, 9) OIDA
+        form_linie(-8, 2) OIDA
+        form_geh(0, 9) OIDA
+        form_linie(0, -8) OIDA
+        form_geh(8, 9) OIDA
+        form_linie(8, -3) OIDA
+        form_rand(dicke) OIDA
+    SUNST WENN nam == "settings" DAUN
+        FIA i VON 0 BIS 7 TUA
+            SOG AU w = i / 8.0 * 2 * PI OIDA
+            form_geh(KOSINUS(w) * 7, SINUS(w) * 7) OIDA
+            form_linie(KOSINUS(w) * 10, SINUS(w) * 10) OIDA
+        PASST SCHO
+        form_rand(dicke) OIDA
+        kreis_rand(0, 0, 6, dicke) OIDA
+    PASST SCHO
+    linien_rund(FOISCH) OIDA
+    lage_zruck() OIDA
+PASST SCHO
+
+# ----------------------------------------------------- Ringe und Nachbilder
+
+# Ein Ring, der sich schnell ausbreitet und verblasst (ein Einschlag, ein Tod, ein Dash).
+KLASSE Ring
+    x KOMMAZOI
+    y KOMMAZOI
+    foab KETTN
+    max_r KOMMAZOI
+    max_lebn KOMMAZOI
+    dicke KOMMAZOI
+    lebn KOMMAZOI
+    r KOMMAZOI = 4.0
+PASST SCHO
+
+# Ein blasses Nachbild (hinter der Figur beim Dash).
+KLASSE Geist
+    x KOMMAZOI
+    y KOMMAZOI
+    radius KOMMAZOI
+    foab KETTN
+    lebn KOMMAZOI = 0.26
+PASST SCHO
+
+KLASSE Effekte
+    ringe LISTN VON Ring = []
+    geista LISTN VON Geist = []
+    tote_seit_ding ZOI = 0
+    # Die Balken oben folgen dem echten Wert weich nach; hinter dem Leben
+    # bleibt kurz stehen, was gerade verloren ging.
+    lebn_zeiga KOMMAZOI = -1.0
+    lebn_schottn KOMMAZOI = -1.0
+    xp_zeiga KOMMAZOI = -1.0
+    # Der Hintergrund jedes Gebiets, einmal gemalt
+    grund_büda LISTN VON Büd = []
+    grund_jetzt ZOI = 0
+    grund_vuaher ZOI = -1
+    grund_blend KOMMAZOI = 1.0
+
+    FUNKTIAUN zruck()
+        MEI.ringe = [] OIDA
+        MEI.geista = [] OIDA
+        MEI.tote_seit_ding = 0 OIDA
+        MEI.lebn_zeiga = -1.0 OIDA
+        MEI.lebn_schottn = -1.0 OIDA
+        MEI.xp_zeiga = -1.0 OIDA
+    PASST SCHO
+
+    FUNKTIAUN ring(x KOMMAZOI, y KOMMAZOI, foab KETTN, max_r KOMMAZOI, lebn KOMMAZOI, dicke KOMMAZOI)
+        WENN LÄNGN(MEI.ringe) >= 28 DAUN
+            HAU AUSSE(MEI.ringe, 0) OIDA
+        PASST SCHO
+        HAU EINE(MEI.ringe, Ring(x, y, foab, max_r, lebn, dicke, lebn)) OIDA
+    PASST SCHO
+
+    FUNKTIAUN geist(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI, foab KETTN)
+        WENN LÄNGN(MEI.geista) >= 18 DAUN
+            HAU AUSSE(MEI.geista, 0) OIDA
+        PASST SCHO
+        HAU EINE(MEI.geista, Geist(x, y, radius, foab)) OIDA
+    PASST SCHO
+
+    FUNKTIAUN weida_um(dauer KOMMAZOI)
+        FIA JEDE r IN MEI.ringe TUA
+            r.lebn -= dauer OIDA
+            SOG AU t = 1 - GRÖSSTA(0.0, r.lebn) / r.max_lebn OIDA
+            r.r = r.max_r * (1 - (1 - t) * (1 - t)) OIDA
+        PASST SCHO
+        MEI.ringe = nur(MEI.ringe, FUNKTIAUN(r Ring) => r.lebn > 0) OIDA
+        FIA JEDE g IN MEI.geista TUA
+            g.lebn -= dauer OIDA
+        PASST SCHO
+        MEI.geista = nur(MEI.geista, FUNKTIAUN(g Geist) => g.lebn > 0) OIDA
+    PASST SCHO
+
+    FUNKTIAUN geista_moi()
+        FIA JEDE g IN MEI.geista TUA
+            SOG AU a = klemm(g.lebn / 0.26, 0.0, 1.0) OIDA
+            foab_hex(g.foab) OIDA
+            deckung(a * 0.34) OIDA
+            kreis(g.x, g.y, g.radius * (0.7 + a * 0.3)) OIDA
+        PASST SCHO
+        deckung(1) OIDA
+    PASST SCHO
+
+    FUNKTIAUN ringe_moi()
+        FIA JEDE r IN MEI.ringe TUA
+            foab_hex(r.foab) OIDA
+            deckung(klemm(r.lebn / r.max_lebn, 0.0, 1.0) * 0.8) OIDA
+            kreis_rand(r.x, r.y, r.r, r.dicke) OIDA
+        PASST SCHO
+        deckung(1) OIDA
+    PASST SCHO
+
+    # Die Werte für die Balken: [Leben, Schatten vom Leben, Erfahrung], jeweils 0 bis 1.
+    FUNKTIAUN boikn_werte(p Spiela, dauer KOMMAZOI) GIBT ZRUCK LISTN VON KOMMAZOI
+        SOG AU lebn = klemm(p.lebn / p.max_lebn, 0.0, 1.0) OIDA
+        SOG AU xp = klemm(1.0 * p.xp / p.xp_ziel, 0.0, 1.0) OIDA
+        WENN MEI.lebn_zeiga < 0 DAUN
+            MEI.lebn_zeiga = lebn OIDA
+            MEI.lebn_schottn = lebn OIDA
+            MEI.xp_zeiga = xp OIDA
+        PASST SCHO
+        # Das Original rückt in jedem Bild (60 in der Sekunde) um einen festen Anteil nach.
+        SOG AU büda = dauer * 60 OIDA
+        MEI.lebn_zeiga = zwischn(MEI.lebn_zeiga, lebn, 1 - HOCH(0.72, büda)) OIDA
+        WENN lebn > MEI.lebn_schottn DAUN
+            MEI.lebn_schottn = lebn OIDA
+        SUNST
+            MEI.lebn_schottn = zwischn(MEI.lebn_schottn, lebn, 1 - HOCH(0.95, büda)) OIDA
+        PASST SCHO
+        WENN xp < MEI.xp_zeiga DAUN
+            MEI.xp_zeiga = xp OIDA
+        SUNST
+            MEI.xp_zeiga = zwischn(MEI.xp_zeiga, xp, 1 - HOCH(0.8, büda)) OIDA
+        PASST SCHO
+        GIB ZRUCK [MEI.lebn_zeiga, MEI.lebn_schottn, MEI.xp_zeiga] OIDA
+    PASST SCHO
+
+    # Malt den Hintergrund eines Gebiets: Farbnebel und Sterne. Die Zufallszahlen haben
+    # einen festen Anfang, damit ein Gebiet immer gleich aussieht.
+    FUNKTIAUN grund_baun(numma ZOI) GIBT ZRUCK Büd
+        SOG AU breite = 1240 OIDA
+        SOG AU höhe = 880 OIDA
+        SOG AU b = neichs_büd(breite, höhe) OIDA
+        moi_in(b) OIDA
+        foab_hex(gebiet_von(numma).grund) OIDA
+        deckung(1) OIDA
+        rechteck(0, 0, breite, höhe) OIDA
+        SOG AU zufoi = Würfl(97 + numma * 131) OIDA
+        SOG AU töne = [205.0, 275.0] OIDA
+        WENN numma % 3 == 1 DAUN
+            töne = [145.0, 190.0] OIDA
+        PASST SCHO
+        WENN numma % 3 == 2 DAUN
+            töne = [340.0, 20.0] OIDA
+        PASST SCHO
+        FIA i VON 0 BIS 8 TUA
+            SOG AU x = zufoi.nächste() * breite OIDA
+            SOG AU y = zufoi.nächste() * höhe OIDA
+            SOG AU r = 180 + zufoi.nächste() * 340 OIDA
+            SOG AU ton = töne[i % 2] OIDA
+            SOG AU hell = (34 + zufoi.nächste() * 18) / 100 OIDA
+            SOG AU stärke = 0.1 + zufoi.nächste() * 0.12 OIDA
+            valauf_rund(x, y, 0, r) OIDA
+            valauf_foab(0, foab_aus_ton(ton, 0.85, hell), stärke) OIDA
+            valauf_foab(1, foab_aus_ton(ton, 0.85, 0.3), 0) OIDA
+            rechteck(0, 0, breite, höhe) OIDA
+        PASST SCHO
+        foab_hex("#d2e1ff") OIDA
+        FIA i VON 0 BIS 169 TUA
+            deckung(0.08 + zufoi.nächste() * 0.3) OIDA
+            SOG AU größe = 1.0 OIDA
+            WENN zufoi.nächste() < 0.08 DAUN
+                größe = 2.0 OIDA
+            PASST SCHO
+            SOG AU x = zufoi.nächste() * breite OIDA
+            SOG AU y = zufoi.nächste() * höhe OIDA
+            rechteck(x, y, größe, größe) OIDA
+        PASST SCHO
+        deckung(1) OIDA
+        moi_ins_fensta() OIDA
+        GIB ZRUCK b OIDA
+    PASST SCHO
+
+    # Der Hintergrund bewegt sich langsamer als die Welt (das gibt Tiefe). Wechselt
+    # das Gebiet, blendet der neue über den alten.
+    # Einmal am Anfang von einem Bild aufrufen, bevor etwas verschoben oder
+    # vergrößert wird: malt die Hintergründe, wenn es sie noch nicht gibt.
+    FUNKTIAUN vuabereitn()
+        WENN LÄNGN(MEI.grund_büda) == 0 DAUN
+            FIA i VON 0 BIS 2 TUA
+                HAU EINE(MEI.grund_büda, MEI.grund_baun(i)) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN grund_moi(kamera_x KOMMAZOI, kamera_y KOMMAZOI, numma ZOI, dauer KOMMAZOI)
+        MEI.vuabereitn() OIDA
+        SOG AU wöchs = numma % 3 OIDA
+        WENN wöchs != MEI.grund_jetzt DAUN
+            MEI.grund_vuaher = MEI.grund_jetzt OIDA
+            MEI.grund_jetzt = wöchs OIDA
+            MEI.grund_blend = 0.0 OIDA
+        PASST SCHO
+        MEI.grund_blend = KLANSTA(1.0, MEI.grund_blend + dauer * 0.7) OIDA
+        SOG AU px = -(kamera_x / GRÖSSTA(1.0, WELT_B - FELD_B)) * 270 OIDA
+        SOG AU py = -(kamera_y / GRÖSSTA(1.0, WELT_H - FELD_H)) * 230 OIDA
+        deckung(1) OIDA
+        WENN MEI.grund_blend < 1 UND MEI.grund_vuaher >= 0 DAUN
+            moi_büd(MEI.grund_büda[MEI.grund_vuaher], px, py) OIDA
+        PASST SCHO
+        deckung(MEI.grund_blend) OIDA
+        moi_büd(MEI.grund_büda[MEI.grund_jetzt], px, py) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Zufallszahlen mit festem Anfang (dieselbe Folge wie im Original).
+KLASSE Würfl
+    somen ZOI
+
+    FUNKTIAUN nächste() GIBT ZRUCK KOMMAZOI
+        MEI.somen = MEI.somen * 16807 % 2147483647 OIDA
+        GIB ZRUCK MEI.somen / 2147483647.0 OIDA
+    PASST SCHO
+PASST SCHO
+
+# Die Ränder des Bildes werden etwas dunkler: Das zieht den Blick in die Mitte.
+FUNKTIAUN randschottn_moi()
+    valauf_rund(FELD_B / 2, FELD_H / 2, 260, 600) OIDA
+    valauf_foab(0, "#000000", 0) OIDA
+    valauf_foab(1, "#000006", 0.5) OIDA
+    deckung(1) OIDA
+    rechteck(0, 0, FELD_B, FELD_H) OIDA
+    foab_hex("#000000") OIDA
+PASST SCHO
+
+# Beim Tod eines Gegners: ein Ring in seiner Farbe, bei Bossen ein großer.
+FUNKTIAUN tod_ring(s Spü, g Gegna)
+    WENN g.is_boss() DAUN
+        s.effekte.ring(g.x, g.y, g.foab, g.radius * 6, 0.6, 5) OIDA
+    SUNST
+        s.effekte.ring(g.x, g.y, g.foab, g.radius * 2.6, 0.26, 2) OIDA
+    PASST SCHO
+PASST SCHO
+
+# ---------------------------------------------------------------- Power-ups
+
+FUNKTIAUN ding_foab(oat ZOI) GIBT ZRUCK KETTN
+    WENN oat == DING_MAGNET DAUN
+        GIB ZRUCK "#55ff88" OIDA
+    PASST SCHO
+    WENN oat == DING_REPARATUR DAUN
+        GIB ZRUCK "#ff6688" OIDA
+    PASST SCHO
+    WENN oat == DING_EMP DAUN
+        GIB ZRUCK "#66ddff" OIDA
+    PASST SCHO
+    GIB ZRUCK "#ffcc33" OIDA
+PASST SCHO
+
+FUNKTIAUN ding_nam(oat ZOI) GIBT ZRUCK KETTN
+    WENN oat == DING_MAGNET DAUN
+        GIB ZRUCK "MAGNET" OIDA
+    PASST SCHO
+    WENN oat == DING_REPARATUR DAUN
+        GIB ZRUCK "REPAIR" OIDA
+    PASST SCHO
+    WENN oat == DING_EMP DAUN
+        GIB ZRUCK "EMP BLAST" OIDA
+    PASST SCHO
+    GIB ZRUCK "OVERDRIVE" OIDA
+PASST SCHO
+
+FUNKTIAUN ding_symbol(oat ZOI) GIBT ZRUCK KETTN
+    WENN oat == DING_MAGNET DAUN
+        GIB ZRUCK "magnet" OIDA
+    PASST SCHO
+    WENN oat == DING_REPARATUR DAUN
+        GIB ZRUCK "heart" OIDA
+    PASST SCHO
+    WENN oat == DING_EMP DAUN
+        GIB ZRUCK "lightning" OIDA
+    PASST SCHO
+    GIB ZRUCK "flame" OIDA
+PASST SCHO
+
+# Nach jedem Tod: Fällt ein Power-up? Bosse lassen immer eines fallen, Elite oft,
+# alle anderen erst nach einer Weile ohne.
+FUNKTIAUN ding_vielleicht(s Spü, g Gegna)
+    s.effekte.tote_seit_ding += 1 OIDA
+    WENN LÄNGN(s.dinga) >= DING_OBN DAUN
+        GIB ZRUCK OIDA
+    PASST SCHO
+    SOG AU vom_boss = g.oat == OAT_MINIBOSS ODA g.oat == OAT_BIGBOSS OIDA
+    SOG AU glück = s.spiela.ding_glück OIDA
+    SOG AU aussicht = 0.0 OIDA
+    WENN vom_boss DAUN
+        aussicht = 1.0 OIDA
+    SUNST WENN g.is_elite DAUN
+        aussicht = 0.28 * glück OIDA
+    SUNST WENN s.effekte.tote_seit_ding >= 38 / glück DAUN
+        aussicht = 0.09 * glück OIDA
+    PASST SCHO
+    WENN ZUFOI() >= aussicht DAUN
+        GIB ZRUCK OIDA
+    PASST SCHO
+    s.effekte.tote_seit_ding = 0 OIDA
+    SOG AU auswoi = [DING_MAGNET, DING_EMP, DING_OVERDRIVE, DING_REPARATUR] OIDA
+    WENN s.spiela.lebn < s.spiela.max_lebn * 0.5 DAUN
+        auswoi = [DING_REPARATUR, DING_REPARATUR, DING_MAGNET, DING_EMP, DING_OVERDRIVE] OIDA
+    PASST SCHO
+    SOG AU oat = auswoi[ZOI(OBRUNDN(ZUFOI() * LÄNGN(auswoi)))] OIDA
+    WENN vom_boss DAUN
+        oat = DING_OVERDRIVE OIDA
+    PASST SCHO
+    HAU EINE(s.dinga, Aufheba(g.x, g.y, oat, ZUFOI() * 2 * PI)) OIDA
+PASST SCHO
+
+FUNKTIAUN ding_nehma(s Spü, a Aufheba)
+    SOG AU p = s.spiela OIDA
+    SOG AU hex = ding_foab(a.oat) OIDA
+    WENN a.oat == DING_MAGNET DAUN
+        FIA JEDE k IN s.kugln TUA
+            k.zogn = WOAHR OIDA
+        PASST SCHO
+    SUNST WENN a.oat == DING_REPARATUR DAUN
+        p.heil(0.25) OIDA
+    SUNST WENN a.oat == DING_EMP DAUN
+        s.effekte.ring(p.x, p.y, hex, 620, 0.5, 6) OIDA
+        FIA JEDE g IN kopie(s.gegna) TUA
+            WENN NED g.lebt ODA BETROG(g.x - p.x) > FELD_B ODA BETROG(g.y - p.y) > FELD_H DAUN
+                WEIDA OIDA
+            PASST SCHO
+            SOG AU anteil = 0.55 OIDA
+            WENN g.is_boss() DAUN
+                anteil = 0.04 OIDA
+            PASST SCHO
+            gegna_schodn(s, g, ZOI(AUFRUNDN(g.max_lebn * anteil)), FOISCH) OIDA
+        PASST SCHO
+        s.kamera.wackl(8) OIDA
+    SUNST
+        p.overdrive = 7 + p.overdrive_länga OIDA
+        p.overdrive_ganz = p.overdrive OIDA
+    PASST SCHO
+    s.effekte.ring(a.x, a.y, hex, 80, 0.4, 3) OIDA
+    s.funkn_bei(a.x, a.y, hex, 14) OIDA
+    s.hinweis(ding_nam(a.oat), hex, 1.1) OIDA
+    s.klang.ding() OIDA
+PASST SCHO
+
+FUNKTIAUN dinga_weida(s Spü, dauer KOMMAZOI)
+    SOG AU p = s.spiela OIDA
+    FIA JEDE a IN s.dinga TUA
+        a.lebn -= dauer OIDA
+        SOG AU weit = abstand(a.x, a.y, p.x, p.y) OIDA
+        WENN weit < 130 UND weit > 1 DAUN
+            SOG AU zug = (1 - weit / 130) * 520 * dauer OIDA
+            a.x += (p.x - a.x) / weit * zug OIDA
+            a.y += (p.y - a.y) / weit * zug OIDA
+        PASST SCHO
+        WENN weit < p.radius + 16 DAUN
+            ding_nehma(s, a) OIDA
+            a.lebn = 0.0 OIDA
+        PASST SCHO
+    PASST SCHO
+    s.dinga = nur(s.dinga, FUNKTIAUN(a Aufheba) => a.lebn > 0) OIDA
+PASST SCHO
+
+FUNKTIAUN dinga_moi(s Spü)
+    FIA JEDE a IN s.dinga TUA
+        # Die letzten Sekunden blinkt es.
+        WENN a.lebn < 4 UND ZOI(OBRUNDN(s.jetzt * 0.01)) % 2 == 1 DAUN
+            WEIDA OIDA
+        PASST SCHO
+        SOG AU hex = ding_foab(a.oat) OIDA
+        SOG AU y = a.y + SINUS(s.jetzt * 0.004 + a.wipp) * 4 OIDA
+        mischn_dazua() OIDA
+        schein(a.x, y, 74, hex, 0.8) OIDA
+        mischn_normal() OIDA
+        foab_hex("#060a18") OIDA
+        deckung(0.92) OIDA
+        kreis(a.x, y, 15) OIDA
+        deckung(1) OIDA
+        foab_hex(hex) OIDA
+        kreis_rand(a.x, y, 15, 2) OIDA
+        symbol(ding_symbol(a.oat), a.x, y, 18, hex, 2.4) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Ein Pfeil am Bildrand zu einem Gegner, der gerade nicht zu sehen ist.
+FUNKTIAUN pfeil_zua(s Spü, g Gegna, hex KETTN)
+    SOG AU sx = g.x - s.kamera.x OIDA
+    SOG AU sy = g.y - s.kamera.y OIDA
+    WENN sx > 0 UND sx < FELD_B UND sy > 0 UND sy < FELD_H DAUN
+        GIB ZRUCK OIDA
+    PASST SCHO
+    SOG AU mx = FELD_B / 2.0 OIDA
+    SOG AU my = FELD_H / 2.0 OIDA
+    SOG AU w = WINKL(sy - my, sx - mx) OIDA
+    SOG AU weit = KLANSTA((mx - 34) / GRÖSSTA(0.001, BETROG(KOSINUS(w))), (my - 34) / GRÖSSTA(0.001, BETROG(SINUS(w)))) OIDA
+    lage_merkn() OIDA
+    schiab(mx + KOSINUS(w) * weit, my + SINUS(w) * weit) OIDA
+    drah(w) OIDA
+    vergrößa(1 + 0.14 * SINUS(s.jetzt * 0.01)) OIDA
+    foab_hex(hex) OIDA
+    vieleck([14.0, 0.0, -9.0, -9.0, -4.0, 0.0, -9.0, 9.0]) OIDA
+    lage_zruck() OIDA
+PASST SCHO
+
+# Pfeile zum Boss, zum Ziel der Jagd und zum Träger der Scherben.
+FUNKTIAUN pfeile_moi(s Spü)
+    SOG AU boss = s.boss OIDA
+    WENN boss != NIX DAUN
+        WENN boss.lebt DAUN
+            pfeil_zua(s, boss, "#ff4d6d") OIDA
+        PASST SCHO
+    PASST SCHO
+    SOG AU jogd = s.jogd_ziel OIDA
+    WENN jogd != NIX DAUN
+        WENN jogd.lebt DAUN
+            pfeil_zua(s, jogd, "#ff66dd") OIDA
+        PASST SCHO
+    PASST SCHO
+    SOG AU träga = s.schotz_träga OIDA
+    WENN träga != NIX DAUN
+        WENN träga.lebt DAUN
+            pfeil_zua(s, träga, "#c38bff") OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# ------------------------------------------------------ Hintergrund vom Anfang
+
+# Der Himmel hinter dem Anfangsbild: ein Gitter, das auf einen zukommt, Sterne,
+# und ein loser Schwarm Gegner, der zum Titel schaut.
+FUNKTIAUN anfang_grund_moi(jetzt KOMMAZOI)
+    valauf_grod(0, 0, 0, FELD_H) OIDA
+    valauf_foab(0, "#070a1e", 1) OIDA
+    valauf_foab(0.55, "#111540", 1) OIDA
+    valauf_foab(1, "#160a2c", 1) OIDA
+    deckung(1) OIDA
+    rechteck(0, 0, FELD_B, FELD_H) OIDA
+
+    SOG AU mitte = FELD_B / 2.0 OIDA
+    SOG AU horizont = FELD_H * 0.56 OIDA
+    mischn_dazua() OIDA
+    schein(mitte, horizont, 760, "#2fa8ff", 0.34) OIDA
+    mischn_normal() OIDA
+
+    foab_hex("#5abeff") OIDA
+    deckung(0.16) OIDA
+    FIA i VON -12 BIS 12 TUA
+        linie(mitte + i * 34, horizont, mitte + i * 190, FELD_H, 1) OIDA
+    PASST SCHO
+    SOG AU vasotz = jetzt * 0.00035 - OBRUNDN(jetzt * 0.00035) OIDA
+    FIA i VON 0 BIS 8 TUA
+        SOG AU f = (i + vasotz) / 9 OIDA
+        SOG AU y = horizont + f * f * (FELD_H - horizont) OIDA
+        linie(0, y, FELD_B, y, 1) OIDA
+    PASST SCHO
+
+    foab_hex("#aad7ff") OIDA
+    FIA i VON 0 BIS 25 TUA
+        SOG AU weg = i * 97 + jetzt * (0.006 + (i % 4) * 0.003) OIDA
+        SOG AU x = weg - FELD_B * OBRUNDN(weg / FELD_B) OIDA
+        SOG AU y = (i * 61) % ZOI(horizont) OIDA
+        deckung(0.14 + 0.2 * BETROG(SINUS(jetzt * 0.001 + i))) OIDA
+        rechteck(x, y, 2, 2) OIDA
+    PASST SCHO
+
+    SOG AU foabn = ["#44bb44", "#ffdd33", "#ff4466", "#ff7744"] OIDA
+    FIA i VON 0 BIS 13 TUA
+        SOG AU hex = foabn[i % 4] OIDA
+        SOG AU tempo = 0.012 + (i % 5) * 0.004 OIDA
+        SOG AU weg = i * 173 + jetzt * tempo OIDA
+        SOG AU x = weg - (FELD_B + 120) * OBRUNDN(weg / (FELD_B + 120)) - 60 OIDA
+        SOG AU y = 36 + (i * 131) % ZOI(horizont - 90) + SINUS(jetzt * 0.0008 + i) * 14 OIDA
+        SOG AU r = 9.0 + (i % 4) * 3 OIDA
+        SOG AU blick = WINKL(horizont * 0.45 - y, mitte - x) OIDA
+        SOG AU stärke = 0.42 + 0.1 * SINUS(jetzt * 0.002 + i) OIDA
+        schein(x, y, r * 3.2, hex, 0.5 * stärke) OIDA
+        deckung(stärke) OIDA
+        WENN i % 4 == 0 DAUN
+            vieleck(zackn(x, y, 6, r, r, -PI / 6 + jetzt * 0.0004)) OIDA
+        SUNST WENN i % 4 == 1 DAUN
+            vieleck([x, y - r, x + r, y, x, y + r, x - r, y]) OIDA
+        SUNST
+            kreis(x, y, r) OIDA
+        PASST SCHO
+        SOG AU cl = KOSINUS(blick) OIDA
+        SOG AU sl = SINUS(blick) OIDA
+        SOG AU aug = r * 0.22 OIDA
+        FIA seitn VON -1 BIS 1 SCHRITT 2 TUA
+            SOG AU ex = x + cl * r * 0.22 - sl * r * 0.36 * seitn OIDA
+            SOG AU ey = y + sl * r * 0.22 + cl * r * 0.36 * seitn OIDA
+            foab_hex("#ffffff") OIDA
+            kreis(ex, ey, aug) OIDA
+            foab_hex("#0b0b18") OIDA
+            kreis(ex + cl * aug * 0.4, ey + sl * aug * 0.4, aug * 0.5) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Ab und zu zieht ein Schuss über den Himmel.
+    FIA i VON 0 BIS 2 TUA
+        SOG AU weg = jetzt * (0.35 + i * 0.1) + i * 700 OIDA
+        SOG AU x = FELD_B + 40 - (weg - (FELD_B + 200) * OBRUNDN(weg / (FELD_B + 200))) OIDA
+        SOG AU y = 70 + (i * 211) % ZOI(horizont - 120) OIDA
+        schein(x + 13, y + 1, 22, "#ffee55", 0.3) OIDA
+        deckung(0.5) OIDA
+        rechteck(x, y, 26, 3) OIDA
+    PASST SCHO
+    deckung(1) OIDA
+PASST SCHO

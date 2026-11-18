@@ -1,51 +1,320 @@
-# RogueWave: die Verbesserungen, aus denen man bei jedem Stufenaufstieg wählt.
+# RogueWave: die Verbesserungen, aus denen man bei jedem Stufenaufstieg wählt,
+# und die Übersicht über alles, was die Figur gerade kann ("Build").
 
-BRAUCH "spü.oida" OIDA
+BRAUCH texte OIDA
+BRAUCH "werte.oida" OIDA
+BRAUCH "dinge.oida" OIDA
 
 # Was eine Verbesserung tut, steht als Funktion dabei.
 STRUKTUR Vabessarung
     kennung KETTN
     nam KETTN
     büdl KETTN
-    waffn JONA
-    # Ein Satz dazu, oder "" (bei "pierce" wird er beim Zeichnen ausgerechnet).
-    wos KETTN
-    wirkung FUNKTIAUN(Spü)
+    sötn ZOI                    # wie selten: SÖTN_GWÖHNLICH, SÖTN_SÖTN, SÖTN_EPISCH
+    waffn ZOI                   # welche Waffe sie hebt, oder -1
+    evo ZOI                     # welche Waffe sie weiterentwickelt, oder -1
+    wos KETTN                   # ein Satz dazu (bei manchen wird er beim Zeichnen ausgerechnet)
+    wirkung FUNKTIAUN(Spiela)
 PASST SCHO
 
 FUNKTIAUN olle_vabessarungen() GIBT ZRUCK LISTN VON Vabessarung
     GIB ZRUCK [
         # Werte der Spielfigur
-        Vabessarung("dmg1", "+5 Damage", "⚔️", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.schodn += 5),
-        Vabessarung("dmg2", "+10 Damage", "🗡️", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.schodn += 10),
-        Vabessarung("spd1", "+15% Move Speed", "👟", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.tempo *= 1.15),
-        Vabessarung("spd2", "+25% Move Speed", "💨", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.tempo *= 1.25),
-        Vabessarung("rate1", "+20% Fire Rate", "🔫", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.schuss_pause *= 0.80),
-        Vabessarung("rate2", "+35% Fire Rate", "💥", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.schuss_pause *= 0.65),
-        Vabessarung("hp1", "+25 Max HP", "❤️", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.mehr_lebn(25)),
-        Vabessarung("hp2", "+50 Max HP", "💖", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.mehr_lebn(50)),
-        Vabessarung("heal", "Heal 30%", "🩹", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.heil(0.3)),
-        Vabessarung("magnet", "+XP Magnet Range", "🧲", FOISCH, "", FUNKTIAUN(s Spü) => s.magnet += 40),
-        Vabessarung("armor1", "+3 Armor", "🛡️", FOISCH, "Reduces all damage taken by 3", FUNKTIAUN(s Spü) => s.spiela.rüstung += 3),
-        Vabessarung("armor2", "+6 Armor", "🏰", FOISCH, "Reduces all damage taken by 6", FUNKTIAUN(s Spü) => s.spiela.rüstung += 6),
-        Vabessarung("regen1", "+2 HP/sec Regen", "💚", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.heilung += 2),
-        Vabessarung("regen2", "+5 HP/sec Regen", "🌿", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.heilung += 5),
-        Vabessarung("pierce", "Piercing +1", "📌", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.durchschuss += 1),
-        Vabessarung("multi", "+1 Multi-Shot", "🎯", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.mehrschuss += 1),
-        Vabessarung("crit1", "+10% Crit Chance", "🎲", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.mehr_glück(0.10)),
-        Vabessarung("crit2", "+0.5x Crit Damage", "💎", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.glück_moi += 0.5),
-        Vabessarung("bigBullet", "+30% Bullet Size", "⭕", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.schuss_größe *= 1.3),
-        Vabessarung("range1", "+20% Range", "📡", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.reichweite *= 1.20),
-        Vabessarung("range2", "+40% Range", "🔭", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.reichweite *= 1.40),
-        Vabessarung("xpgain1", "+25% XP Gain", "✨", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.xp_moi *= 1.25),
-        Vabessarung("xpgain2", "+50% XP Gain", "⭐", FOISCH, "", FUNKTIAUN(s Spü) => s.spiela.xp_moi *= 1.50),
+        Vabessarung("dmg1", "+5 Damage", "⚔️", 0, -1, -1, "Increase base damage.", FUNKTIAUN(p Spiela) => p.schodn += 5),
+        Vabessarung("dmg2", "+10 Damage", "🗡️", 1, -1, -1, "Significant base damage boost.", FUNKTIAUN(p Spiela) => p.schodn += 10),
+        Vabessarung("spd1", "+15% Move Speed", "👟", 0, -1, -1, "Move faster around the arena.", FUNKTIAUN(p Spiela) => p.tempo *= 1.15),
+        Vabessarung("spd2", "+25% Move Speed", "💨", 1, -1, -1, "Large movement speed boost.", FUNKTIAUN(p Spiela) => p.tempo *= 1.25),
+        Vabessarung("rate1", "+20% Fire Rate", "🔫", 0, -1, -1, "Fire bullets more frequently.", FUNKTIAUN(p Spiela) => p.schuss_pause *= 0.8),
+        Vabessarung("rate2", "+35% Fire Rate", "💥", 1, -1, -1, "Major fire rate increase.", FUNKTIAUN(p Spiela) => p.schuss_pause *= 0.65),
+        Vabessarung("hp1", "+25 Max HP", "❤️", 0, -1, -1, "Increase max HP and heal.", FUNKTIAUN(p Spiela) => p.mehr_lebn(25)),
+        Vabessarung("hp2", "+50 Max HP", "💖", 1, -1, -1, "Large max HP increase and heal.", FUNKTIAUN(p Spiela) => p.mehr_lebn(50)),
+        Vabessarung("heal", "Heal 30%", "🩹", 0, -1, -1, "Restore part of your HP now.", FUNKTIAUN(p Spiela) => p.heil(0.3)),
+        Vabessarung("magnet", "+XP Magnet Range", "🧲", 0, -1, -1, "XP orbs are pulled from farther away.", FUNKTIAUN(p Spiela) => p.magnet += 40),
+        Vabessarung("armor1", "+3 Armor", "🛡️", 0, -1, -1, "Reduces all damage taken by 3", FUNKTIAUN(p Spiela) => p.rüstung += 3),
+        Vabessarung("armor2", "+6 Armor", "🏰", 1, -1, -1, "Reduces all damage taken by 6", FUNKTIAUN(p Spiela) => p.rüstung += 6),
+        Vabessarung("regen1", "+2 HP/sec Regen", "💚", 0, -1, -1, "Regenerate HP each second.", FUNKTIAUN(p Spiela) => p.heilung += 2),
+        Vabessarung("regen2", "+5 HP/sec Regen", "🌿", 1, -1, -1, "Strong HP regeneration.", FUNKTIAUN(p Spiela) => p.heilung += 5),
+        Vabessarung("pierce", "Piercing +1", "📌", 0, -1, -1, "", FUNKTIAUN(p Spiela) => p.durchschuss += 1),
+        Vabessarung("multi", "+1 Multi-Shot", "🎯", 0, -1, -1, "Shoot one extra projectile.", FUNKTIAUN(p Spiela) => p.mehrschuss += 1),
+        Vabessarung("crit1", "+10% Crit Chance", "🎲", 0, -1, -1, "Crit chance increased.", FUNKTIAUN(p Spiela) => p.mehr_glück(0.1)),
+        Vabessarung("crit2", "+0.5x Crit Damage", "💎", 1, -1, -1, "Critical hits deal more damage.", FUNKTIAUN(p Spiela) => p.glück_moi += 0.5),
+        Vabessarung("bigBullet", "+30% Bullet Size", "⭕", 0, -1, -1, "Increase bullet collision size.", FUNKTIAUN(p Spiela) => p.schuss_größe *= 1.3),
+        Vabessarung("range1", "+20% Range", "📡", 0, -1, -1, "Increase effective attack range.", FUNKTIAUN(p Spiela) => p.reichweite *= 1.2),
+        Vabessarung("range2", "+40% Range", "🔭", 1, -1, -1, "Large range increase.", FUNKTIAUN(p Spiela) => p.reichweite *= 1.4),
+        Vabessarung("xpgain1", "+25% XP Gain", "✨", 0, -1, -1, "Gain more XP from kills.", FUNKTIAUN(p Spiela) => p.xp_moi *= 1.25),
+        Vabessarung("xpgain2", "+50% XP Gain", "⭐", 1, -1, -1, "Greatly increase XP gain.", FUNKTIAUN(p Spiela) => p.xp_moi *= 1.5),
+        Vabessarung("execute1", "+8% Execute Threshold", "⚰️", 1, -1, -1, "Finish low-health enemies faster.", FUNKTIAUN(p Spiela) => p.mehr_gnadnstoß(0.08)),
+        Vabessarung("execute2", "+12% Execute Threshold", "🩸", 2, -1, -1, "Strong execute threshold boost.", FUNKTIAUN(p Spiela) => p.mehr_gnadnstoß(0.12)),
+        Vabessarung("dashcd", "Dash Cooldown -20%", "🌀", 0, -1, -1, "Dash more often", FUNKTIAUN(p Spiela) => p.kürzara_dash()),
+        Vabessarung("shockdash", "Shock Dash", "🌩️", 1, -1, -1, "Your dash damages every enemy it touches", FUNKTIAUN(p Spiela) => p.schock_dash += 1),
+        Vabessarung("scavenger", "Scavenger", "🎁", 0, -1, -1, "Power-ups drop 40% more often", FUNKTIAUN(p Spiela) => p.ding_glück *= 1.4),
+        Vabessarung("overclock", "Overclock", "🔋", 1, -1, -1, "Overdrive lasts 3 seconds longer", FUNKTIAUN(p Spiela) => p.overdrive_länga += 3),
 
-        # Waffen
-        Vabessarung("orbit", "Orbit Shield +1", "🔵", WOAHR, "", FUNKTIAUN(s Spü) => s.spiela.schüd_stufn += 1),
-        Vabessarung("lightning", "Lightning Aura +1", "⚡", WOAHR, "", FUNKTIAUN(s Spü) => s.spiela.blitz_stufn += 1),
-        Vabessarung("frost", "Frost Nova +1", "❄️", WOAHR, "", FUNKTIAUN(s Spü) => s.spiela.frost_stufn += 1),
-        Vabessarung("flame", "Flame Trail +1", "🔥", WOAHR, "", FUNKTIAUN(s Spü) => s.spiela.feia_stufn += 1)
+        # Waffen: eine Stufe mehr
+        Vabessarung("orbit", "Orbit Shield +1", "🔵", 1, WAFFN_SCHÜD, -1, "", FUNKTIAUN(p Spiela) => p.mehr_waffn(WAFFN_SCHÜD)),
+        Vabessarung("lightning", "Lightning Aura +1", "⚡", 1, WAFFN_BLITZ, -1, "", FUNKTIAUN(p Spiela) => p.mehr_waffn(WAFFN_BLITZ)),
+        Vabessarung("frost", "Frost Nova +1", "❄️", 1, WAFFN_FROST, -1, "", FUNKTIAUN(p Spiela) => p.mehr_waffn(WAFFN_FROST)),
+        Vabessarung("flame", "Flame Trail +1", "🔥", 1, WAFFN_FEIA, -1, "", FUNKTIAUN(p Spiela) => p.mehr_waffn(WAFFN_FEIA)),
+
+        # Waffen: die Weiterentwicklung (kommt nur, wenn Stufe und Schlüssel passen)
+        Vabessarung("evoOrbit", "Singularity", "🌀", 2, -1, WAFFN_SCHÜD, "One heavy orb drags enemies away and reflects bullets", FUNKTIAUN(p Spiela) => p.entwickl(WAFFN_SCHÜD)),
+        Vabessarung("evoLightning", "Storm Chain", "🌩️", 2, -1, WAFFN_BLITZ, "Bolts jump up to 3 times and can crit", FUNKTIAUN(p Spiela) => p.entwickl(WAFFN_BLITZ)),
+        Vabessarung("evoFrost", "Absolute Zero", "🧊", 2, -1, WAFFN_FROST, "Frozen enemies shatter on death, reach follows your range", FUNKTIAUN(p Spiela) => p.entwickl(WAFFN_FROST)),
+        Vabessarung("evoFlame", "Inferno", "☄️", 2, -1, WAFFN_FEIA, "Longer patches set enemies ablaze, fire spreads on touch", FUNKTIAUN(p Spiela) => p.entwickl(WAFFN_FEIA))
     ] OIDA
+PASST SCHO
+
+FUNKTIAUN waffn_nam(waffn ZOI) GIBT ZRUCK KETTN
+    WENN waffn == WAFFN_SCHÜD DAUN
+        GIB ZRUCK "Orbit Shield" OIDA
+    PASST SCHO
+    WENN waffn == WAFFN_BLITZ DAUN
+        GIB ZRUCK "Lightning Aura" OIDA
+    PASST SCHO
+    WENN waffn == WAFFN_FROST DAUN
+        GIB ZRUCK "Frost Nova" OIDA
+    PASST SCHO
+    GIB ZRUCK "Flame Trail" OIDA
+PASST SCHO
+
+FUNKTIAUN evo_nam(waffn ZOI) GIBT ZRUCK KETTN
+    WENN waffn == WAFFN_SCHÜD DAUN
+        GIB ZRUCK "Singularity" OIDA
+    PASST SCHO
+    WENN waffn == WAFFN_BLITZ DAUN
+        GIB ZRUCK "Storm Chain" OIDA
+    PASST SCHO
+    WENN waffn == WAFFN_FROST DAUN
+        GIB ZRUCK "Absolute Zero" OIDA
+    PASST SCHO
+    GIB ZRUCK "Inferno" OIDA
+PASST SCHO
+
+# Welche Verbesserung eine Waffe braucht, damit sie sich weiterentwickeln kann.
+FUNKTIAUN evo_schlissl_nam(waffn ZOI) GIBT ZRUCK KETTN
+    WENN waffn == WAFFN_SCHÜD DAUN
+        GIB ZRUCK "Bullet Size" OIDA
+    PASST SCHO
+    WENN waffn == WAFFN_BLITZ DAUN
+        GIB ZRUCK "Crit Chance" OIDA
+    PASST SCHO
+    WENN waffn == WAFFN_FROST DAUN
+        GIB ZRUCK "Range" OIDA
+    PASST SCHO
+    GIB ZRUCK "Move Speed" OIDA
+PASST SCHO
+
+# Der Satz unter dem Namen der Karte.
+FUNKTIAUN vabessarung_text(v Vabessarung, p Spiela) GIBT ZRUCK KETTN
+    WENN v.kennung == "pierce" DAUN
+        GIB ZRUCK "Bullets pierce through " + KETTN(p.durchschuss + 1) + " enemies" OIDA
+    PASST SCHO
+    WENN v.waffn < 0 DAUN
+        GIB ZRUCK v.wos OIDA
+    PASST SCHO
+    SOG AU hot = p.waffn_stufn(v.waffn) > 0 OIDA
+    WENN v.waffn == WAFFN_SCHÜD DAUN
+        WENN p.schüd_evo DAUN
+            GIB ZRUCK "Heavier Singularity, wider circle" OIDA
+        PASST SCHO
+        WENN hot DAUN
+            GIB ZRUCK "One more orb, wider circle" OIDA
+        PASST SCHO
+        GIB ZRUCK "Orbs circle you and smash whatever they touch" OIDA
+    PASST SCHO
+    WENN v.waffn == WAFFN_BLITZ DAUN
+        WENN hot DAUN
+            GIB ZRUCK "Zaps harder and more often" OIDA
+        PASST SCHO
+        GIB ZRUCK "Zaps nearby enemies every few seconds" OIDA
+    PASST SCHO
+    WENN v.waffn == WAFFN_FROST DAUN
+        WENN hot DAUN
+            GIB ZRUCK "Bigger, colder nova" OIDA
+        PASST SCHO
+        GIB ZRUCK "Freezes and damages everything around you" OIDA
+    PASST SCHO
+    WENN hot DAUN
+        GIB ZRUCK "Hotter, longer trail" OIDA
+    PASST SCHO
+    GIB ZRUCK "Burns the ground you move over" OIDA
+PASST SCHO
+
+# Was eine Waffenkarte über die Weiterentwicklung sagt ("" bei allen anderen Karten).
+FUNKTIAUN evo_hinweis(v Vabessarung, p Spiela) GIBT ZRUCK KETTN
+    WENN v.waffn < 0 DAUN
+        GIB ZRUCK "" OIDA
+    PASST SCHO
+    WENN p.waffn_evo(v.waffn) DAUN
+        GIB ZRUCK "Evolved: " + evo_nam(v.waffn) OIDA
+    PASST SCHO
+    WENN p.waffn_stufn(v.waffn) >= WAFFN_EVO_STUFN UND NED p.hot_schlissl(v.waffn) DAUN
+        GIB ZRUCK "Take " + evo_schlissl_nam(v.waffn) + " to unlock " + evo_nam(v.waffn) OIDA
+    PASST SCHO
+    GIB ZRUCK "Lv " + KETTN(WAFFN_EVO_STUFN) + " + " + evo_schlissl_nam(v.waffn) + " → " + evo_nam(v.waffn) OIDA
+PASST SCHO
+
+FUNKTIAUN sötn_nam(sötn ZOI) GIBT ZRUCK KETTN
+    WENN sötn == SÖTN_EPISCH DAUN
+        GIB ZRUCK "EPIC" OIDA
+    PASST SCHO
+    WENN sötn == SÖTN_SÖTN DAUN
+        GIB ZRUCK "RARE" OIDA
+    PASST SCHO
+    GIB ZRUCK "COMMON" OIDA
+PASST SCHO
+
+FUNKTIAUN sötn_foab(sötn ZOI) GIBT ZRUCK KETTN
+    WENN sötn == SÖTN_EPISCH DAUN
+        GIB ZRUCK FOAB_SÖTN_EPISCH OIDA
+    PASST SCHO
+    WENN sötn == SÖTN_SÖTN DAUN
+        GIB ZRUCK FOAB_SÖTN_SÖTN OIDA
+    PASST SCHO
+    GIB ZRUCK FOAB_SÖTN_GWÖHNLICH OIDA
+PASST SCHO
+
+# Wie schwer eine Seltenheit beim Ziehen wiegt. Seltene und epische Karten werden
+# mit den Wellen häufiger, und nach einem Boss noch einmal.
+FUNKTIAUN sötn_gwicht(sötn ZOI, wön ZOI, is_lohn JONA, vom_bigboss JONA) GIBT ZRUCK KOMMAZOI
+    WENN sötn == SÖTN_GWÖHNLICH DAUN
+        GIB ZRUCK 100.0 OIDA
+    PASST SCHO
+    SOG AU episch = sötn == SÖTN_EPISCH OIDA
+    WENN episch UND wön < EPISCH_AB_WÖN UND NED is_lohn DAUN
+        GIB ZRUCK 0.0 OIDA
+    PASST SCHO
+    SOG AU gwicht = 16.0 OIDA
+    WENN episch DAUN
+        gwicht = 5.0 OIDA
+    PASST SCHO
+    WENN wön >= 8 DAUN
+        WENN episch DAUN
+            gwicht *= 1.5 OIDA
+        SUNST
+            gwicht *= 1.35 OIDA
+        PASST SCHO
+    PASST SCHO
+    WENN wön >= 15 DAUN
+        WENN episch DAUN
+            gwicht *= 2.2 OIDA
+        SUNST
+            gwicht *= 1.7 OIDA
+        PASST SCHO
+    PASST SCHO
+    WENN wön >= 20 DAUN
+        WENN episch DAUN
+            gwicht *= 3.0 OIDA
+        SUNST
+            gwicht *= 2.1 OIDA
+        PASST SCHO
+    PASST SCHO
+    WENN is_lohn DAUN
+        WENN episch DAUN
+            gwicht *= 1.4 OIDA
+        SUNST
+            gwicht *= 1.25 OIDA
+        PASST SCHO
+    PASST SCHO
+    WENN vom_bigboss DAUN
+        WENN episch DAUN
+            gwicht *= 1.35 OIDA
+        SUNST
+            gwicht *= 1.2 OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK gwicht OIDA
+PASST SCHO
+
+# Darf diese Karte gerade angeboten werden? Was nichts mehr bringt, fällt weg.
+FUNKTIAUN im_topf(v Vabessarung, p Spiela) GIBT ZRUCK JONA
+    WENN v.evo >= 0 DAUN
+        GIB ZRUCK FOISCH OIDA           # die Weiterentwicklungen kommen eigens dazu
+    PASST SCHO
+    WENN (v.kennung == "execute1" ODA v.kennung == "execute2") UND p.gnadnstoß >= 0.5 DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    WENN (v.kennung == "rate1" ODA v.kennung == "rate2") UND p.schuss_pause <= SCHUSS_PAUSE_UNTN DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    WENN v.kennung == "multi" UND p.mehrschuss >= MEHRSCHUSS_OBN DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    WENN (v.kennung == "xpgain1" ODA v.kennung == "xpgain2") UND p.xp_moi >= XP_MOI_OBN DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    WENN v.waffn >= 0 DAUN
+        WENN p.waffn_evo(v.waffn) ODA p.waffn_stufn(v.waffn) >= WAFFN_STUFN_OBN DAUN
+            GIB ZRUCK FOISCH OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK WOAHR OIDA
+PASST SCHO
+
+# Zieht `anzahl` verschiedene Karten, seltene seltener. Kann sich eine Waffe
+# weiterentwickeln, liegt ihre Karte sicher dabei.
+FUNKTIAUN zieh_vabessarungen(olle LISTN VON Vabessarung, p Spiela, anzahl ZOI, wön ZOI, is_lohn JONA, vom_bigboss JONA) GIBT ZRUCK LISTN VON Vabessarung
+    SOG AU topf LISTN VON Vabessarung = [] OIDA
+    FIA JEDE v IN olle TUA
+        WENN im_topf(v, p) DAUN
+            HAU EINE(topf, v) OIDA
+        PASST SCHO
+    PASST SCHO
+    SOG AU zogn LISTN VON Vabessarung = [] OIDA
+    SOLONG LÄNGN(topf) > 0 UND LÄNGN(zogn) < anzahl TUA
+        SOG AU summe = 0.0 OIDA
+        FIA JEDE v IN topf TUA
+            summe += sötn_gwicht(v.sötn, wön, is_lohn, vom_bigboss) OIDA
+        PASST SCHO
+        WENN summe <= 0 DAUN
+            HAU OB OIDA
+        PASST SCHO
+        SOG AU wurf = ZUFOI() * summe OIDA
+        SOG AU gwöt = LÄNGN(topf) - 1 OIDA
+        FIA i VON 0 BIS LÄNGN(topf) - 1 TUA
+            wurf -= sötn_gwicht(topf[i].sötn, wön, is_lohn, vom_bigboss) OIDA
+            WENN wurf <= 0 DAUN
+                gwöt = i OIDA
+                HAU OB OIDA
+            PASST SCHO
+        PASST SCHO
+        HAU EINE(zogn, topf[gwöt]) OIDA
+        HAU AUSSE(topf, gwöt) OIDA
+    PASST SCHO
+    # Reicht es nicht (alles Übrige wiegt nichts), wird mit dem Rest aufgefüllt.
+    SOLONG LÄNGN(topf) > 0 UND LÄNGN(zogn) < anzahl TUA
+        SOG AU i = ZOI(OBRUNDN(ZUFOI() * LÄNGN(topf))) OIDA
+        HAU EINE(zogn, topf[i]) OIDA
+        HAU AUSSE(topf, i) OIDA
+    PASST SCHO
+    SOG AU evos LISTN VON Vabessarung = [] OIDA
+    FIA JEDE v IN olle TUA
+        WENN v.evo >= 0 DAUN
+            WENN p.kaun_evo(v.evo) DAUN
+                HAU EINE(evos, v) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+    WENN LÄNGN(evos) > 0 DAUN
+        SOG AU evo = evos[ZOI(OBRUNDN(ZUFOI() * LÄNGN(evos)))] OIDA
+        WENN LÄNGN(zogn) >= anzahl DAUN
+            zogn[LÄNGN(zogn) - 1] = evo OIDA
+        SUNST
+            HAU EINE(zogn, evo) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK zogn OIDA
+PASST SCHO
+
+# Am Anfang wählt man eine Waffe: die vier Waffenkarten.
+FUNKTIAUN anfangs_waffn(olle LISTN VON Vabessarung) GIBT ZRUCK LISTN VON Vabessarung
+    SOG AU aus LISTN VON Vabessarung = [] OIDA
+    FIA JEDE v IN olle TUA
+        WENN v.waffn >= 0 DAUN
+            HAU EINE(aus, v) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
 PASST SCHO
 
 # Für die Anzeige rechts unten: Verbesserungen derselben Art teilen sich ein Bild.
@@ -68,6 +337,130 @@ FUNKTIAUN olle_gruppn() GIBT ZRUCK LISTN VON Gruppn
         Gruppn("⭕", ["bigBullet"]),
         Gruppn("📡", ["range1", "range2"]),
         Gruppn("🧲", ["magnet"]),
-        Gruppn("✨", ["xpgain1", "xpgain2"])
+        Gruppn("✨", ["xpgain1", "xpgain2"]),
+        Gruppn("⚰️", ["execute1", "execute2"])
     ] OIDA
+PASST SCHO
+
+# ------------------------------------------------------------- Die Übersicht
+
+# Eine Zeile der Übersicht: eine Überschrift oder ein Wert mit Namen.
+STRUKTUR BauZeile
+    kopf JONA
+    nam KETTN
+    wert KETTN
+    zeig JONA                   # manche Zeilen gibt es erst, wenn man den Wert überhaupt hat
+    matt JONA
+PASST SCHO
+
+# Eine Kommazahl mit fester Zahl an Nachkommastellen (nicht für negative).
+FUNKTIAUN fest(wert KOMMAZOI, stön ZOI) GIBT ZRUCK KETTN
+    SOG AU moi = 1 OIDA
+    FIA i VON 1 BIS stön TUA
+        moi = moi * 10 OIDA
+    PASST SCHO
+    SOG AU gaunz = ZOI(RUNDN(wert * moi)) OIDA
+    WENN stön == 0 DAUN
+        GIB ZRUCK KETTN(gaunz) OIDA
+    PASST SCHO
+    GIB ZRUCK KETTN(gaunz / moi) + "." + vuan_auffülln(KETTN(gaunz % moi), stön, "0") OIDA
+PASST SCHO
+
+FUNKTIAUN prozent(wert KOMMAZOI) GIBT ZRUCK KETTN
+    GIB ZRUCK KETTN(ZOI(RUNDN(wert * 100))) + "%" OIDA
+PASST SCHO
+
+FUNKTIAUN waffn_zeile(p Spiela, waffn ZOI) GIBT ZRUCK BauZeile
+    SOG AU stufn = p.waffn_stufn(waffn) OIDA
+    SOG AU wert = "–" OIDA
+    WENN stufn > 0 DAUN
+        wert = "Lv " + KETTN(stufn) OIDA
+        WENN p.waffn_evo(waffn) DAUN
+            wert = wert + " · " + evo_nam(waffn) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK BauZeile(FOISCH, waffn_nam(waffn), wert, WOAHR, stufn <= 0) OIDA
+PASST SCHO
+
+# Alle Zeilen der Übersicht, immer gleich viele und in derselben Reihenfolge:
+# So lassen sich zwei Stände (jetzt und mit einer Karte mehr) Zeile für Zeile vergleichen.
+FUNKTIAUN bau_zeiln(p Spiela) GIBT ZRUCK LISTN VON BauZeile
+    SOG AU zeiln LISTN VON BauZeile = [] OIDA
+    HAU EINE(zeiln, BauZeile(WOAHR, "OFFENSE", "", WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Damage", KETTN(p.schodn), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Fire rate", fest(1 / GRÖSSTA(SCHUSS_PAUSE_UNTN, p.schuss_pause), 2) + "/s", WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Bullets", KETTN(1 + KLANSTA(MEHRSCHUSS_OBN, p.mehrschuss)), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Pierce", KETTN(p.durchschuss), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Crit chance", prozent(p.glück), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Crit damage", "×" + fest(p.glück_moi, 1), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Range", fest(p.reichweite, 0), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Bullet size", prozent(p.schuss_größe), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Execute below", prozent(p.gnadnstoß) + " HP", p.gnadnstoß > 0, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(WOAHR, "DEFENSE", "", WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "HP", KETTN(GRÖSSTA(0, ZOI(AUFRUNDN(p.lebn)))) + " / " + KETTN(p.max_lebn), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Armor", KETTN(p.rüstung), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Regen", KETTN(p.heilung) + "/s", WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Move speed", fest(p.tempo, 0), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Dash cooldown", fest(p.dash_pause, 1) + "s", WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Shock Dash", "Lv " + KETTN(p.schock_dash), p.schock_dash > 0, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(WOAHR, "UTILITY", "", WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "XP gain", prozent(KLANSTA(XP_MOI_OBN, p.xp_moi)), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Pickup range", fest(XP_MAGNET + p.magnet, 0), WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Power-up luck", prozent(p.ding_glück), p.ding_glück != 1, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Overdrive", "+" + fest(p.overdrive_länga, 0) + "s", p.overdrive_länga > 0, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(WOAHR, "WEAPONS", "", WOAHR, FOISCH)) OIDA
+    HAU EINE(zeiln, waffn_zeile(p, WAFFN_SCHÜD)) OIDA
+    HAU EINE(zeiln, waffn_zeile(p, WAFFN_BLITZ)) OIDA
+    HAU EINE(zeiln, waffn_zeile(p, WAFFN_FROST)) OIDA
+    HAU EINE(zeiln, waffn_zeile(p, WAFFN_FEIA)) OIDA
+    SOG AU a = p.syn_supraleita() OIDA
+    SOG AU b = p.syn_hitzeschock() OIDA
+    SOG AU c = p.syn_brennkreis() OIDA
+    HAU EINE(zeiln, BauZeile(WOAHR, "SYNERGY", "", a ODA b ODA c, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Superconductor", wirkt_text(a), a, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Thermal Shock", wirkt_text(b), b, FOISCH)) OIDA
+    HAU EINE(zeiln, BauZeile(FOISCH, "Burning Orbit", wirkt_text(c), c, FOISCH)) OIDA
+    GIB ZRUCK zeiln OIDA
+PASST SCHO
+
+FUNKTIAUN wirkt_text(wirkt JONA) GIBT ZRUCK KETTN
+    WENN wirkt DAUN
+        GIB ZRUCK "active" OIDA
+    PASST SCHO
+    GIB ZRUCK "–" OIDA
+PASST SCHO
+
+# Welches Zusammenspiel gerade gilt, als Namen.
+FUNKTIAUN synergien(p Spiela) GIBT ZRUCK LISTN VON KETTN
+    SOG AU aus LISTN VON KETTN = [] OIDA
+    WENN p.syn_supraleita() DAUN
+        HAU EINE(aus, "Superconductor") OIDA
+    PASST SCHO
+    WENN p.syn_hitzeschock() DAUN
+        HAU EINE(aus, "Thermal Shock") OIDA
+    PASST SCHO
+    WENN p.syn_brennkreis() DAUN
+        HAU EINE(aus, "Burning Orbit") OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Teilt einen Satz in Zeilen mit höchstens so vielen Zeichen.
+FUNKTIAUN in_zeiln(satz KETTN, höchstns ZOI) GIBT ZRUCK LISTN VON KETTN
+    SOG AU zeiln LISTN VON KETTN = [] OIDA
+    SOG AU zeile = "" OIDA
+    FIA JEDE wort IN wörter(satz) TUA
+        WENN zeile == "" DAUN
+            zeile = wort OIDA
+        SUNST WENN LÄNGN(zeile) + 1 + LÄNGN(wort) <= höchstns DAUN
+            zeile = zeile + " " + wort OIDA
+        SUNST
+            HAU EINE(zeiln, zeile) OIDA
+            zeile = wort OIDA
+        PASST SCHO
+    PASST SCHO
+    WENN zeile != "" DAUN
+        HAU EINE(zeiln, zeile) OIDA
+    PASST SCHO
+    GIB ZRUCK zeiln OIDA
 PASST SCHO

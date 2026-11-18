@@ -1,0 +1,440 @@
+# RogueWave: die Angriffe der Bosse. Jeder Angriff wird angekündigt (man sieht,
+# wohin er geht), dann ausgeführt, und danach steht der Boss kurz offen da und
+# nimmt doppelten Schaden.
+
+BRAUCH fensta OIDA
+BRAUCH mathe OIDA
+BRAUCH "werte.oida" OIDA
+BRAUCH "dinge.oida" OIDA
+BRAUCH "gegna.oida" OIDA
+BRAUCH "spü.oida" OIDA
+
+# Welcher Boss welche Angriffe hat
+FIX KIT_KANS = 0 OIDA
+FIX KIT_WÄCHTA = 1 OIDA                 # Shard Warden (Welle 5 und 15): Sturm, Scherbenring
+FIX KIT_TYRANN = 2 OIDA                 # Iron Tyrant (Welle 10): Schlag, Salve
+FIX KIT_KOLOSS = 3 OIDA                 # Abyss Colossus (Welle 20): Schwenk, Sog, Minen
+
+FIX ANGRIFF_KANA = 0 OIDA
+FIX ANGRIFF_STURM = 1 OIDA              # rast in eine Richtung
+FIX ANGRIFF_SCHERBNRING = 2 OIDA        # Schüsse rundherum
+FIX ANGRIFF_SCHLOG = 3 OIDA             # schlägt dort ein, wo die Figur stand
+FIX ANGRIFF_SALVN = 4 OIDA              # drei Fächer hintereinander
+FIX ANGRIFF_SCHWENK = 5 OIDA            # ein Strahl, der einen Halbkreis fährt
+FIX ANGRIFF_SOG = 6 OIDA                # zieht die Figur an, dann ein Ring
+FIX ANGRIFF_MINEN = 7 OIDA              # legt Minen um sich
+
+FIX BOSS_RUHIG = 0 OIDA
+FIX BOSS_HOIT_AUS = 1 OIDA              # kündigt an
+FIX BOSS_GREIFT_AU = 2 OIDA
+FIX BOSS_OFFN = 3 OIDA                  # steht offen da
+
+# Was ein Boss gerade vorhat. Die meisten Felder gelten nur für einen bestimmten Angriff.
+KLASSE BossKit
+    kit ZOI
+    tempo KOMMAZOI                      # Ankündigung und Pause werden mit der Welle kürzer
+    stufn ZOI                           # ab Welle 15 die härtere Fassung
+    zuastand ZOI = BOSS_RUHIG
+    uhr KOMMAZOI = 1.6                  # ein Moment, um den Boss anzuschauen, bevor er loslegt
+    offn_uhr KOMMAZOI = 0.0
+    angriff_stö ZOI = -1
+    angriff ZOI = ANGRIFF_KANA
+
+    dauer KOMMAZOI = 0.1
+    ausholn KOMMAZOI = 0.6
+    vagaunga KOMMAZOI = 0.0
+    richtung KOMMAZOI = 0.0             # Sturm
+    läng KOMMAZOI = 0.0                 # Sturm, Schwenk
+    anzahl ZOI = 0                      # Scherbenring, Minen
+    x KOMMAZOI = 0.0                    # Schlag
+    y KOMMAZOI = 0.0
+    radius KOMMAZOI = 0.0               # Schlag, Minen (Ring)
+    salvn ZOI = 0                       # Salve
+    lückn KOMMAZOI = 0.3
+    gfeiat ZOI = 0
+    winkl KOMMAZOI = 0.0                # Schwenk
+    rate KOMMAZOI = 0.0
+    breite KOMMAZOI = 0.0
+    tick KOMMAZOI = 0.0
+    kroft KOMMAZOI = 0.0                # Sog
+    fertig JONA = FOISCH
+PASST SCHO
+
+# Die Angriffe eines Bosses, der Reihe nach.
+FUNKTIAUN kit_angriffe(kit ZOI) GIBT ZRUCK LISTN VON ZOI
+    WENN kit == KIT_WÄCHTA DAUN
+        GIB ZRUCK [ANGRIFF_STURM, ANGRIFF_SCHERBNRING] OIDA
+    PASST SCHO
+    WENN kit == KIT_TYRANN DAUN
+        GIB ZRUCK [ANGRIFF_SCHLOG, ANGRIFF_SALVN] OIDA
+    PASST SCHO
+    GIB ZRUCK [ANGRIFF_SCHWENK, ANGRIFF_SOG, ANGRIFF_MINEN] OIDA
+PASST SCHO
+
+# Die Pause zwischen zwei Angriffen.
+FUNKTIAUN kit_pause(kit ZOI) GIBT ZRUCK KOMMAZOI
+    WENN kit == KIT_WÄCHTA DAUN
+        GIB ZRUCK 2.4 OIDA
+    PASST SCHO
+    GIB ZRUCK 2.8 OIDA
+PASST SCHO
+
+# Wie lang der Boss nach einem Angriff offen dasteht.
+FUNKTIAUN angriff_offn(angriff ZOI) GIBT ZRUCK KOMMAZOI
+    WENN angriff == ANGRIFF_STURM ODA angriff == ANGRIFF_SCHLOG ODA angriff == ANGRIFF_SCHWENK DAUN
+        GIB ZRUCK 2.0 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SCHERBNRING DAUN
+        GIB ZRUCK 1.2 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SALVN DAUN
+        GIB ZRUCK 1.0 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SOG DAUN
+        GIB ZRUCK 1.5 OIDA
+    PASST SCHO
+    GIB ZRUCK 0.8 OIDA
+PASST SCHO
+
+# Wie lang ein Angriff angekündigt wird (vor dem Kürzen durch die Welle).
+FUNKTIAUN angriff_ausholn(angriff ZOI) GIBT ZRUCK KOMMAZOI
+    WENN angriff == ANGRIFF_STURM ODA angriff == ANGRIFF_SCHWENK DAUN
+        GIB ZRUCK 0.8 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SCHERBNRING DAUN
+        GIB ZRUCK 0.6 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SCHLOG DAUN
+        GIB ZRUCK 1.0 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SALVN DAUN
+        GIB ZRUCK 0.5 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SOG DAUN
+        GIB ZRUCK 0.7 OIDA
+    PASST SCHO
+    GIB ZRUCK 0.4 OIDA
+PASST SCHO
+
+# Welcher Teil vom Grundschaden des Bosses ein Angriff macht.
+FUNKTIAUN angriff_anteil(angriff ZOI) GIBT ZRUCK KOMMAZOI
+    WENN angriff == ANGRIFF_SCHERBNRING ODA angriff == ANGRIFF_SCHWENK DAUN
+        GIB ZRUCK 0.3 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SCHLOG DAUN
+        GIB ZRUCK 0.55 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SALVN DAUN
+        GIB ZRUCK 0.22 OIDA
+    PASST SCHO
+    WENN angriff == ANGRIFF_SOG DAUN
+        GIB ZRUCK 0.25 OIDA
+    PASST SCHO
+    GIB ZRUCK 0.45 OIDA
+PASST SCHO
+
+# Der Schaden eines Angriffs von diesem Boss.
+FUNKTIAUN angriff_schodn(g Gegna, angriff ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK ZOI(OBRUNDN(g.angriff_grund * angriff_anteil(angriff))) OIDA
+PASST SCHO
+
+# Ein Schuss vom Boss in eine Richtung.
+FUNKTIAUN boss_schuss(s Spü, g Gegna, richtung KOMMAZOI, schodn ZOI, größe KOMMAZOI)
+    HAU EINE(s.schüsse, neicha_schuss(g.x, g.y, richtung, schodn, 0, größe, FOISCH, WOAHR, SCHUSS_LEBN)) OIDA
+PASST SCHO
+
+# Ein Bild lang Boss: Je nach Zustand läuft er, holt aus, greift an oder steht offen da.
+FUNKTIAUN boss_weida(s Spü, g Gegna, k BossKit, dauer KOMMAZOI, dx KOMMAZOI, dy KOMMAZOI, weit KOMMAZOI, tempo KOMMAZOI)
+    SOG AU ziel = s.spiela OIDA
+    k.uhr -= dauer OIDA
+    WENN k.zuastand == BOSS_OFFN DAUN
+        k.offn_uhr -= dauer OIDA
+        WENN weit > 1 DAUN
+            g.x += dx / weit * tempo * 0.25 * dauer OIDA
+            g.y += dy / weit * tempo * 0.25 * dauer OIDA
+        PASST SCHO
+        WENN k.offn_uhr <= 0 DAUN
+            k.offn_uhr = 0.0 OIDA
+            k.zuastand = BOSS_RUHIG OIDA
+            k.uhr = kit_pause(k.kit) * k.tempo OIDA
+        PASST SCHO
+        GIB ZRUCK OIDA
+    PASST SCHO
+    WENN k.zuastand == BOSS_RUHIG DAUN
+        WENN weit > 1 DAUN
+            g.x += dx / weit * tempo * dauer OIDA
+            g.y += dy / weit * tempo * dauer OIDA
+        PASST SCHO
+        WENN k.uhr <= 0 UND weit < 560 DAUN
+            boss_hoit_aus(g, k, ziel, dx, dy) OIDA
+        PASST SCHO
+        GIB ZRUCK OIDA
+    PASST SCHO
+    WENN k.zuastand == BOSS_HOIT_AUS DAUN
+        WENN k.uhr <= 0 DAUN
+            k.zuastand = BOSS_GREIFT_AU OIDA
+            k.uhr = k.dauer OIDA
+            k.vagaunga = 0.0 OIDA
+            boss_schlogt_zua(s, g, k) OIDA
+        PASST SCHO
+        GIB ZRUCK OIDA
+    PASST SCHO
+    # Der Angriff läuft.
+    k.vagaunga += dauer OIDA
+    boss_angriff_weida(s, g, k, dauer, weit) OIDA
+    WENN k.uhr <= 0 DAUN
+        k.zuastand = BOSS_OFFN OIDA
+        k.offn_uhr = angriff_offn(k.angriff) OIDA
+        WENN k.stufn == 2 DAUN
+            k.offn_uhr = k.offn_uhr * 0.85 OIDA
+        PASST SCHO
+        g.stoß_x = 0.0 OIDA
+        g.stoß_y = 0.0 OIDA
+        s.effekte.ring(g.x, g.y, "#ffd700", g.radius * 2.2, 0.35, 3) OIDA
+        s.funkn_bei(g.x, g.y, "#ffd700", 12) OIDA
+        s.klang.glückstreffa() OIDA
+        WENN NED s.offn_hinweis_zeigt DAUN
+            s.offn_hinweis_zeigt = WOAHR OIDA
+            s.hinweis("Boss exposed: hit it now for double damage!", "#ffd700", 2.2) OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# Der Boss sucht sich den nächsten Angriff aus und kündigt ihn an.
+FUNKTIAUN boss_hoit_aus(g Gegna, k BossKit, ziel Ding, dx KOMMAZOI, dy KOMMAZOI)
+    SOG AU angriffe = kit_angriffe(k.kit) OIDA
+    k.angriff_stö = (k.angriff_stö + 1) % LÄNGN(angriffe) OIDA
+    SOG AU angriff = angriffe[k.angriff_stö] OIDA
+    SOG AU richtung = WINKL(dy, dx) OIDA
+    k.angriff = angriff OIDA
+    k.ausholn = angriff_ausholn(angriff) * k.tempo OIDA
+    k.dauer = 0.1 OIDA
+    k.vagaunga = 0.0 OIDA
+    WENN angriff == ANGRIFF_STURM DAUN
+        k.richtung = richtung OIDA
+        k.läng = 400.0 OIDA
+        k.dauer = 400.0 / 1250.0 OIDA
+    SUNST WENN angriff == ANGRIFF_SCHERBNRING DAUN
+        k.anzahl = 6 OIDA
+        WENN k.stufn == 2 DAUN
+            k.anzahl = 10 OIDA
+        PASST SCHO
+    SUNST WENN angriff == ANGRIFF_SCHLOG DAUN
+        k.x = ziel.x OIDA
+        k.y = ziel.y OIDA
+        k.radius = 140.0 OIDA
+    SUNST WENN angriff == ANGRIFF_SALVN DAUN
+        k.salvn = 3 OIDA
+        k.lückn = 0.3 OIDA
+        k.gfeiat = 0 OIDA
+        k.dauer = 3 * 0.3 + 0.1 OIDA
+    SUNST WENN angriff == ANGRIFF_SCHWENK DAUN
+        k.winkl = richtung - PI / 2 OIDA
+        k.rate = PI / 2.0 OIDA
+        k.läng = 520.0 OIDA
+        k.breite = 44.0 OIDA
+        k.tick = 0.0 OIDA
+        k.dauer = 2.0 OIDA
+    SUNST WENN angriff == ANGRIFF_SOG DAUN
+        k.kroft = 320.0 OIDA
+        k.fertig = FOISCH OIDA
+        k.dauer = 1.0 OIDA
+    SUNST
+        k.anzahl = 5 OIDA
+        k.radius = 110.0 OIDA
+    PASST SCHO
+    k.zuastand = BOSS_HOIT_AUS OIDA
+    k.uhr = k.ausholn OIDA
+    g.stoß_x = 0.0 OIDA
+    g.stoß_y = 0.0 OIDA
+PASST SCHO
+
+# Die Ankündigung ist vorbei: Der Angriff geht los.
+FUNKTIAUN boss_schlogt_zua(s Spü, g Gegna, k BossKit)
+    SOG AU ziel = s.spiela OIDA
+    WENN k.angriff == ANGRIFF_STURM DAUN
+        s.klang.dash() OIDA
+        s.kamera.wackl(3) OIDA
+    SUNST WENN k.angriff == ANGRIFF_SCHERBNRING DAUN
+        SOG AU versatz = ZUFOI() * 2 * PI OIDA
+        FIA i VON 0 BIS k.anzahl - 1 TUA
+            boss_schuss(s, g, versatz + 2 * PI / k.anzahl * i, angriff_schodn(g, k.angriff), 1.1) OIDA
+        PASST SCHO
+        s.klang.explosion() OIDA
+    SUNST WENN k.angriff == ANGRIFF_SCHLOG DAUN
+        s.effekte.ring(k.x, k.y, "#ff5533", k.radius, 0.35, 6) OIDA
+        s.funkn_bei(k.x, k.y, "#ff7744", 24) OIDA
+        s.kamera.wackl(10) OIDA
+        s.klang.explosion() OIDA
+        SOG AU weg = abstand(k.x, k.y, ziel.x, ziel.y) OIDA
+        WENN weg < k.radius + ziel.radius DAUN
+            s.spiela_triff(angriff_schodn(g, k.angriff)) OIDA
+            # Die Figur wird weggeschleudert.
+            WENN weg > 1 DAUN
+                ziel.vx += (ziel.x - k.x) / weg * 700 OIDA
+                ziel.vy += (ziel.y - k.y) / weg * 700 OIDA
+            PASST SCHO
+        PASST SCHO
+    SUNST WENN k.angriff == ANGRIFF_MINEN DAUN
+        FIA i VON 0 BIS k.anzahl - 1 TUA
+            SOG AU w = 2 * PI / k.anzahl * i + ZUFOI() * 0.4 OIDA
+            SOG AU mx = klemm(g.x + KOSINUS(w) * k.radius, 20, WELT_B - 20) OIDA
+            SOG AU my = klemm(g.y + SINUS(w) * k.radius, 20, WELT_H - 20) OIDA
+            SOG AU mine = neicha_schuss(mx, my, 0, angriff_schodn(g, k.angriff), 0, 1.8, FOISCH, WOAHR, 9.0) OIDA
+            mine.vx = 0.0 OIDA
+            mine.vy = 0.0 OIDA
+            mine.mine = WOAHR OIDA
+            HAU EINE(s.schüsse, mine) OIDA
+        PASST SCHO
+        s.funkn_bei(g.x, g.y, "#ff3355", 10) OIDA
+    SUNST WENN k.angriff == ANGRIFF_SCHWENK DAUN
+        s.klang.explosion() OIDA
+    SUNST WENN k.angriff == ANGRIFF_SOG DAUN
+        s.effekte.ring(g.x, g.y, "#c38bff", 420, 0.5, 2) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Während der Angriff läuft.
+FUNKTIAUN boss_angriff_weida(s Spü, g Gegna, k BossKit, dauer KOMMAZOI, weit KOMMAZOI)
+    SOG AU ziel = s.spiela OIDA
+    WENN k.angriff == ANGRIFF_STURM DAUN
+        g.x += KOSINUS(k.richtung) * 1250 * dauer OIDA
+        g.y += SINUS(k.richtung) * 1250 * dauer OIDA
+        s.effekte.geist(g.x, g.y, g.radius, "#ff88bb") OIDA
+    SUNST WENN k.angriff == ANGRIFF_SALVN DAUN
+        SOG AU fällig = KLANSTA(k.salvn, ZOI(OBRUNDN(k.vagaunga / k.lückn)) + 1) OIDA
+        SOLONG k.gfeiat < fällig TUA
+            k.gfeiat += 1 OIDA
+            SOG AU richtung = WINKL(ziel.y - g.y, ziel.x - g.x) OIDA
+            FIA i VON -1 BIS 1 TUA
+                boss_schuss(s, g, richtung + i * 0.22, angriff_schodn(g, k.angriff), 1.0) OIDA
+            PASST SCHO
+            s.klang.schuss() OIDA
+        PASST SCHO
+    SUNST WENN k.angriff == ANGRIFF_SCHWENK DAUN
+        k.winkl += k.rate * dauer OIDA
+        k.tick -= dauer OIDA
+        WENN k.tick <= 0 DAUN
+            k.tick = 0.5 OIDA
+            SOG AU bx = g.x + KOSINUS(k.winkl) * k.läng OIDA
+            SOG AU by = g.y + SINUS(k.winkl) * k.läng OIDA
+            WENN obstand_zua_streckn(ziel.x, ziel.y, g.x, g.y, bx, by) < k.breite / 2 + ziel.radius DAUN
+                s.spiela_triff(angriff_schodn(g, k.angriff)) OIDA
+            PASST SCHO
+            s.funkn_bei(bx, by, "#ff3355", 2) OIDA
+        PASST SCHO
+    SUNST WENN k.angriff == ANGRIFF_SOG DAUN
+        # Wer ausweicht (Dash), reißt sich los.
+        WENN ziel.dash_uhr <= 0 UND weit > g.radius + 20 DAUN
+            ziel.x += (g.x - ziel.x) / weit * k.kroft * dauer OIDA
+            ziel.y += (g.y - ziel.y) / weit * k.kroft * dauer OIDA
+        PASST SCHO
+        WENN k.uhr <= 0 UND NED k.fertig DAUN
+            k.fertig = WOAHR OIDA
+            FIA i VON 0 BIS 7 TUA
+                boss_schuss(s, g, 2 * PI / 8 * i, angriff_schodn(g, k.angriff), 1.0) OIDA
+            PASST SCHO
+            s.klang.explosion() OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# ----------------------------------------------------------------- Zeichnen
+
+# Was man vom Angriff sieht, unter dem Boss gezeichnet: die Ankündigung
+# (wohin es gehen wird), der laufende Angriff, und die Risse, wenn er offen dasteht.
+FUNKTIAUN boss_ankündigung_moi(s Spü, g Gegna, k BossKit)
+    SOG AU jetzt = s.jetzt OIDA
+    WENN k.zuastand == BOSS_HOIT_AUS DAUN
+        # Wie weit die Ankündigung schon ist (0 bis 1)
+        SOG AU p = klemm(1 - k.uhr / GRÖSSTA(0.01, k.ausholn), 0.0, 1.0) OIDA
+        WENN k.angriff == ANGRIFF_STURM DAUN
+            foab_hex("#ff506e") OIDA
+            deckung(0.25 + 0.55 * p) OIDA
+            linien_rund(WOAHR) OIDA
+            linie(g.x, g.y, g.x + KOSINUS(k.richtung) * k.läng, g.y + SINUS(k.richtung) * k.läng, 6 + 30 * p) OIDA
+            linien_rund(FOISCH) OIDA
+        SUNST WENN k.angriff == ANGRIFF_SCHERBNRING DAUN
+            foab_hex("#ff88bb") OIDA
+            deckung(0.3 + 0.5 * p) OIDA
+            gstrichlt(6, 8) OIDA
+            kreis_rand(g.x, g.y, g.radius * (1.3 + 0.6 * p), 2) OIDA
+            durchzogn() OIDA
+        SUNST WENN k.angriff == ANGRIFF_SCHLOG DAUN
+            foab_hex("#ff4628") OIDA
+            deckung(0.12 + 0.18 * p) OIDA
+            kreis(k.x, k.y, k.radius) OIDA
+            foab_hex("#ff7850") OIDA
+            deckung(0.5 + 0.4 * (0.5 + 0.5 * SINUS(jetzt * 0.03))) OIDA
+            kreis_rand(k.x, k.y, k.radius, 2) OIDA
+            deckung(0.35) OIDA
+            kreis(k.x, k.y, k.radius * p) OIDA
+        SUNST WENN k.angriff == ANGRIFF_SALVN DAUN
+            SOG AU richtung = WINKL(s.spiela.y - g.y, s.spiela.x - g.x) OIDA
+            foab_hex("#ff5050") OIDA
+            deckung(0.2 + 0.5 * p) OIDA
+            FIA i VON -1 BIS 1 TUA
+                linie(g.x, g.y, g.x + KOSINUS(richtung + i * 0.22) * 380, g.y + SINUS(richtung + i * 0.22) * 380, 2) OIDA
+            PASST SCHO
+        SUNST WENN k.angriff == ANGRIFF_SCHWENK DAUN
+            foab_hex("#ff3c5a") OIDA
+            deckung(0.3 + 0.5 * p) OIDA
+            linie(g.x, g.y, g.x + KOSINUS(k.winkl) * k.läng, g.y + SINUS(k.winkl) * k.läng, 3) OIDA
+            gstrichlt(4, 10) OIDA
+            bogn(g.x, g.y, k.läng, k.winkl, k.winkl + k.rate * k.dauer, 1.5) OIDA
+            durchzogn() OIDA
+        SUNST WENN k.angriff == ANGRIFF_SOG DAUN
+            foab_hex("#c38bff") OIDA
+            deckung(0.3 + 0.5 * p) OIDA
+            gstrichlt(8, 10) OIDA
+            kreis_rand(g.x, g.y, 420 - 300 * p, 2) OIDA
+            durchzogn() OIDA
+        SUNST
+            foab_hex("#ff3355") OIDA
+            deckung(0.3 + 0.5 * p) OIDA
+            kreis_rand(g.x, g.y, k.radius, 2) OIDA
+        PASST SCHO
+        deckung(1) OIDA
+    SUNST WENN k.zuastand == BOSS_GREIFT_AU DAUN
+        WENN k.angriff == ANGRIFF_SCHWENK DAUN
+            # Der Strahl: außen ein roter Schein, innen weiß
+            SOG AU ex = g.x + KOSINUS(k.winkl) * k.läng OIDA
+            SOG AU ey = g.y + SINUS(k.winkl) * k.läng OIDA
+            linien_rund(WOAHR) OIDA
+            mischn_dazua() OIDA
+            foab_hex("#ff3c5a") OIDA
+            deckung(0.35) OIDA
+            linie(g.x, g.y, ex, ey, k.breite + 18) OIDA
+            deckung(1) OIDA
+            foab_hex("#ff3355") OIDA
+            linie(g.x, g.y, ex, ey, k.breite) OIDA
+            foab_hex("#ffffff") OIDA
+            linie(g.x, g.y, ex, ey, k.breite * 0.3) OIDA
+            mischn_normal() OIDA
+            linien_rund(FOISCH) OIDA
+        SUNST WENN k.angriff == ANGRIFF_SOG DAUN
+            foab_hex("#c38bff") OIDA
+            deckung(0.6) OIDA
+            gstrichlt(6, 6) OIDA
+            linie(s.spiela.x, s.spiela.y, g.x, g.y, 2) OIDA
+            durchzogn() OIDA
+            deckung(1) OIDA
+        PASST SCHO
+    SUNST WENN k.zuastand == BOSS_OFFN DAUN
+        # Risse und ein Schild: jetzt fest zuschlagen
+        SOG AU r = g.radius OIDA
+        foab_hex("#ffd700") OIDA
+        deckung(0.85) OIDA
+        FIA i VON 0 BIS 3 TUA
+            SOG AU w = i * 1.7 + 0.4 OIDA
+            linienzug([g.x + KOSINUS(w) * r * 0.2, g.y + SINUS(w) * r * 0.2, g.x + KOSINUS(w + 0.3) * r * 0.6, g.y + SINUS(w + 0.3) * r * 0.6, g.x + KOSINUS(w - 0.1) * r * 1.05, g.y + SINUS(w - 0.1) * r * 1.05], 2, FOISCH) OIDA
+        PASST SCHO
+        deckung(1) OIDA
+        schrift_fett(12) OIDA
+        SOG AU höha = 34 OIDA
+        WENN g.oat == OAT_BIGBOSS DAUN
+            höha = 44 OIDA
+        PASST SCHO
+        text_drüba(g.x, g.y - r - höha, "EXPOSED") OIDA
+    PASST SCHO
+PASST SCHO

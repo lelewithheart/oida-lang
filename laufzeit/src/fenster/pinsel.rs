@@ -48,6 +48,30 @@ struct Stufe {
     farbe: Farbe,
 }
 
+/// Die Farben eines Verlaufs, fertig für Direct2D. Das Anlegen ist teuer (es
+/// entsteht ein kleines Bild mit allen Zwischenfarben), und ein Spiel nimmt
+/// dieselben paar Verläufe hundertmal im Bild: Darum werden sie aufgehoben.
+pub(super) struct Stufenlager {
+    /// Die Stufen als Bitmuster (Stelle, Rot, Grün, Blau, Deckung) und was Direct2D daraus gemacht hat.
+    eintraege: Vec<(Vec<[u32; 5]>, Zeiger)>,
+}
+
+impl Default for Stufenlager {
+    fn default() -> Self {
+        Stufenlager { eintraege: Vec::new() }
+    }
+}
+
+const STUFENLAGER_GROESSE: usize = 96;
+
+impl Stufenlager {
+    unsafe fn leeren(&mut self) {
+        for (_, sammlung) in self.eintraege.drain(..) {
+            unsafe { freigeben(sammlung) };
+        }
+    }
+}
+
 /// Holt `ID2D1DeviceContext` von einer Zeichenfläche (null, wenn es das hier nicht gibt).
 pub(super) unsafe fn kontext_von(ziel: Zeiger) -> Zeiger {
     if ziel.is_null() {
@@ -70,6 +94,7 @@ pub(super) unsafe fn vergiss(f: &mut Fenster) {
             freigeben(verlauf.pinsel);
             verlauf.pinsel = std::ptr::null_mut();
         }
+        f.stufenlager.leeren();
         freigeben(f.leucht_effekt);
         freigeben(f.leucht_ziel);
         freigeben(f.kontext);
@@ -177,12 +202,14 @@ pub unsafe extern "C" fn oida_g_verlauf_stufe(stelle: f64, code: *const TextKopf
 pub(super) unsafe fn verlauf_pinsel(f: &mut Fenster) -> Option<Zeiger> {
     let ziel = f.ziel;
     let deckung = f.deckung;
+    let lager = &mut f.stufenlager;
     let verlauf = f.verlauf.as_mut()?;
     if verlauf.stufen.is_empty() {
         return None;
     }
     unsafe {
         if verlauf.pinsel.is_null() {
+            let _uhr = Stoppuhr::neu("verlauf_pinsel_anlegen()");
             let [a, b, c, d] = verlauf.masse;
             // Beim runden Verlauf mit innerem Radius rücken die Stufen nach außen:
             // Direct2D kennt nur "von der Mitte bis zum Rand".
@@ -190,12 +217,33 @@ pub(super) unsafe fn verlauf_pinsel(f: &mut Fenster) -> Option<Zeiger> {
             let mut stufen: Vec<Stufe> =
                 verlauf.stufen.iter().map(|(s, farbe)| Stufe { stelle: innen + s * (1.0 - innen), farbe: *farbe }).collect();
             stufen.sort_by(|x, y| x.stelle.total_cmp(&y.stelle));
-            let sammeln: unsafe extern "system" fn(Zeiger, *const Stufe, u32, u32, u32, *mut Zeiger) -> i32 =
-                methode(ziel, ZIEL_STUFEN);
-            let mut sammlung = std::ptr::null_mut();
-            if sammeln(ziel, stufen.as_ptr(), stufen.len() as u32, 0, 0, &mut sammlung) < 0 || sammlung.is_null() {
-                return None;
-            }
+            let muster: Vec<[u32; 5]> = stufen
+                .iter()
+                .map(|s| [s.stelle.to_bits(), s.farbe.r.to_bits(), s.farbe.g.to_bits(), s.farbe.b.to_bits(), s.farbe.a.to_bits()])
+                .collect();
+            let sammlung = match lager.eintraege.iter().position(|(m, _)| *m == muster) {
+                Some(stelle) => {
+                    // Zuletzt gebraucht kommt nach hinten; vorne steht, was am längsten liegt.
+                    let eintrag = lager.eintraege.remove(stelle);
+                    let sammlung = eintrag.1;
+                    lager.eintraege.push(eintrag);
+                    sammlung
+                }
+                None => {
+                    let sammeln: unsafe extern "system" fn(Zeiger, *const Stufe, u32, u32, u32, *mut Zeiger) -> i32 =
+                        methode(ziel, ZIEL_STUFEN);
+                    let mut sammlung = std::ptr::null_mut();
+                    if sammeln(ziel, stufen.as_ptr(), stufen.len() as u32, 0, 0, &mut sammlung) < 0 || sammlung.is_null() {
+                        return None;
+                    }
+                    if lager.eintraege.len() >= STUFENLAGER_GROESSE {
+                        let (_, alt) = lager.eintraege.remove(0);
+                        freigeben(alt);
+                    }
+                    lager.eintraege.push((muster, sammlung));
+                    sammlung
+                }
+            };
             let mut pinsel = std::ptr::null_mut();
             let ergebnis = if verlauf.rund {
                 #[repr(C)]
@@ -215,7 +263,7 @@ pub(super) unsafe fn verlauf_pinsel(f: &mut Fenster) -> Option<Zeiger> {
                     methode(ziel, ZIEL_VERLAUF_GERADE);
                 anlegen(ziel, &angaben, std::ptr::null_mut(), sammlung, &mut pinsel)
             };
-            freigeben(sammlung);
+            // Die Sammlung gehört dem Lager; der Pinsel hält sie selbst fest, solange er sie braucht.
             if ergebnis < 0 || pinsel.is_null() {
                 return None;
             }

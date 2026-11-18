@@ -4,24 +4,31 @@
 # hier als eigenes Programm mit eigenem Fenster.
 #
 #   WASD oder Pfeiltasten   bewegen (geschossen wird von selbst)
+#   LEERTASTE oder SHIFT    ausweichen (Dash)
 #   1, 2, 3 oder Mausklick  eine Verbesserung wählen
-#   ESC                     Einstellungen und zurück
+#   ESC oder P              Pause
 #   ENTER                   starten, und nach dem Ende noch einmal
 #
 #   oida beispiele\roguewave\roguewave.oida --renn
 #
 # Die Teile:
 #   werte.oida           die festen Werte (Größen, Tempo, Farben ...)
-#   dinge.oida           Spielfigur, Schüsse, Gegner, Erfahrung, Funken
+#   dinge.oida           Spielfigur, Schüsse, Erfahrung, Funken
+#   gegna.oida           die Gegner, vom gewöhnlichen bis zum Endboss
+#   bosse.oida           die Angriffe der Bosse
+#   effekte.oida         Schein, Ringe, Hintergrund, Symbole, Power-ups
 #   klang.oida           Geräusche und Musik
 #   vabessarungen.oida   was man beim Stufenaufstieg wählen kann
 #   bestenlistn.oida     die besten Läufe, in Dateien gemerkt
 #   spü.oida             die Regeln: was in jedem Bild passiert
 #   büdschirm.oida       alles, was gezeichnet wird
+#   musik\               die Musik (MP3), haut\ das Bild für die Figur
 
 BRAUCH fensta OIDA
+BRAUCH dateien OIDA
 BRAUCH "werte.oida" OIDA
 BRAUCH "dinge.oida" OIDA
+BRAUCH "effekte.oida" OIDA
 BRAUCH "klang.oida" OIDA
 BRAUCH "vabessarungen.oida" OIDA
 BRAUCH "bestenlistn.oida" OIDA
@@ -30,8 +37,15 @@ BRAUCH "büdschirm.oida" OIDA
 
 fensta_auf("RogueWave", FELD_B, FELD_H) OIDA
 
-SOG AU spü = Spü(Spiela(WELT_B / 2, WELT_H / 2, SPIELA_RADIUS), Kamera(), Klang(melodie(), bass()), Bestenlistn(), olle_vabessarungen()) OIDA
+SOG AU spü = Spü(Spiela(WELT_B / 2, WELT_H / 2, SPIELA_RADIUS), Kamera(), neicha_klang(programm_ordna() + "musik/"), Bestenlistn(), olle_vabessarungen(), Effekte()) OIDA
 spü.von_vuan() OIDA
+
+# Das Bild für die Figur. Fehlt die Datei, bleibt sie einfarbig.
+PROBIER haut = lod_büd(programm_ordna() + "haut/default.png")
+    spü.haut = haut OIDA
+WONNS SCHIEFGEHT
+    spü.haut = NIX OIDA
+PASST SCHO
 
 SOLONG fensta_offn() TUA
     # Das Spielfeld hat immer 960 mal 640 Punkte. Ist das Fenster größer,
@@ -44,11 +58,14 @@ SOLONG fensta_offn() TUA
     spü.maus_x = (maus_x() - links) / maß OIDA
     spü.maus_y = (maus_y() - obn) / maß OIDA
     spü.klick = maus_taste_neich(1) OIDA
+    spü.maus_druckt = maus_taste(1) OIDA
 
     spü.weida_um(büd_zeit()) OIDA
 
     foab(0, 0, 0) OIDA
     hintagrund() OIDA
+    # Die Hintergründe der Gebiete werden einmal gemalt, noch bevor etwas vergrößert wird.
+    spü.effekte.vuabereitn() OIDA
     lage_merkn() OIDA
     schiab(links, obn) OIDA
     vergrößa(maß) OIDA

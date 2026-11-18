@@ -34,13 +34,14 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.10.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.11.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
 [Töne](#töne) und [Dateien](#dateien) sind da, und damit ist ein ganzes Spiel geschrieben,
-[RogueWave](#ein-ganzes-spiel-roguewave), rund 2500 Zeilen OIDA. Neu: Das Fenster kann
-Farbverläufe, Leuchten, Bilder aus Dateien und freie Formen, und es gibt Musik aus MP3-Dateien.
+[RogueWave](#ein-ganzes-spiel-roguewave), rund 7500 Zeilen OIDA. Neu: Das Spiel ist auf dem
+heutigen Stand seiner Vorlage (Ausweichen, Power-ups, Ereignisse, Boss-Angriffe, Waffen, die sich
+weiterentwickeln, Musik aus MP3-Dateien).
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -136,7 +137,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.10)
+## Die Sprache (v0.11)
 
 ### Typen
 
@@ -910,6 +911,7 @@ geht auch eine `ZOI`.
 | `linienzug(punkte, dicke, zua)` | Linien von Punkt zu Punkt; mit `zua = WOAHR` zurück zum ersten |
 | `gstrichlt(strich, lückn)` | Ränder und Linien sind ab jetzt gestrichelt: so lang der Strich, so lang die Lücke |
 | `durchzogn()` | ... und ab jetzt wieder durchgezogen |
+| `linien_rund(jo)` | Linien und Ränder haben ab jetzt runde Enden und Ecken (`WOAHR`) oder wieder eckige (`FOISCH`) |
 
 | Farbverläufe, Mischen, Leuchten | |
 |---|---|
@@ -1020,6 +1022,7 @@ davorsitzt. Dafür gibt es Umgebungsvariablen:
 | `OIDA_SOMEN=<zahl>` | der Zufall fängt immer gleich an |
 | `OIDA_TON_AUS=1` | kein Ton |
 | `OIDA_FENSTER_PRUEFEN=1` | meldet am Ende, wie lang das Programm für ein Bild gerechnet und gezeichnet hat |
+| `OIDA_FENSTER_PRUEFEN=2` | dazu, wie oft jede Zeichenfunktion in einem Bild lief und wie lang |
 
 So spielen die Tests von OIDA die Beispielspiele durch und schauen einzelne Bildpunkte nach.
 
@@ -1029,6 +1032,19 @@ viel davon das eigene Programm braucht:
 ```
 OIDA: 900 Büda; Rechnen und Zeichnen im Schnitt 3.27 ms, am längsten 99.63 ms, 5 moi üba 16 ms; Auzeign im Schnitt 13.52 ms
 ```
+
+Mit `OIDA_FENSTER_PRUEFEN=2` kommt dazu, wo die Zeit beim Zeichnen bleibt:
+
+```
+OIDA: wo de Zeit beim Zeichnen bleibt:
+  oida_g_ellipse                  411.4 moi im Büd,   1.550 ms
+  oida_g_text                      58.2 moi im Büd,   1.239 ms
+  oida_g_linie                    184.9 moi im Büd,   0.591 ms
+```
+
+Was ein Programm immer wieder gleich braucht, hebt die Laufzeit auf: die Farben eines Verlaufs,
+fertig gesetzte Texte, den Stil für runde Linien. Ein Schein aus einem Farbverlauf, hundertmal im
+Bild, kostet darum nicht mehr als hundert Kreise.
 
 ### Töne
 
@@ -1091,8 +1107,7 @@ Die Wiederholung ist auf den Wert genau: Was beim Packen einer MP3-Datei vorne u
 dazukommt, wird weggeschnitten (verglichen mit `ffmpeg`, größte Abweichung 1 von 32768).
 
 Mit `ton_um` plant man Musik: In jedem Bild die Noten der nächsten Fünftelsekunde einplanen, und
-der Takt bleibt genau, auch wenn das Programm einmal ruckelt (so macht es
-[`beispiele/roguewave/klang.oida`](beispiele/roguewave/klang.oida)).
+der Takt bleibt genau, auch wenn das Programm einmal ruckelt.
 
 ### Ein ganzes Spiel: RogueWave
 
@@ -1100,38 +1115,58 @@ der Takt bleibt genau, auch wenn das Programm einmal ruckelt (so macht es
 
 [`beispiele/roguewave/`](beispiele/roguewave/) ist ein Survivor-Roguelite, nachgebaut nach einem
 Browserspiel in JavaScript: Die Figur schießt von selbst, Gegner kommen in Wellen, für Erfahrung
-gibt es Verbesserungen, alle fünf Wellen kommt ein Boss, nach Welle 25 hat man gewonnen.
+gibt es Verbesserungen, alle fünf Wellen kommt ein Boss, nach Welle 25 der Endboss.
 
 ```
 target\release\oida beispiele\roguewave\roguewave.oida --renn
 ```
 
-WASD oder die Pfeiltasten bewegen, `1` bis `3` (oder ein Klick) wählt eine Verbesserung, `ESC`
-führt zu den Einstellungen, `ENTER` startet.
+WASD oder die Pfeiltasten bewegen, die Leertaste (oder Shift) weicht aus, `1` bis `4` (oder ein
+Klick) wählt eine Karte, `ESC` oder `P` macht Pause, `ENTER` startet.
+
+Was alles drin ist:
+
+- **Vier Waffen**, die von selbst arbeiten (Schild, Blitz, Frost, Feuer). Am Anfang sucht man sich
+  eine aus. Ab Stufe 5 und mit der passenden Verbesserung entwickelt sich jede weiter
+  (Singularity, Storm Chain, Absolute Zero, Inferno), und je zwei spielen ab Stufe 3 zusammen.
+- **37 Verbesserungen** in drei Seltenheiten; neben den Karten steht, was die Figur gerade kann
+  und was die Karte unter der Maus daran ändern würde.
+- **Elf Arten von Gegnern**, von denen manche schießen, springen, zerfallen oder einen Strahl
+  drehen, dazu Elite-Gegner. Die drei Bosse kündigen ihre Angriffe an und stehen danach kurz offen
+  da; jeder bekommt ein oder zwei zufällige Eigenschaften.
+- **Ereignisse** alle drei Wellen (Elite-Welle, Sturm, Brunnen, Hinterhalt, Scherben, Jagd),
+  **Power-ups**, die Gegner fallen lassen, drei **Gebiete** mit eigenem Hintergrund und eigener
+  Musik, nach dem Sieg ein **Endlos**-Lauf.
 
 | Datei | Was drinsteht |
 |---|---|
 | `roguewave.oida` | das Hauptprogramm: Fenster auf, und die Schleife für jedes Bild |
-| `werte.oida` | die festen Werte (`FIX`): Größen, Tempo, Farben |
-| `dinge.oida` | Spielfigur, Schüsse, Erfahrung, Funken und die Gegner: sieben Arten als Klassen, die vom gewöhnlichen Gegner erben und anders aussehen oder sich anders bewegen |
-| `spü.oida` | die Regeln: was in jedem Bild passiert, die vier Waffen, die Wellen |
-| `vabessarungen.oida` | 27 Verbesserungen als Liste; was jede tut, steht als Funktion dabei |
-| `klang.oida` | Geräusche und die Musik (64 Achtelnoten, die sich wiederholen) |
+| `werte.oida` | die festen Werte (`FIX`): Größen, Tempo, Farben, die Spielarten |
+| `dinge.oida` | Spielfigur, Schüsse, Erfahrung, Funken, Schadenszahlen |
+| `gegna.oida` | die Gegner: neun Klassen, die vom gewöhnlichen Gegner erben und anders aussehen; wie sie sich bewegen, was ein Treffer anrichtet |
+| `bosse.oida` | die sieben Angriffe der Bosse: ankündigen, zuschlagen, offen dastehen |
+| `spü.oida` | die Regeln: was in jedem Bild passiert, die Waffen, die Wellen, die Ereignisse |
+| `vabessarungen.oida` | die Verbesserungen als Liste (was jede tut, steht als Funktion dabei), das Ziehen nach Seltenheit, die Übersicht |
+| `effekte.oida` | Schein, Ringe, Nachbilder, die gemalten Hintergründe, Symbole, Power-ups |
+| `klang.oida` | Geräusche (errechnet) und die Musik: welches Stück wo läuft, Abwechseln, Gefahr-Musik bei wenig Leben |
 | `bestenlistn.oida` | die fünf besten Läufe je Spielart, in Dateien gemerkt |
-| `büdschirm.oida` | alles, was gezeichnet wird: Spielfeld, Anzeige, Menüs |
+| `büdschirm.oida` | alles, was gezeichnet wird: Spielfeld, Anzeige, Anfangsbild, Karten, Pause |
+| `musik\`, `haut\` | zehn Musikstücke (MP3) und die Bilder für die Figur, aus dem Original |
 
-Das fertige Programm hat 560 KB und braucht keine weiteren Dateien. Im Getümmel einer späten
-Welle (über 60 Gegner, 150 Funken, alle Waffen) rechnet und zeichnet es ein Bild in rund 3
-Millisekunden, das Rechnen allein dauert unter 0,1 Millisekunden.
+Das Programm selbst hat 800 KB; dazu kommen 15 MB Musik, die neben der `.exe` im Ordner `musik`
+liegen muss (ohne sie läuft das Spiel stumm weiter). Im dichtesten Getümmel (80 Gegner, alle
+Waffen weiterentwickelt, Dauerfeuer) rechnet und zeichnet es ein Bild in rund 6 Millisekunden.
 
-**Der Stand der Vorlage.** Nachgebaut ist das Spiel, wie es im April 2026 war. Das Original ist
-seither stark gewachsen (Dash, Beute, Boss-Angriffe, MP3-Musik, Skins, rund viermal so viel Code).
-Der Nachbau wird in Etappen nachgezogen: Was Fenster und Ton dafür brauchen, ist da (Verläufe,
-Leuchten, Bilder, Musik aus Dateien); das Spiel selbst kommt als Nächstes.
+**Der Stand der Vorlage.** Nachgebaut ist das Spielen selbst, wie es im November 2026 im Original
+ist. Was dort rundherum dazugekommen ist, fehlt noch und kommt als Nächstes: Beute und Truhen,
+Locker, Prestige, Tagesaufgabe, Skins zum Kaufen, die weiteren Menüs. Die Scherben, die ein Lauf
+einbringt, werden schon gezählt und am Ende angezeigt, ausgeben kann man sie noch nicht.
 
-Was anders ist als im Original: Werbung, Online-Bestenliste und Bedienung am Handy gibt es nicht
-(die hingen am Browser). Treffer werden für jeden Schuss gegen alle Gegner geprüft statt über ein
-Raster, und ein Gegner, der schon tot ist, kann nicht noch einmal getroffen und gezählt werden.
+Was anders ist als im Original: Werbung, Online-Bestenliste, Bedienung am Handy, der
+Leistungsmodus und die Herausforderungen ("Challenge") gibt es nicht. Treffer werden für jeden
+Schuss gegen alle Gegner geprüft statt über ein Raster. Ein neuer Gegner wächst kurz auf seine
+Größe, statt sich zusätzlich einzublenden. Fehlt eine Musikdatei, bleibt es still (das Original
+spielt dann eine errechnete Melodie).
 Die Bestenlisten liegen als `roguewave_bestenlistn_<spielart>.txt` in dem Ordner, in dem das
 Spiel gestartet wurde.
 
@@ -1229,7 +1264,7 @@ steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
 woerterbuch.txt        die Wörter der Sprache
 beispiele/             Beispielprogramme, jeweils mit der erwarteten Ausgabe (.erwartet)
   spui/                  ein kleines Spiel mit Fenster
-  roguewave/             ein ganzes Spiel in acht Dateien
+  roguewave/             ein ganzes Spiel in elf Dateien, mit Musik und Bildern
 bibliothek/            die mitgelieferte Bibliothek, in OIDA geschrieben (wird in oida.exe eingebaut)
 uebersetzer/           der Compiler (Rust), ergibt oida.exe
   src/woerterbuch.rs     Wörterbuch lesen, längster Treffer gewinnt
@@ -1309,7 +1344,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | fertig |
 | 8 | Das Spiel nachbauen: [RogueWave](#ein-ganzes-spiel-roguewave); dazu feste Werte (`FIX`) | fertig für den Stand vom April |
 | 8a | Für den heutigen Stand des Spiels: Verläufe, Leuchten, Bilder, freie Formen, MP3-Musik, Mausrad | fertig |
-| 8b | Das Spielen selbst auf den heutigen Stand: Dash, Power-ups, neue Gegner, Ereignisse, Boss-Angriffe | offen |
+| 8b | Das Spielen selbst auf den heutigen Stand: Dash, Power-ups, neue Gegner, Ereignisse, Boss-Angriffe, Waffen-Entwicklungen, Endlos | fertig |
 | 8c | Alles rundherum: Beute, Truhen, Locker, Prestige, Skins, die neuen Menüs | offen |
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
 

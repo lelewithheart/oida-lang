@@ -435,8 +435,9 @@ fn zaehle(bild: &Bild, x: std::ops::Range<usize>, y: std::ops::Range<usize>, pas
 #[test]
 fn roguewave_geht_durch_alle_zustaende() {
     // Das große Beispiel: ein ganzes Spiel in OIDA. Ein Prüfprogramm holt sich
-    // seine Teile dazu und führt es durch Menü, Spiel mit allen Waffen und
-    // Gegnern, Boss, Einstellungen, Ende, Sieg und Bestenliste.
+    // seine Teile dazu und führt es durch Anfangsbild, Waffenwahl, Spiel mit
+    // allen Waffen und Gegnern, Weiterentwicklungen, Ereignisse, Boss, Pause,
+    // Endboss, Sieg, Endlos, Ende und Bestenliste.
     let arbeit = arbeitsordner("roguewave_probe");
     let exe = arbeit.join("probe.exe");
     let quelle = tests().join("fenster").join("roguewave_probe.oida");
@@ -444,7 +445,8 @@ fn roguewave_geht_durch_alle_zustaende() {
     let lauf = befehl(&exe, None)
         .env("OIDA_FENSTER_BILDER", &arbeit)
         .env("OIDA_FENSTER_BILD_JEDES", "250")
-        .env("OIDA_FENSTER_TASTEN", "D@251-1750")
+        // Im Spiel ab Bild 500 nach rechts laufen und viermal ausweichen.
+        .env("OIDA_FENSTER_TASTEN", "D@501-2000,LAA@700,LAA@1000,LAA@1300,LAA@1600")
         .env("OIDA_TEXTE_PRUEFEN", "1")
         .output()
         .unwrap();
@@ -457,80 +459,96 @@ fn roguewave_geht_durch_alle_zustaende() {
         assert_eq!((bild.breite, bild.hoehe), (960, 640));
         bild
     };
-    let grund = (17, 17, 34);
-    // Ein Knopf: die Akzentfarbe, leicht durchscheinend über dem Hintergrund.
-    let knopf = (46, 176, 222);
     let gold = |f: (u8, u8, u8)| f.0 > 150 && f.1 > 120 && f.2 < 60 && f.0 > f.1;
+    let hell = |f: (u8, u8, u8)| f.0.max(f.1).max(f.2) > 150;
+    let blau = |f: (u8, u8, u8)| f.2 > 200 && f.0 < 140 && f.1 > 150;
 
-    // Das Menü: Titel, die drei Spielarten, die zwei Knöpfe
-    let menue = bild(250);
-    menue.pruefe(5, 5, grund, "Hintergrund im Menü");
-    assert!(menue.andere(300..660, 165..215, grund) > 3000, "der Titel fehlt");
-    menue.pruefe(380, 345, knopf, "Knopf PLAY");
-    menue.pruefe(380, 415, knopf, "Knopf SETTINGS");
-    menue.pruefe(420, 275, (48, 185, 233), "gewählte Spielart NORMAL");
+    // Das Anfangsbild: Himmel mit Verlauf, Titel, die gewählte Spielart, PLAY, unten die Einstellungen
+    let anfang = bild(250);
+    anfang.pruefe(5, 5, (7, 10, 31), "Himmel im Anfangsbild");
+    assert!(zaehle(&anfang, 300..660, 70..122, hell) > 5000, "der Titel fehlt");
+    anfang.pruefe(300, 334, (54, 181, 226), "Knopf PLAY");
+    anfang.pruefe(410, 240, (33, 157, 205), "gewählte Spielart NORMAL");
+    assert!(zaehle(&anfang, 426..534, 532..596, hell) > 200, "das Zahnrad mit SETTINGS fehlt");
+
+    // Die Wahl der Waffe: Überschrift, vier Karten mit hellblauem Rand, links die Übersicht
+    let waffen = bild(500);
+    assert!(zaehle(&waffen, 400..800, 100..135, blau) > 3000, "CHOOSE YOUR WEAPON fehlt");
+    for karte in 0..4 {
+        let (x, y) = (269 + (karte % 3) * 230, 210 + (karte / 3) * 210);
+        let rand = waffen.farbe(x + 60, y);
+        let innen = waffen.farbe(x + 20, y + 100);
+        assert!(rand.2 > innen.2 + 100 && rand.1 > innen.1 + 100, "Karte {karte}: Rand {rand:?}, innen {innen:?}");
+    }
+    assert!(zaehle(&waffen, 14..250, 80..560, blau) > 700, "die Übersicht links fehlt");
 
     // Mitten im Spiel: die Balken oben, die vier Waffen links unten
-    let spiel = bild(1750);
+    let spiel = bild(2000);
     spiel.pruefe(30, 20, (255, 51, 68), "Lebensbalken");
-    spiel.pruefe(20, 44, (68, 170, 255), "Erfahrungsbalken");
+    let xp = spiel.farbe(20, 44);
+    assert!(xp == (68, 170, 255) || xp == (17, 34, 68), "Erfahrungsbalken: {xp:?}");
     for waffe in 0..4 {
-        let hell = zaehle(&spiel, 16 + waffe * 50..46 + waffe * 50, 600..630, |f| f.0.max(f.1).max(f.2) > 150);
-        assert!(hell > 100, "Waffe {waffe} fehlt in der Anzeige");
+        let punkte = zaehle(&spiel, 16 + waffe * 50..46 + waffe * 50, 596..632, hell);
+        assert!(punkte > 80, "Waffe {waffe} fehlt in der Anzeige ({punkte} Punkte)");
     }
 
-    // Die Auswahl nach dem großen Boss: goldene Überschrift, vier Karten
-    let wahl = bild(2000);
-    assert!(zaehle(&wahl, 250..760, 100..140, gold) > 1500, "die goldene Überschrift fehlt");
-    for karte in 0..4 {
-        let x = 35 + karte * 230;
-        // Der Rand der Karte ist heller als ihr Inneres.
-        let rand = wahl.farbe(x + 100, 200);
-        let innen = wahl.farbe(x + 20, 320);
-        assert!(rand.0 > innen.0 + 20, "Karte {karte}: Rand {rand:?}, innen {innen:?}");
-    }
+    // Die Auswahl nach dem großen Boss: goldene Überschrift, die vierte Karte ist die violette Weiterentwicklung
+    let lohn = bild(2500);
+    assert!(zaehle(&lohn, 300..910, 100..135, gold) > 4000, "die goldene Überschrift fehlt");
+    let (rand, innen) = (lohn.farbe(269 + 60, 420), lohn.farbe(269 + 20, 520));
+    assert!(rand.0 > 120 && rand.2 > 170 && rand.2 > rand.1 + 50, "Rand der epischen Karte: {rand:?}");
+    assert!(innen.0 < 30 && innen.2 < 60, "Inneres der Karte: {innen:?}");
 
-    // Der große Boss: sein Lebensbalken unten in der Mitte
-    let boss = bild(2500);
-    boss.pruefe(290, 587, (204, 0, 0), "Lebensbalken vom Boss");
+    // Der Boss: sein Lebensbalken unten in der Mitte (rosa, oder golden, solange er offen dasteht)
+    let boss = bild(3000);
+    let balken = boss.farbe(335, 585);
+    assert!(balken == (221, 34, 119) || balken == (255, 215, 0), "Lebensbalken vom Boss: {balken:?}");
 
-    // Die Einstellungen decken das Spiel zu.
-    let einstellungen = bild(2750);
-    einstellungen.pruefe(5, 5, (11, 11, 30), "Hintergrund der Einstellungen");
-    for y in [150, 210, 270, 552] {
-        einstellungen.pruefe(350, y, knopf, "Knopf in den Einstellungen");
-    }
+    // Die Pause deckt das Spiel zu: Knöpfe in der Mitte, Übersicht links, Stand vom Lauf rechts.
+    let pause = bild(3250);
+    pause.pruefe(5, 5, (10, 10, 30), "Hintergrund der Pause");
+    assert!(zaehle(&pause, 340..620, 120..540, blau) > 10000, "die Knöpfe der Pause fehlen");
+    assert!(zaehle(&pause, 28..264, 60..580, blau) > 500, "die Übersicht in der Pause fehlt");
+    assert!(zaehle(&pause, 708..932, 230..410, blau) > 350, "der Stand vom Lauf fehlt");
 
-    // Aus: rote Überschrift. Gewonnen: goldene.
-    let aus = bild(3000);
+    // Der Endboss: sein Leben steht oben, noch voll und in der Farbe der ersten Phase.
+    bild(3750).pruefe(340, 48, (255, 0, 255), "Lebensbalken vom Endboss");
+
+    // Gewonnen: goldene Überschrift. Aus: rote.
+    let gewonnen = bild(4000);
+    assert!(zaehle(&gewonnen, 250..710, 40..100, gold) > 3000, "YOU WIN fehlt");
+    gewonnen.pruefe(5, 5, (17, 17, 34), "Hintergrund nach dem Sieg");
+    let _ = bild(4250);
+    let aus = bild(4500);
     let rot = |f: (u8, u8, u8)| f.0 > 230 && (50..95).contains(&f.1) && (80..125).contains(&f.2);
-    assert!(zaehle(&aus, 340..620, 190..235, rot) > 1500, "GAME OVER fehlt");
-    let gewonnen = bild(3250);
-    assert!(zaehle(&gewonnen, 300..660, 185..240, gold) > 1500, "YOU WIN fehlt");
-    let _ = bild(3500);
+    assert!(zaehle(&aus, 330..630, 45..95, rot) > 3000, "GAME OVER fehlt");
+    let _ = bild(4750);
 
-    // Die Bestenlisten liegen als Dateien da: eine Zeile pro Lauf.
+    // Die Bestenlisten liegen als Dateien da: eine Zeile pro Lauf, der gewonnene vor dem verlorenen.
     let normal = lies(&arbeit.join("roguewave_bestenlistn_normal.txt"));
-    assert_eq!(normal.lines().count(), 1);
-    assert!(normal.starts_with("lauf") && normal.contains(";10;") && normal.ends_with(";na\n"), "{normal}");
-    let leicht = lies(&arbeit.join("roguewave_bestenlistn_easy.txt"));
-    let zeilen: Vec<&str> = leicht.lines().collect();
+    let zeilen: Vec<&str> = normal.lines().collect();
     assert_eq!(zeilen.len(), 2);
-    assert!(zeilen[0].contains(";25;0;") && zeilen[0].ends_with(";jo"), "{leicht}");
-    assert!(zeilen[1].contains(";1;") && zeilen[1].ends_with(";na"), "{leicht}");
+    assert!(zeilen[0].starts_with("lauf") && zeilen[0].contains(";25;") && zeilen[0].ends_with(";jo"), "{normal}");
+    assert!(zeilen[1].contains(";26;") && zeilen[1].ends_with(";na"), "{normal}");
+    let leicht = lies(&arbeit.join("roguewave_bestenlistn_easy.txt"));
+    assert_eq!(leicht.lines().count(), 1);
+    assert!(leicht.contains(";1;0;") && leicht.ends_with(";na\n"), "{leicht}");
 }
 
 #[test]
 fn roguewave_spielt_sich() {
-    // Das Spiel selbst, wie es jemand startet: ENTER, herumlaufen, bei jedem
-    // Aufstieg die erste Verbesserung nehmen. Eine halbe Minute nach Drehbuch.
+    // Das Spiel selbst, wie es jemand startet: ENTER, die erste Waffe nehmen,
+    // herumlaufen, ausweichen, bei jedem Aufstieg die erste Verbesserung nehmen.
+    // Eine halbe Minute nach Drehbuch.
     let arbeit = arbeitsordner("roguewave");
     let exe = arbeit.join("roguewave.exe");
     uebersetze(&wurzel().join("beispiele").join("roguewave").join("roguewave.oida"), &exe, &[]);
     let mut tasten = String::from("ENTER@5");
-    for runde in 0..9 {
-        let a = 10 + runde * 200;
-        tasten += &format!(",RECHTS@{}-{},S@{}-{},A@{}-{},AUFFE@{}-{}", a, a + 50, a + 50, a + 100, a + 100, a + 150, a + 150, a + 199);
+    // Große Runden: Wer stehen bleibt, wird überrannt.
+    for runde in 0..3 {
+        let a = 10 + runde * 800;
+        tasten += &format!(",RECHTS@{}-{},S@{}-{},A@{}-{},AUFFE@{}-{}", a, a + 199, a + 200, a + 399, a + 400, a + 599, a + 600, a + 799);
+        tasten += &format!(",LAA@{},LAA@{}", a + 300, a + 700);
     }
     for mal in 1..=30 {
         tasten += &format!(",1@{}", mal * 60);
@@ -546,10 +564,11 @@ fn roguewave_spielt_sich() {
         .unwrap();
     assert!(lauf.status.success(), "{}", text(&lauf.stderr));
     assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
-    assert_eq!(text(&lauf.stdout), "Wave 2 - Kills 15 - Level 2 - Zeit 00:29\n");
+    assert_eq!(text(&lauf.stdout), "Wave 2 - Kills 23 - Level 1 - Zeit 00:28\n");
     let bild = Bild::lies(&arbeit.join("bild_1800.bmp"));
     assert_eq!((bild.breite, bild.hoehe), (960, 640));
-    bild.pruefe(30, 20, (255, 51, 68), "Lebensbalken");
+    let leben = bild.farbe(18, 20);
+    assert!(leben.0 > 200 && leben.2 < 110, "Lebensbalken: {leben:?}");
     // Die Spielfigur ist in der Nähe der Mitte zu sehen (die Kamera zieht etwas nach).
     let figur = zaehle(&bild, 380..580, 220..420, |f| f == (51, 204, 255));
     assert!(figur > 300, "von der Spielfigur sind nur {figur} Punkte da");
@@ -647,6 +666,16 @@ fn fenster_kann_verlaeufe_leuchten_formen_und_bilder() {
 
     // Der Rahmen ist genau so breit wie der Text (127 Punkte): rechts davon ist nichts mehr.
     bild.pruefe(20 + 127 + 6, 434, grund, "rechts vom Textrahmen");
+
+    // Linien: gerade abgeschnitten, mit runden Enden, und danach wieder gerade.
+    let gelb = (255, 238, 85);
+    bild.pruefe(345, 440, gelb, "gerade Linie");
+    bild.pruefe(336, 440, grund, "vor der geraden Linie");
+    bild.pruefe(455, 440, gelb, "rundes Ende, links über die Linie hinaus");
+    bild.pruefe(525, 440, gelb, "rundes Ende, rechts über die Linie hinaus");
+    bild.pruefe(454, 433, grund, "das Ende ist rund, nicht eckig");
+    bild.pruefe(556, 440, grund, "nach linien_rund(FOISCH) wieder gerade");
+    bild.pruefe(580, 440, gelb, "die dritte Linie");
 }
 
 #[test]

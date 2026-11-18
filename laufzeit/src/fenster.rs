@@ -37,6 +37,7 @@ use std::time::Instant;
 /// es gewöhnlich weiter.
 macro_rules! leuchtend {
     ($f:ident, $selbst:expr) => {
+        let _uhr = Stoppuhr::neu(stringify!($selbst));
         if unsafe { pinsel::leuchten_anfang($f) } {
             $selbst;
             unsafe { pinsel::leuchten_ende(zeichnen()) };
@@ -56,6 +57,55 @@ pub(crate) static ARBEIT_SUMME: AtomicU64 = AtomicU64::new(0);
 pub(crate) static ARBEIT_LAENGSTE: AtomicU64 = AtomicU64::new(0);
 pub(crate) static ARBEIT_UEBER: AtomicU64 = AtomicU64::new(0);
 pub(crate) static ANZEIGEN_SUMME: AtomicU64 = AtomicU64::new(0);
+
+/// Für `OIDA_FENSTER_PRUEFEN=2`: wie oft jede Zeichenfunktion lief und wie lang
+/// (in Nanosekunden). 0: noch nicht nachgeschaut, 1: aus, 2: an.
+static UHREN_AN: AtomicU64 = AtomicU64::new(0);
+static UHREN: std::sync::Mutex<Vec<(&'static str, u64, u64)>> = std::sync::Mutex::new(Vec::new());
+
+/// Misst, wie lang eine Zeichenfunktion braucht (nur wenn danach gefragt ist).
+struct Stoppuhr(&'static str, Option<Instant>);
+
+impl Stoppuhr {
+    fn neu(aufruf: &'static str) -> Stoppuhr {
+        let mut an = UHREN_AN.load(Ordering::Relaxed);
+        if an == 0 {
+            an = if std::env::var_os("OIDA_FENSTER_PRUEFEN").is_some_and(|w| w == "2") { 2 } else { 1 };
+            UHREN_AN.store(an, Ordering::Relaxed);
+        }
+        Stoppuhr(aufruf, if an == 2 { Some(Instant::now()) } else { None })
+    }
+}
+
+impl Drop for Stoppuhr {
+    fn drop(&mut self) {
+        let Some(anfang) = self.1 else { return };
+        let nanos = anfang.elapsed().as_nanos() as u64;
+        // Vom Aufruf, wie er im Quelltext steht, bleibt der Name der Funktion.
+        let name = self.0.trim_start_matches("unsafe").trim_start_matches([' ', '{']);
+        let name = name.split('(').next().unwrap_or(name).trim();
+        let mut uhren = UHREN.lock().unwrap();
+        match uhren.iter_mut().find(|u| u.0 == name) {
+            Some(uhr) => {
+                uhr.1 += 1;
+                uhr.2 += nanos;
+            }
+            None => uhren.push((name, 1, nanos)),
+        }
+    }
+}
+
+/// Der Bericht zu den Stoppuhren: die Funktionen nach ihrer Zeit, pro Bild gerechnet.
+pub(crate) fn uhren_bericht(bilder: u64) -> String {
+    let mut uhren = UHREN.lock().unwrap().clone();
+    uhren.sort_by(|a, b| b.2.cmp(&a.2));
+    let bilder = bilder.max(1) as f64;
+    uhren
+        .iter()
+        .map(|(name, mal, nanos)| format!("  {:<28} {:>8.1} moi im Büd, {:>7.3} ms", name, *mal as f64 / bilder, *nanos as f64 / 1e6 / bilder))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 use super::{ListenKopf, TextKopf, bytes};
 
@@ -90,6 +140,7 @@ const ZIEL_FORM_RAND: usize = 22; // DrawGeometry
 const ZIEL_FORM: usize = 23; // FillGeometry
 const ZIEL_BILD: usize = 26; // DrawBitmap
 const ZIEL_TEXT: usize = 27; // DrawText
+const ZIEL_SATZ: usize = 28; // DrawTextLayout
 const ZIEL_LAGE: usize = 30; // SetTransform
 const ZIEL_LEEREN: usize = 47; // Clear
 const ZIEL_ANFANG: usize = 48; // BeginDraw
@@ -300,6 +351,10 @@ struct Fenster {
     schriften: HashMap<(u32, bool), Zeiger>,
     /// Texte mit bunten Zeichen, fertig gezeichnet als Bild (siehe [`oida_g_text`]).
     text_bilder: HashMap<TextSchluessel, TextBild>,
+    /// Fertig gesetzte Texte (siehe `Satz`).
+    saetze: HashMap<SatzSchluessel, Satz>,
+    /// Der Stil für durchgezogene Linien mit runden Enden; wird beim ersten Mal angelegt.
+    rund_stil: Zeiger,
     schrift: (u32, bool),
     breite: i32,
     hoehe: i32,
@@ -309,6 +364,10 @@ struct Fenster {
     gemerkt: Vec<Lage>,
     /// Gestrichelte Ränder und Linien: Länge von Strich und Lücke (0, 0: durchgezogen).
     strich: (f32, f32),
+    /// Linien und Ränder haben runde Enden und Ecken.
+    runde_enden: bool,
+    /// Die Farben der zuletzt gebrauchten Verläufe.
+    stufenlager: pinsel::Stufenlager,
     /// Zwischen `fensta_offn()` und dem nächsten `fensta_offn()` wird gezeichnet.
     im_bild: bool,
     zu: bool,
@@ -570,6 +629,8 @@ pub unsafe extern "C" fn oida_g_auf(titel: *const TextKopf, breite: i64, hoehe: 
             schrift_fabrik,
             schriften: HashMap::new(),
             text_bilder: HashMap::new(),
+            saetze: HashMap::new(),
+            rund_stil: std::ptr::null_mut(),
             schrift: (16 * 4, false),
             breite: breite as i32,
             hoehe: hoehe as i32,
@@ -578,6 +639,8 @@ pub unsafe extern "C" fn oida_g_auf(titel: *const TextKopf, breite: i64, hoehe: 
             lage: Lage::GERADE,
             gemerkt: Vec::new(),
             strich: (0.0, 0.0),
+            runde_enden: false,
+            stufenlager: Default::default(),
             im_bild: false,
             zu: false,
             bilder: 0,
@@ -1007,12 +1070,28 @@ pub extern "C" fn oida_g_strich(strich: f64, luecke: f64) {
     fenster().strich = (gut(strich), gut(luecke));
 }
 
-/// Der Stil für einen Rand der Dicke `dicke`: null (durchgezogen) oder ein
-/// Strichmuster, das der Aufrufer nach dem Zeichnen wieder freigibt.
+/// `linien_rund(jo)`: Linien und Ränder bekommen ab jetzt runde Enden und Ecken (oder wieder eckige).
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_g_linien_rund(rund: bool) {
+    fenster().runde_enden = rund;
+}
+
+/// Der Stil für einen Rand der Dicke `dicke`: null (durchgezogen, eckig) oder ein
+/// eigener Stil (gestrichelt, runde Enden), den der Aufrufer nach dem Zeichnen wieder freigibt.
 unsafe fn strich_stil(f: &mut Fenster, dicke: f32) -> Zeiger {
     let (strich, luecke) = f.strich;
-    if strich <= 0.0 || luecke <= 0.0 || dicke <= 0.0 {
+    let gestrichelt = strich > 0.0 && luecke > 0.0 && dicke > 0.0;
+    if !gestrichelt && !f.runde_enden {
         return std::ptr::null_mut();
+    }
+    // Durchgezogen und rund ist immer derselbe Stil: einmal anlegen, dann nur
+    // noch mitzählen lassen (der Aufrufer gibt seinen Anteil wieder her).
+    if !gestrichelt && !f.rund_stil.is_null() {
+        unsafe {
+            let mitzaehlen: unsafe extern "system" fn(Zeiger) -> u32 = methode(f.rund_stil, 1);
+            mitzaehlen(f.rund_stil);
+        }
+        return f.rund_stil;
     }
     #[repr(C)]
     struct Angaben {
@@ -1024,15 +1103,24 @@ unsafe fn strich_stil(f: &mut Fenster, dicke: f32) -> Zeiger {
         muster: u32,
         versatz: f32,
     }
-    // Muster 5: eigenes. Direct2D misst Strich und Lücke in Vielfachen der Dicke.
-    let angaben = Angaben { anfang: 0, ende: 0, strich_ende: 0, ecke: 0, spitze: 10.0, muster: 5, versatz: 0.0 };
-    let laengen = [strich / dicke, luecke / dicke];
+    // Enden: 0 gerade abgeschnitten, 2 rund. Ecken: 0 spitz, 2 rund.
+    let rund = if f.runde_enden { 2 } else { 0 };
+    // Muster 0: durchgezogen, 5: eigenes. Direct2D misst Strich und Lücke in Vielfachen der Dicke.
+    let muster = if gestrichelt { 5 } else { 0 };
+    let angaben = Angaben { anfang: rund, ende: rund, strich_ende: rund, ecke: rund, spitze: 10.0, muster, versatz: 0.0 };
+    let laengen = [strich / dicke.max(0.001), luecke / dicke.max(0.001)];
+    let (zeiger, anzahl) = if gestrichelt { (laengen.as_ptr(), 2) } else { (std::ptr::null(), 0) };
     unsafe {
         let anlegen: unsafe extern "system" fn(Zeiger, *const Angaben, *const f32, u32, *mut Zeiger) -> i32 =
             methode(f.fabrik, FABRIK_STRICH);
         let mut stil = std::ptr::null_mut();
-        if anlegen(f.fabrik, &angaben, laengen.as_ptr(), 2, &mut stil) < 0 {
+        if anlegen(f.fabrik, &angaben, zeiger, anzahl, &mut stil) < 0 {
             return std::ptr::null_mut();
+        }
+        if !gestrichelt && !stil.is_null() {
+            let mitzaehlen: unsafe extern "system" fn(Zeiger) -> u32 = methode(stil, 1);
+            mitzaehlen(stil);
+            f.rund_stil = stil;
         }
         stil
     }
@@ -1331,6 +1419,48 @@ struct TextBild {
     gebraucht: u64,
 }
 
+/// Ein Text, den DirectWrite schon gesetzt hat (welches Zeichen wo steht):
+/// Text, Schrift und Ausrichtung. Das Setzen kostet bei jedem Text gut 30
+/// Mikrosekunden, und die meisten Texte stehen viele Bilder lang unverändert da.
+type SatzSchluessel = (Vec<u8>, (u32, bool), u8);
+
+struct Satz {
+    satz: Zeiger,
+    /// Das Bild, in dem er zuletzt gebraucht wurde.
+    gebraucht: u64,
+}
+
+/// Der gesetzte Text zur aktuellen Schrift und Ausrichtung, aus dem Lager oder
+/// neu. Null, wenn DirectWrite ihn nicht hergibt.
+unsafe fn satz_holen(f: &mut Fenster, roh: &[u8], zeichen: &[u16], format: Zeiger, ausrichtung: u8, weite: f32) -> Zeiger {
+    let schluessel: SatzSchluessel = (roh.to_vec(), f.schrift, ausrichtung);
+    let jetzt = f.bilder;
+    if let Some(satz) = f.saetze.get_mut(&schluessel) {
+        satz.gebraucht = jetzt;
+        return satz.satz;
+    }
+    unsafe {
+        // Wird es zu viel, fliegt hinaus, was schon länger niemand gebraucht hat.
+        if f.saetze.len() >= 800 {
+            f.saetze.retain(|_, satz| {
+                let bleibt = satz.gebraucht + 120 >= jetzt;
+                if !bleibt {
+                    freigeben(satz.satz);
+                }
+                bleibt
+            });
+        }
+        let anlegen: unsafe extern "system" fn(Zeiger, *const u16, u32, Zeiger, f32, f32, *mut Zeiger) -> i32 =
+            methode(f.schrift_fabrik, formen::SCHRIFT_SATZ);
+        let mut satz = std::ptr::null_mut();
+        if anlegen(f.schrift_fabrik, zeichen.as_ptr(), zeichen.len() as u32, format, weite, weite, &mut satz) < 0 || satz.is_null() {
+            return std::ptr::null_mut();
+        }
+        f.saetze.insert(schluessel, Satz { satz, gebraucht: jetzt });
+        satz
+    }
+}
+
 /// Hat der Text Zeichen, die Windows bunt zeichnet (Emoji) oder aus einer
 /// Ersatzschrift holt (Pfeile, Sterne ...)? Die sind so langsam (über eine
 /// Millisekunde pro Text), dass sich ein fertiges Bild lohnt.
@@ -1474,9 +1604,15 @@ pub unsafe extern "C" fn oida_g_text(x: f64, y: f64, text: *const TextKopf, ausr
         let (links, oben) = (x - anteil_x * 2.0 * WEIT, y - anteil_y * 2.0 * WEIT);
         let flaeche = Rechteck { links, oben, rechts: links + 2.0 * WEIT, unten: oben + 2.0 * WEIT };
         let p = pinsel(f);
+        // Die 4 lässt bunte Zeichen (Emoji) bunt.
+        let satz = satz_holen(f, bytes(text), &zeichen, format, ausrichtung.clamp(0, 6) as u8, 2.0 * WEIT);
+        if !satz.is_null() {
+            let zeichne: unsafe extern "system" fn(Zeiger, Punkt, Zeiger, Zeiger, u32) = methode(f.ziel, ZIEL_SATZ);
+            zeichne(f.ziel, Punkt { x: links, y: oben }, satz, p, 4);
+            return;
+        }
         let schreiben: unsafe extern "system" fn(Zeiger, *const u16, u32, Zeiger, *const Rechteck, Zeiger, u32, u32) =
             methode(f.ziel, ZIEL_TEXT);
-        // Die 4 lässt bunte Zeichen (Emoji) bunt.
         schreiben(f.ziel, zeichen.as_ptr(), zeichen.len() as u32, format, &flaeche, p, 4, 0);
     }
 }
@@ -1631,6 +1767,20 @@ mod tests {
         let beides = schieben.dann(doppelt);
         let (x, y) = (1.0 * beides.m11 + 1.0 * beides.m21 + beides.dx, 1.0 * beides.m12 + 1.0 * beides.m22 + beides.dy);
         assert_eq!((x, y), (22.0, 2.0));
+    }
+
+    #[test]
+    fn stoppuhr_merkt_sich_den_namen_der_funktion() {
+        // Eingeschaltet zählt sie mit, und vom Aufruf im Quelltext bleibt der Name.
+        UHREN_AN.store(2, Ordering::Relaxed);
+        drop(Stoppuhr::neu("unsafe { oida_g_probe_uhr(x, y, text, ausrichtung) }"));
+        drop(Stoppuhr::neu("oida_g_probe_uhr(1.0)"));
+        UHREN_AN.store(1, Ordering::Relaxed);
+        drop(Stoppuhr::neu("oida_g_probe_aus()"));
+        let bericht = uhren_bericht(2);
+        let zeile = bericht.lines().find(|z| z.contains("oida_g_probe_uhr")).unwrap_or_else(|| panic!("{bericht}"));
+        assert!(zeile.contains("1.0 moi im Büd") && zeile.trim_end().ends_with("ms"), "{zeile}");
+        assert!(!bericht.contains("oida_g_probe_aus") && !bericht.contains("unsafe"), "{bericht}");
     }
 
     #[test]

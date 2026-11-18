@@ -1,25 +1,31 @@
 # RogueWave: das Spiel selbst. Hier steht, was in jedem Bild passiert:
-# Bewegen, Schießen, Treffen, Wellen, Verbesserungen. Gezeichnet wird in
-# "büdschirm.oida".
+# Bewegen, Ausweichen, Schießen, Treffen, Wellen, Ereignisse, Verbesserungen.
+# Gezeichnet wird in "büdschirm.oida".
 
 BRAUCH fensta OIDA
 BRAUCH mathe OIDA
 BRAUCH listen OIDA
 BRAUCH "werte.oida" OIDA
 BRAUCH "dinge.oida" OIDA
+BRAUCH "gegna.oida" OIDA
+BRAUCH "bosse.oida" OIDA
+BRAUCH "effekte.oida" OIDA
 BRAUCH "klang.oida" OIDA
 BRAUCH "bestenlistn.oida" OIDA
 BRAUCH "vabessarungen.oida" OIDA
 
-# Die Kamera folgt der Spielfigur weich nach und wackelt bei Treffern.
+# Die Kamera folgt der Spielfigur weich nach. Bei Treffern wackelt sie: Jeder
+# Stoß macht sie unruhiger, und die Unruhe klingt von selbst wieder ab.
 KLASSE Kamera
     x KOMMAZOI = 0.0
     y KOMMAZOI = 0.0
     ziel_x KOMMAZOI = 0.0
     ziel_y KOMMAZOI = 0.0
-    wackl_uhr KOMMAZOI = 0.0
     wackl_x KOMMAZOI = 0.0
     wackl_y KOMMAZOI = 0.0
+    unruh KOMMAZOI = 0.0
+    uhr KOMMAZOI = 0.0
+    stärke KOMMAZOI = 1.0           # aus den Einstellungen; 0 heißt: gar nicht wackeln
 
     FUNKTIAUN foig(wem Ding)
         MEI.ziel_x = wem.x - FELD_B / 2 OIDA
@@ -29,17 +35,22 @@ KLASSE Kamera
     FUNKTIAUN weida_um(dauer KOMMAZOI)
         # Jedes Bild ein Stück näher ans Ziel, unabhängig davon, wie lang das Bild dauert.
         SOG AU stickl = 1 - E_HOCH(-KAMERA_TEMPO * dauer) OIDA
-        MEI.x = klemm(zwischn(MEI.x, MEI.ziel_x, stickl), 0, WELT_B - FELD_B) OIDA
-        MEI.y = klemm(zwischn(MEI.y, MEI.ziel_y, stickl), 0, WELT_H - FELD_H) OIDA
-        WENN MEI.wackl_uhr > 0 DAUN
-            MEI.wackl_uhr -= dauer OIDA
-            SOG AU stärke = WACKL_STÄRKE * (MEI.wackl_uhr / WACKL_DAUER) OIDA
-            MEI.wackl_x = zufoi_von(-stärke, stärke) OIDA
-            MEI.wackl_y = zufoi_von(-stärke, stärke) OIDA
+        MEI.x = klemm(zwischn(MEI.x, MEI.ziel_x, stickl), 0.0, WELT_B - FELD_B) OIDA
+        MEI.y = klemm(zwischn(MEI.y, MEI.ziel_y, stickl), 0.0, WELT_H - FELD_H) OIDA
+        WENN MEI.unruh > 0 DAUN
+            MEI.unruh = GRÖSSTA(0.0, MEI.unruh - dauer * 2.2) OIDA
+            MEI.uhr += dauer OIDA
+            SOG AU weit = 15 * MEI.unruh * MEI.unruh OIDA
+            MEI.wackl_x = weit * (SINUS(MEI.uhr * 47.3) + SINUS(MEI.uhr * 71.9)) * 0.5 OIDA
+            MEI.wackl_y = weit * (SINUS(MEI.uhr * 53.1) + SINUS(MEI.uhr * 67.7)) * 0.5 OIDA
         SUNST
             MEI.wackl_x = 0.0 OIDA
             MEI.wackl_y = 0.0 OIDA
         PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN wackl(wievü KOMMAZOI)
+        MEI.unruh = KLANSTA(1.0, MEI.unruh + wievü * 0.09 * MEI.stärke) OIDA
     PASST SCHO
 PASST SCHO
 
@@ -49,21 +60,119 @@ STRUKTUR Nah
     weit KOMMAZOI
 PASST SCHO
 
+# Ein Stern im Hintergrund.
+STRUKTUR Stern
+    x KOMMAZOI
+    y KOMMAZOI
+    radius KOMMAZOI
+    hell KOMMAZOI
+    tempo KOMMAZOI
+    vasotz KOMMAZOI
+PASST SCHO
+
+# Eine Auswahl, die noch aussteht (wenn mehrere Stufen auf einmal kommen).
+STRUKTUR Wortend
+    lohn JONA
+    bigboss JONA
+PASST SCHO
+
+# ------------------------------------------------------------- Ereignisse
+
+FUNKTIAUN ereignis_nam(e ZOI) GIBT ZRUCK KETTN
+    WENN e == EREIGNIS_ELITE DAUN
+        GIB ZRUCK "ELITE WAVE" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_STURM DAUN
+        GIB ZRUCK "ION STORM" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_BRUNNEN DAUN
+        GIB ZRUCK "REPAIR FOUNTAIN" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_HINTAHOIT DAUN
+        GIB ZRUCK "AMBUSH" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_SCHOTZ DAUN
+        GIB ZRUCK "SHARD CACHE" OIDA
+    PASST SCHO
+    GIB ZRUCK "BOUNTY HUNT" OIDA
+PASST SCHO
+
+FUNKTIAUN ereignis_wos(e ZOI) GIBT ZRUCK KETTN
+    WENN e == EREIGNIS_ELITE DAUN
+        GIB ZRUCK "Every enemy is an elite. Deadlier — and far more rewarding." OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_STURM DAUN
+        GIB ZRUCK "Enemies are fast and frail. Everything hits harder." OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_BRUNNEN DAUN
+        GIB ZRUCK "You regenerate health this wave, but XP is scarce." OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_HINTAHOIT DAUN
+        GIB ZRUCK "Enemies arrive in packs from a single direction. Hold the line." OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_SCHOTZ DAUN
+        GIB ZRUCK "One enemy carries a shard cache. Hunt it down before it dies elsewhere." OIDA
+    PASST SCHO
+    GIB ZRUCK "A marked elite prowls the arena. Kill it for a payout." OIDA
+PASST SCHO
+
+FUNKTIAUN ereignis_foab(e ZOI) GIBT ZRUCK KETTN
+    WENN e == EREIGNIS_ELITE DAUN
+        GIB ZRUCK "#ffcc66" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_STURM DAUN
+        GIB ZRUCK "#88ddff" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_BRUNNEN DAUN
+        GIB ZRUCK "#66ff99" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_HINTAHOIT DAUN
+        GIB ZRUCK "#ff8899" OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_SCHOTZ DAUN
+        GIB ZRUCK "#c38bff" OIDA
+    PASST SCHO
+    GIB ZRUCK "#ff66dd" OIDA
+PASST SCHO
+
+# Wie oft ein Ereignis gezogen wird (höher heißt öfter).
+FUNKTIAUN ereignis_gwicht(e ZOI) GIBT ZRUCK ZOI
+    WENN e == EREIGNIS_ELITE DAUN
+        GIB ZRUCK 22 OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_STURM DAUN
+        GIB ZRUCK 18 OIDA
+    PASST SCHO
+    WENN e == EREIGNIS_BRUNNEN ODA e == EREIGNIS_HINTAHOIT DAUN
+        GIB ZRUCK 16 OIDA
+    PASST SCHO
+    GIB ZRUCK 14 OIDA
+PASST SCHO
+
+# -------------------------------------------------------------- Das Spiel
+
 KLASSE Spü
     spiela Spiela
     kamera Kamera
     klang Klang
     bestenlistn Bestenlistn
     vabessarungen LISTN VON Vabessarung
+    effekte Effekte
 
     zustand ZOI = ZUSTAND_ANFANG
     schüsse LISTN VON Schuss = []
     gegna LISTN VON Gegna = []
-    xp_kugln LISTN VON XpKugl = []
+    neiche_gegna LISTN VON Gegna = []   # kommen erst nach dem Durchgang durch alle dazu
+    kugln LISTN VON XpKugl = []
     funkn LISTN VON Funkn = []
     blitze LISTN VON Blitz = []
     frostwön LISTN VON Frostwön = []
     flammen LISTN VON Flamme = []
+    zoin LISTN VON Schodnszoi = []
+    spurn LISTN VON Spur = []
+    dinga LISTN VON Aufheba = []
+    sterne LISTN VON Stern = []
+    stü_uhr KOMMAZOI = 0.0          # kurz fast stehen bleiben nach einem großen Treffer
 
     # Die Wellen
     wön ZOI = 0
@@ -71,36 +180,119 @@ KLASSE Spü
     wön_ziel ZOI = 0
     neiche_uhr KOMMAZOI = 0.0       # bis der nächste Gegner kommt
     neiche_pause KOMMAZOI = 0.0
+    nochfüll_uhr KOMMAZOI = 0.0     # bis wieder einer nachrückt, wenn zu wenige da sind
     rast_uhr KOMMAZOI = 0.0         # Pause zwischen zwei Wellen
     wön_rennt JONA = FOISCH
     boss VIELLEICHT Gegna = NIX
+    endboss_do JONA = FOISCH
+    endlos JONA = FOISCH
+
+    # Ereignisse
+    ereignis ZOI = EREIGNIS_KANS
+    letzts_ereignis ZOI = EREIGNIS_KANS
+    brunnen_heilung KOMMAZOI = 0.0
+    schotz_offn JONA = FOISCH       # es wird noch ein Träger für die Scherben gesucht
+    schotz_träga VIELLEICHT Gegna = NIX
+    jogd_ziel VIELLEICHT Gegna = NIX
+    hintahoit_uhr KOMMAZOI = 0.0
+    hintahoit_gsetzt JONA = FOISCH
+    hintahoit_dx KOMMAZOI = 0.0
+    hintahoit_dy KOMMAZOI = 0.0
+    scherbn ZOI = 0                 # was die Ereignisse in diesem Lauf eingebracht haben
 
     # Die Auswahl beim Stufenaufstieg
     woi LISTN VON Vabessarung = []
-    woi_vom_boss JONA = FOISCH
-    magnet KOMMAZOI = 0.0
+    woi_schlange LISTN VON Wortend = []
+    woi_is_lohn JONA = FOISCH
+    anfangs_woi JONA = FOISCH       # am Anfang sucht man sich eine Waffe aus
 
     # Was nach der Rast noch ansteht
-    offn_boss_woi JONA = FOISCH
-    offn_boss_oat ZOI = OAT_NORMAL
     offn_gwunna JONA = FOISCH
+    offn_endboss JONA = FOISCH
 
     tote ZOI = 0
     spüzeit KOMMAZOI = 0.0
     rang ZOI = 0                    # Platz in der Bestenliste nach dem letzten Lauf (0: keiner)
+    fertig JONA = FOISCH            # der Lauf ist abgerechnet
+    schüsse_gfeiat ZOI = 0
+    schüsse_troffn ZOI = 0
+    vabessarungen_gnumma ZOI = 0
+    bosse_gschlogn ZOI = 0
+    letzta_modus KETTN = "normal"
+
+    # Trefferserie
+    combo ZOI = 0
+    combo_uhr KOMMAZOI = 0.0
+    combo_puls KOMMAZOI = 0.0
+    beste_combo ZOI = 0
+    combo_klang_uhr KOMMAZOI = 0.0
+    letzta_elite_stü KOMMAZOI = -10.0
+
+    # Kurze Rückmeldungen am Bildschirm
+    blitz_uhr KOMMAZOI = 0.0        # das ganze Bild leuchtet kurz in einer Farbe
+    blitz_foab KETTN = "#ffffff"
+    hinweis_uhr KOMMAZOI = 0.0
+    hinweis_text KETTN = ""
+    hinweis_foab KETTN = FOAB_AKZENT
+    stufn_blitz_uhr KOMMAZOI = 0.0
+    banna_uhr KOMMAZOI = 0.0
+    banna_text KETTN = ""
+    übagang_uhr KOMMAZOI = 0.0
+    offn_hinweis_zeigt JONA = FOISCH
+
+    # Die drei Tipps am Anfang
+    lern_stufn ZOI = 0
+    lern_uhr KOMMAZOI = 0.0
+    lern_fertig JONA = FOISCH
+    bewegt JONA = FOISCH
 
     # Einstellungen
     wackln JONA = WOAHR
+    effekte_stärke KOMMAZOI = 1.0
     modus KETTN = "normal"          # "easy", "normal" oder "hard"
+    schieba ZOI = 0                 # welcher Schieberegler gerade gezogen wird (0: keiner)
 
     # Was für dieses Bild gilt: die Zeit in Tausendstelsekunden, die Maus im Spielfeld.
     jetzt KOMMAZOI = 0.0
+    büd_dauer KOMMAZOI = 0.0
     maus_x KOMMAZOI = 0.0
     maus_y KOMMAZOI = 0.0
     klick JONA = FOISCH
+    maus_druckt JONA = FOISCH
+    haut VIELLEICHT Büd = NIX       # das Bild für die Figur
 
     FUNKTIAUN maus_drin(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI) GIBT ZRUCK JONA
         GIB ZRUCK MEI.maus_x >= x UND MEI.maus_x <= x + breite UND MEI.maus_y >= y UND MEI.maus_y <= y + höhe OIDA
+    PASST SCHO
+
+    FUNKTIAUN oat() GIBT ZRUCK Spüoat
+        GIB ZRUCK spüoat_von(MEI.modus) OIDA
+    PASST SCHO
+
+    # In welchem Gebiet man gerade ist (0, 1 oder 2).
+    FUNKTIAUN gebiet() GIBT ZRUCK ZOI
+        WENN MEI.wön >= 15 DAUN
+            GIB ZRUCK 2 OIDA
+        PASST SCHO
+        WENN MEI.wön >= 8 DAUN
+            GIB ZRUCK 1 OIDA
+        PASST SCHO
+        GIB ZRUCK 0 OIDA
+    PASST SCHO
+
+    FUNKTIAUN boss_lebt() GIBT ZRUCK JONA
+        SOG AU b = MEI.boss OIDA
+        WENN b != NIX DAUN
+            GIB ZRUCK b.lebt OIDA
+        PASST SCHO
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+
+    FUNKTIAUN is_boss_wön(numma ZOI) GIBT ZRUCK JONA
+        WENN numma == 5 ODA numma == 10 ODA numma == 15 ODA numma == 20 DAUN
+            GIB ZRUCK WOAHR OIDA
+        PASST SCHO
+        GIB ZRUCK MEI.endlos UND endlos_tiafn(numma) > 0 UND numma % 5 == 0 OIDA
     PASST SCHO
 
     # ------------------------------------------------------------ Anfang
@@ -108,49 +300,131 @@ KLASSE Spü
     FUNKTIAUN von_vuan()
         MEI.spiela = Spiela(WELT_B / 2, WELT_H / 2, SPIELA_RADIUS) OIDA
         MEI.kamera = Kamera() OIDA
+        MEI.kamera.x = klemm(MEI.spiela.x - FELD_B / 2, 0.0, WELT_B - FELD_B) OIDA
+        MEI.kamera.y = klemm(MEI.spiela.y - FELD_H / 2, 0.0, WELT_H - FELD_H) OIDA
+        MEI.einstellungen_gödn() OIDA
+        MEI.effekte.zruck() OIDA
         MEI.schüsse = [] OIDA
         MEI.gegna = [] OIDA
-        MEI.xp_kugln = [] OIDA
+        MEI.neiche_gegna = [] OIDA
+        MEI.kugln = [] OIDA
         MEI.funkn = [] OIDA
         MEI.blitze = [] OIDA
         MEI.frostwön = [] OIDA
         MEI.flammen = [] OIDA
+        MEI.zoin = [] OIDA
+        MEI.spurn = [] OIDA
+        MEI.dinga = [] OIDA
+        MEI.stü_uhr = 0.0 OIDA
         MEI.wön = 0 OIDA
         MEI.wön_tote = 0 OIDA
         MEI.wön_ziel = 0 OIDA
         MEI.neiche_uhr = 0.0 OIDA
         MEI.neiche_pause = 0.0 OIDA
+        MEI.nochfüll_uhr = 0.0 OIDA
         MEI.rast_uhr = 1.0 OIDA
         MEI.wön_rennt = FOISCH OIDA
         MEI.boss = NIX OIDA
+        MEI.endboss_do = FOISCH OIDA
+        MEI.endlos = FOISCH OIDA
+        MEI.ereignis = EREIGNIS_KANS OIDA
+        MEI.letzts_ereignis = EREIGNIS_KANS OIDA
+        MEI.brunnen_heilung = 0.0 OIDA
+        MEI.schotz_offn = FOISCH OIDA
+        MEI.schotz_träga = NIX OIDA
+        MEI.jogd_ziel = NIX OIDA
+        MEI.hintahoit_uhr = 0.0 OIDA
+        MEI.hintahoit_gsetzt = FOISCH OIDA
+        MEI.scherbn = 0 OIDA
         MEI.woi = [] OIDA
-        MEI.woi_vom_boss = FOISCH OIDA
-        MEI.magnet = 0.0 OIDA
-        MEI.offn_boss_woi = FOISCH OIDA
+        MEI.woi_schlange = [] OIDA
+        MEI.woi_is_lohn = FOISCH OIDA
+        MEI.anfangs_woi = FOISCH OIDA
         MEI.offn_gwunna = FOISCH OIDA
+        MEI.offn_endboss = FOISCH OIDA
         MEI.tote = 0 OIDA
         MEI.spüzeit = 0.0 OIDA
         MEI.rang = 0 OIDA
-    PASST SCHO
-
-    FUNKTIAUN start()
-        MEI.von_vuan() OIDA
-        MEI.zustand = ZUSTAND_SPÜ OIDA
-        MEI.klang.musik_start() OIDA
-    PASST SCHO
-
-    # Zurück aus den Einstellungen: ins laufende Spiel oder ins Menü.
-    FUNKTIAUN zruck()
-        WENN MEI.spiela.lebt UND MEI.wön > 0 DAUN
-            MEI.zustand = ZUSTAND_SPÜ OIDA
-        SUNST
-            MEI.zustand = ZUSTAND_ANFANG OIDA
+        MEI.fertig = FOISCH OIDA
+        MEI.schüsse_gfeiat = 0 OIDA
+        MEI.schüsse_troffn = 0 OIDA
+        MEI.vabessarungen_gnumma = 0 OIDA
+        MEI.bosse_gschlogn = 0 OIDA
+        MEI.letzta_modus = MEI.modus OIDA
+        MEI.combo = 0 OIDA
+        MEI.combo_uhr = 0.0 OIDA
+        MEI.combo_puls = 0.0 OIDA
+        MEI.beste_combo = 0 OIDA
+        MEI.combo_klang_uhr = 0.0 OIDA
+        MEI.letzta_elite_stü = -10.0 OIDA
+        MEI.blitz_uhr = 0.0 OIDA
+        MEI.hinweis_uhr = 0.0 OIDA
+        MEI.hinweis_text = "" OIDA
+        MEI.stufn_blitz_uhr = 0.0 OIDA
+        MEI.banna_uhr = 0.0 OIDA
+        MEI.banna_text = "" OIDA
+        MEI.offn_hinweis_zeigt = FOISCH OIDA
+        MEI.lern_stufn = 0 OIDA
+        MEI.lern_uhr = 0.0 OIDA
+        MEI.lern_fertig = FOISCH OIDA
+        WENN LÄNGN(MEI.sterne) == 0 DAUN
+            FIA i VON 1 BIS 80 TUA
+                HAU EINE(MEI.sterne, Stern(ZUFOI() * WELT_B, ZUFOI() * WELT_H, zufoi_von(0.5, 2), zufoi_von(0.15, 0.5), zufoi_von(0.002, 0.006), ZUFOI() * 2 * PI)) OIDA
+            PASST SCHO
         PASST SCHO
     PASST SCHO
 
-    # --------------------------------------------------------- ein Bild
+    # Was in den Einstellungen steht, gilt ab sofort.
+    FUNKTIAUN einstellungen_gödn()
+        MEI.kamera.stärke = 0.0 OIDA
+        WENN MEI.wackln DAUN
+            MEI.kamera.stärke = MEI.effekte_stärke OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Ein neuer Lauf: Er beginnt mit der Wahl einer der vier Waffen.
+    FUNKTIAUN start()
+        MEI.von_vuan() OIDA
+        MEI.klang.musik_gebiet(0) OIDA
+        MEI.woi = anfangs_waffn(MEI.vabessarungen) OIDA
+        MEI.woi_is_lohn = FOISCH OIDA
+        MEI.anfangs_woi = WOAHR OIDA
+        MEI.zustand = ZUSTAND_VABESSARUNG OIDA
+    PASST SCHO
+
+    # In einen anderen Zustand, mit einem kurzen Schleier dazwischen.
+    FUNKTIAUN geh_zua(neich ZOI)
+        WENN MEI.zustand != neich DAUN
+            MEI.übagang_uhr = 0.22 OIDA
+            MEI.zustand = neich OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN hinweis(inhalt KETTN, foab KETTN, dauer KOMMAZOI)
+        MEI.hinweis_text = inhalt OIDA
+        MEI.hinweis_foab = foab OIDA
+        MEI.hinweis_uhr = GRÖSSTA(MEI.hinweis_uhr, dauer) OIDA
+    PASST SCHO
+
+    FUNKTIAUN aufblitzn(foab KETTN, dauer KOMMAZOI)
+        MEI.blitz_foab = foab OIDA
+        MEI.blitz_uhr = GRÖSSTA(MEI.blitz_uhr, dauer) OIDA
+    PASST SCHO
+
+    # ------------------------------------------------------ ein Bild weiter
 
     FUNKTIAUN weida_um(dauer KOMMAZOI)
+        MEI.büd_dauer = dauer OIDA
+        WENN MEI.übagang_uhr > 0 DAUN
+            MEI.übagang_uhr = GRÖSSTA(0.0, MEI.übagang_uhr - dauer) OIDA
+        PASST SCHO
+        # Die Musik richtet sich danach, wo man ist und wie es der Figur geht.
+        SOG AU lebn = -1.0 OIDA
+        WENN MEI.spiela.lebt UND NED MEI.offn_gwunna UND (MEI.zustand == ZUSTAND_SPÜ ODA MEI.zustand == ZUSTAND_VABESSARUNG ODA MEI.zustand == ZUSTAND_PAUSE) DAUN
+            lebn = MEI.spiela.lebn / MEI.spiela.max_lebn OIDA
+        PASST SCHO
+        MEI.klang.weida_um(MEI.zustand, lebn, MEI.jetzt / 1000) OIDA
+
         WENN MEI.zustand == ZUSTAND_ANFANG DAUN
             WENN taste_neich("ENTER") ODA taste_neich("LAA") DAUN
                 MEI.start() OIDA
@@ -158,88 +432,194 @@ KLASSE Spü
         SUNST WENN MEI.zustand == ZUSTAND_SPÜ DAUN
             MEI.spü_weida(dauer) OIDA
         SUNST WENN MEI.zustand == ZUSTAND_VABESSARUNG DAUN
-            # Auswählen mit den Tasten 1 bis 4
-            FIA i VON 0 BIS LÄNGN(MEI.woi) - 1 TUA
-                WENN taste_neich(KETTN(i + 1)) DAUN
-                    MEI.woi_nehma(i) OIDA
-                    HAU OB OIDA
+            WENN MEI.offn_gwunna DAUN
+                # Der Endboss ist gefallen, während die Auswahl offen war: Der Lauf ist gewonnen.
+                MEI.woi_schlange = [] OIDA
+                MEI.zustand = ZUSTAND_SPÜ OIDA
+            SUNST
+                FIA i VON 0 BIS LÄNGN(MEI.woi) - 1 TUA
+                    WENN taste_neich(KETTN(i + 1)) DAUN
+                        MEI.woi_nehma(i) OIDA
+                        HAU OB OIDA
+                    PASST SCHO
                 PASST SCHO
+            PASST SCHO
+        SUNST WENN MEI.zustand == ZUSTAND_PAUSE DAUN
+            WENN taste_neich("ESC") ODA taste_neich("P") DAUN
+                MEI.zustand = ZUSTAND_SPÜ OIDA
             PASST SCHO
         SUNST WENN MEI.zustand == ZUSTAND_EINSTELLUNGEN DAUN
             WENN taste_neich("ESC") DAUN
-                MEI.zruck() OIDA
+                MEI.geh_zua(ZUSTAND_ANFANG) OIDA
             PASST SCHO
-        SUNST
-            # Aus oder gewonnen
+        SUNST WENN MEI.zustand == ZUSTAND_AUS DAUN
+            WENN taste_neich("ENTER") DAUN
+                MEI.valuan() OIDA
+                MEI.start() OIDA
+            PASST SCHO
+        SUNST WENN MEI.zustand == ZUSTAND_GWUNNA DAUN
             WENN taste_neich("ENTER") DAUN
                 MEI.start() OIDA
             PASST SCHO
         PASST SCHO
-        MEI.klang.musik_weida() OIDA
     PASST SCHO
 
-    FUNKTIAUN spü_weida(dauer KOMMAZOI)
+    FUNKTIAUN spü_weida(echte_dauer KOMMAZOI)
+        MEI.combo_puls = GRÖSSTA(0.0, MEI.combo_puls - echte_dauer * 5) OIDA
+        SOG AU dauer = echte_dauer OIDA
+        WENN MEI.stü_uhr > 0 DAUN
+            MEI.stü_uhr -= echte_dauer OIDA
+            dauer = echte_dauer * 0.14 OIDA
+        PASST SCHO
         SOG AU p = MEI.spiela OIDA
+        MEI.effekte.weida_um(dauer) OIDA
         MEI.spüzeit += dauer OIDA
+        WENN MEI.wön_rennt DAUN
+            MEI.ereignis_weida(dauer) OIDA
+        PASST SCHO
 
         MEI.spiela_weida(dauer) OIDA
 
-        # Schüsse
-        FIA JEDE s IN MEI.schüsse TUA
-            s.weida_um(dauer) OIDA
-        PASST SCHO
-        MEI.schüsse = nur(MEI.schüsse, FUNKTIAUN(s Schuss) => s.lebt) OIDA
-
-        # Gegner: bewegen, und wer die Figur berührt, tut ihr weh.
-        FIA JEDE g IN MEI.gegna TUA
-            WENN g.lebt DAUN
-                g.weida_um(p, MEI.schüsse, dauer, MEI.jetzt) OIDA
-                WENN g.trifft(p) UND g.berührt <= 0 DAUN
-                    MEI.spiela_triff(g.schodn) OIDA
-                    g.berührt = 0.5 OIDA
+        # Die Tipps am Anfang: drei kurze, einer nach dem anderen. Wer sich bewegt, hat den ersten verstanden.
+        WENN NED MEI.lern_fertig DAUN
+            MEI.lern_uhr += echte_dauer OIDA
+            SOG AU vorbei = MEI.lern_uhr > 4 OIDA
+            WENN MEI.lern_stufn == 0 DAUN
+                vorbei = (MEI.bewegt UND MEI.lern_uhr > 0.6) ODA MEI.lern_uhr > 8 OIDA
+            SUNST WENN MEI.lern_stufn == 1 DAUN
+                vorbei = MEI.lern_uhr > 5 OIDA
+            PASST SCHO
+            WENN vorbei DAUN
+                MEI.lern_stufn += 1 OIDA
+                MEI.lern_uhr = 0.0 OIDA
+                WENN MEI.lern_stufn >= 3 DAUN
+                    MEI.lern_fertig = WOAHR OIDA
                 PASST SCHO
             PASST SCHO
         PASST SCHO
-        MEI.gegna = nur(MEI.gegna, FUNKTIAUN(g Gegna) => g.lebt) OIDA
 
-        # Schüsse der Gegner treffen die Figur, die eigenen treffen Gegner.
-        FIA JEDE s IN MEI.schüsse TUA
-            WENN s.lebt UND s.vom_gegna DAUN
-                WENN s.trifft(p) DAUN
-                    MEI.spiela_triff(s.schodn) OIDA
-                    s.lebt = FOISCH OIDA
-                    MEI.funkn_bei(s.x, s.y, FOAB_GEGNA_SCHUSS, 4) OIDA
+        # Schüsse
+        FIA JEDE schuss IN MEI.schüsse TUA
+            schuss.weida_um(dauer) OIDA
+        PASST SCHO
+        MEI.schüsse = nur(MEI.schüsse, FUNKTIAUN(schuss Schuss) => schuss.lebt) OIDA
+
+        # Gegner. Ein Boss, der offen dasteht, tut bei Berührung nichts: Das ist die Gelegenheit, hinzugehen.
+        FIA JEDE g IN MEI.gegna TUA
+            WENN NED g.lebt DAUN
+                WEIDA OIDA
+            PASST SCHO
+            gegna_weida(MEI, g, dauer) OIDA
+            WENN g.lebt UND g.trifft(p) UND g.berührt <= 0 UND NED g.is_offn() DAUN
+                MEI.spiela_triff(g.schodn) OIDA
+                g.berührt = 0.5 OIDA
+            PASST SCHO
+        PASST SCHO
+        MEI.gegna_aufräuma() OIDA
+        MEI.gegna_ausanaund(dauer) OIDA
+
+        # Schüsse treffen Gegner, Schüsse der Gegner treffen die Figur.
+        FIA JEDE schuss IN MEI.schüsse TUA
+            WENN NED schuss.lebt DAUN
+                WEIDA OIDA
+            PASST SCHO
+            WENN schuss.vom_gegna DAUN
+                WENN schuss.trifft(p) DAUN
+                    MEI.spiela_triff(schuss.schodn) OIDA
+                    schuss.lebt = FOISCH OIDA
+                    MEI.funkn_bei(schuss.x, schuss.y, FOAB_GEGNA_SCHUSS, 4) OIDA
                 PASST SCHO
-            SUNST WENN s.lebt DAUN
-                FIA JEDE g IN MEI.gegna TUA
-                    WENN s.lebt UND g.lebt UND s.trifft(g) DAUN
-                        MEI.gegna_triff(g, s.schodn) OIDA
-                        MEI.funkn_bei(g.x, g.y, FOAB_GEGNA_A, 5) OIDA
-                        MEI.klang.treffa() OIDA
-                        # Ein Schuss mit Durchschuss fliegt weiter, bis er genug getroffen hat.
-                        s.treffa += 1 OIDA
-                        WENN s.treffa > s.durchschuss DAUN
-                            s.lebt = FOISCH OIDA
-                        PASST SCHO
-                        MEI.wackl() OIDA
+                WEIDA OIDA
+            PASST SCHO
+            FIA JEDE g IN MEI.gegna TUA
+                WENN NED g.lebt ODA NED schuss.trifft(g) DAUN
+                    WEIDA OIDA
+                PASST SCHO
+                # Ein Schuss, der durchgeht, trifft denselben Gegner nur einmal.
+                WENN hot(schuss.troffn, g) DAUN
+                    WEIDA OIDA
+                PASST SCHO
+                MEI.schüsse_troffn += 1 OIDA
+                WENN schuss.durchschuss > 0 DAUN
+                    HAU EINE(schuss.troffn, g) OIDA
+                PASST SCHO
+                WENN NED g.is_boss() UND g.oat != OAT_WÄCHTA DAUN
+                    SOG AU stoß = 0.28 OIDA
+                    WENN g.oat == OAT_PANZA DAUN
+                        stoß = 0.1 OIDA
+                    PASST SCHO
+                    WENN schuss.glückstreffa DAUN
+                        stoß = stoß * 1.5 OIDA
+                    PASST SCHO
+                    g.stoß_x += schuss.vx * stoß OIDA
+                    g.stoß_y += schuss.vy * stoß OIDA
+                PASST SCHO
+                gegna_schodn(MEI, g, schuss.schodn, schuss.glückstreffa) OIDA
+                WENN schuss.glückstreffa DAUN
+                    MEI.klang.glückstreffa() OIDA
+                    MEI.kamera.wackl(1.6) OIDA
+                PASST SCHO
+                # Gnadenstoß: Wer schon fast am Ende ist, fällt gleich um (Bosse nicht).
+                SOG AU gnadnstoß = FOISCH OIDA
+                WENN g.lebt UND p.gnadnstoß > 0 UND NED g.is_boss() DAUN
+                    WENN g.lebn / g.max_lebn <= p.gnadnstoß DAUN
+                        gegna_schodn(MEI, g, ZOI(AUFRUNDN(g.lebn)), FOISCH) OIDA
+                        gnadnstoß = WOAHR OIDA
+                        MEI.klang.gnadnstoß() OIDA
                     PASST SCHO
                 PASST SCHO
+                MEI.funkn_bei(g.x, g.y, FOAB_GEGNA_A, 5) OIDA
+                WENN gnadnstoß DAUN
+                    MEI.funkn_bei(g.x, g.y, "#ff5577", 10) OIDA
+                PASST SCHO
+                MEI.klang.treffa() OIDA
+                schuss.treffa += 1 OIDA
+                WENN schuss.treffa > schuss.durchschuss DAUN
+                    schuss.lebt = FOISCH OIDA
+                    HAU OB OIDA
+                PASST SCHO
             PASST SCHO
         PASST SCHO
 
-        # Erfahrung aufsammeln
-        FIA JEDE k IN MEI.xp_kugln TUA
-            WENN k.weida_um(p, MEI.magnet, dauer) DAUN
+        # Erfahrung
+        FIA JEDE k IN MEI.kugln TUA
+            WENN k.weida_um(p, p.magnet, dauer) DAUN
                 MEI.xp_dazua(k.menge) OIDA
             PASST SCHO
         PASST SCHO
-        MEI.xp_kugln = nur(MEI.xp_kugln, FUNKTIAUN(k XpKugl) => k.lebt) OIDA
+        MEI.kugln = nur(MEI.kugln, FUNKTIAUN(k XpKugl) => k.lebt) OIDA
 
-        # Funken
         FIA JEDE f IN MEI.funkn TUA
             f.weida_um(dauer) OIDA
         PASST SCHO
         MEI.funkn = nur(MEI.funkn, FUNKTIAUN(f Funkn) => f.lebn > 0) OIDA
+
+        FIA JEDE z IN MEI.zoin TUA
+            z.weida_um(dauer) OIDA
+        PASST SCHO
+        MEI.zoin = nur(MEI.zoin, FUNKTIAUN(z Schodnszoi) => z.lebn > 0) OIDA
+
+        # Die Spur hinter der Figur, solange sie sich bewegt
+        FIA JEDE sp IN MEI.spurn TUA
+            sp.lebn -= dauer OIDA
+        PASST SCHO
+        MEI.spurn = nur(MEI.spurn, FUNKTIAUN(sp Spur) => sp.lebn > 0) OIDA
+        WENN MEI.bewegt UND LÄNGN(MEI.spurn) < 40 DAUN
+            HAU EINE(MEI.spurn, Spur(p.x + zufoi_von(-7, 7), p.y + zufoi_von(-7, 7), zufoi_von(5, 9), "#33ccff80")) OIDA
+        PASST SCHO
+
+        # Die Trefferserie reißt ab, wenn eine Weile niemand fällt.
+        WENN MEI.combo_uhr > 0 DAUN
+            MEI.combo_uhr -= dauer OIDA
+            WENN MEI.combo_uhr <= 0 DAUN
+                MEI.combo = 0 OIDA
+            PASST SCHO
+        PASST SCHO
+        MEI.combo_klang_uhr = GRÖSSTA(0.0, MEI.combo_klang_uhr - dauer) OIDA
+        MEI.blitz_uhr = GRÖSSTA(0.0, MEI.blitz_uhr - dauer) OIDA
+        MEI.hinweis_uhr = GRÖSSTA(0.0, MEI.hinweis_uhr - dauer) OIDA
+        MEI.stufn_blitz_uhr = GRÖSSTA(0.0, MEI.stufn_blitz_uhr - dauer) OIDA
+        MEI.banna_uhr = GRÖSSTA(0.0, MEI.banna_uhr - dauer) OIDA
 
         # Blitze und Frostringe sind nur zum Anschauen.
         FIA JEDE b IN MEI.blitze TUA
@@ -252,48 +632,94 @@ KLASSE Spü
         PASST SCHO
         MEI.frostwön = nur(MEI.frostwön, FUNKTIAUN(w Frostwön) => w.lebn > 0) OIDA
 
-        # Flammen am Boden: Wer drinsteht, nimmt alle 0,3 Sekunden Schaden.
-        FIA JEDE f IN MEI.flammen TUA
-            f.lebn -= dauer OIDA
-            f.schodn_uhr -= dauer OIDA
-            WENN f.schodn_uhr <= 0 DAUN
-                f.schodn_uhr = 0.3 OIDA
+        # Flammen am Boden: alle 0,3 Sekunden Schaden für jeden, der drinsteht.
+        SOG AU hitzeschock = p.syn_hitzeschock() OIDA
+        FIA JEDE fl IN MEI.flammen TUA
+            fl.lebn -= dauer OIDA
+            fl.schodn_uhr -= dauer OIDA
+            WENN fl.schodn_uhr <= 0 DAUN
+                fl.schodn_uhr = 0.3 OIDA
                 FIA JEDE g IN MEI.gegna TUA
-                    WENN g.lebt UND abstand(f.x, f.y, g.x, g.y) < f.radius + g.radius DAUN
-                        MEI.gegna_triff(g, f.schodn) OIDA
+                    WENN NED g.lebt ODA abstand(fl.x, fl.y, g.x, g.y) >= fl.radius + g.radius DAUN
+                        WEIDA OIDA
+                    PASST SCHO
+                    WENN hitzeschock UND (g.brems_zeit > 0 ODA g.gfrorn > 0) DAUN
+                        # Hitzeschock: Wer kalt ist, zerspringt in der Hitze.
+                        gegna_schodn(MEI, g, ZOI(OBRUNDN(fl.schodn * SYN_HITZESCHOCK_MOI)), FOISCH) OIDA
+                        WENN ZUFOI() < 0.3 DAUN
+                            MEI.funkn_bei(g.x, g.y, "#ffffff", 2) OIDA
+                        PASST SCHO
+                    SUNST
+                        gegna_schodn(MEI, g, fl.schodn, FOISCH) OIDA
+                    PASST SCHO
+                    WENN fl.zündet UND g.lebt DAUN
+                        g.zünd_au(fl.schodn * EVO_FEIA_BRENN_ANTEIL / 0.3, EVO_FEIA_BRENN_ZEIT, WOAHR) OIDA
                     PASST SCHO
                 PASST SCHO
             PASST SCHO
         PASST SCHO
-        MEI.flammen = nur(MEI.flammen, FUNKTIAUN(f Flamme) => f.lebn > 0) OIDA
+        MEI.flammen = nur(MEI.flammen, FUNKTIAUN(fl Flamme) => fl.lebn > 0) OIDA
+
+        dinga_weida(MEI, dauer) OIDA
 
         MEI.kamera.foig(p) OIDA
         MEI.kamera.weida_um(dauer) OIDA
 
         MEI.wön_weida(dauer) OIDA
+        MEI.gegna_aufräuma() OIDA
 
-        # Die Figur ist tot: Das Spiel ist aus.
         WENN NED p.lebt DAUN
             MEI.zustand = ZUSTAND_AUS OIDA
             MEI.klang.musik_stopp() OIDA
             MEI.klang.spü_aus() OIDA
-            MEI.rang = MEI.bestenlistn.eintragn(MEI.modus, MEI.wön, MEI.tote, MEI.spüzeit, FOISCH) OIDA
-            WENN MEI.rang == 1 DAUN
-                MEI.klang.bestwert() OIDA
-            PASST SCHO
+            MEI.valuan() OIDA
         PASST SCHO
-
-        WENN taste_neich("ESC") DAUN
-            MEI.zustand = ZUSTAND_EINSTELLUNGEN OIDA
+        WENN MEI.zustand == ZUSTAND_SPÜ UND (taste_neich("ESC") ODA taste_neich("P")) DAUN
+            MEI.zustand = ZUSTAND_PAUSE OIDA
         PASST SCHO
     PASST SCHO
 
-    # ------------------------------------------------------- Spielfigur
+    # Neue Gegner kommen dazu, tote fallen heraus.
+    FUNKTIAUN gegna_aufräuma()
+        FIA JEDE g IN MEI.neiche_gegna TUA
+            WENN LÄNGN(MEI.gegna) < HÖCHSTNS_GEGNA DAUN
+                HAU EINE(MEI.gegna, g) OIDA
+            PASST SCHO
+        PASST SCHO
+        MEI.neiche_gegna = [] OIDA
+        MEI.gegna = nur(MEI.gegna, FUNKTIAUN(g Gegna) => g.lebt) OIDA
+    PASST SCHO
+
+    # Gegner schieben sich sanft auseinander, damit sie eine Menge bilden und kein Knäuel.
+    FUNKTIAUN gegna_ausanaund(dauer KOMMAZOI)
+        SOG AU stärke = KLANSTA(1.0, dauer * 9) OIDA
+        FIA JEDE g IN MEI.gegna TUA
+            WENN g.oat == OAT_WÄCHTA ODA g.oat == OAT_BIGBOSS ODA g.oat == OAT_ENDBOSS DAUN
+                WEIDA OIDA
+            PASST SCHO
+            FIA JEDE aundara IN MEI.gegna TUA
+                WENN aundara == g DAUN
+                    WEIDA OIDA
+                PASST SCHO
+                SOG AU dx = g.x - aundara.x OIDA
+                SOG AU dy = g.y - aundara.y OIDA
+                SOG AU eng = (g.radius + aundara.radius) * 0.92 OIDA
+                SOG AU quadrat_weit = dx * dx + dy * dy OIDA
+                WENN quadrat_weit >= eng * eng ODA quadrat_weit < 0.01 DAUN
+                    WEIDA OIDA
+                PASST SCHO
+                SOG AU weit = WURZL(quadrat_weit) OIDA
+                SOG AU schub = (eng - weit) * 0.5 * stärke OIDA
+                g.x += dx / weit * schub OIDA
+                g.y += dy / weit * schub OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    # ------------------------------------------------------- Die Spielfigur
 
     FUNKTIAUN spiela_weida(dauer KOMMAZOI)
         SOG AU p = MEI.spiela OIDA
-
-        # Bewegen mit WASD (oder ZQSD) und den Pfeiltasten; schräg ist man nicht schneller.
         SOG AU mx = 0.0 OIDA
         SOG AU my = 0.0 OIDA
         WENN taste("A") ODA taste("Q") ODA taste("LINKS") DAUN
@@ -308,78 +734,279 @@ KLASSE Spü
         WENN taste("S") ODA taste("OBE") DAUN
             my += 1 OIDA
         PASST SCHO
-        SOG AU läng = WURZL(mx * mx + my * my) OIDA
-        WENN läng > 0 DAUN
-            mx = mx / läng OIDA
-            my = my / läng OIDA
+        # Schräg soll es nicht schneller gehen als gerade.
+        WENN mx != 0 UND my != 0 DAUN
+            mx = mx * 0.7071 OIDA
+            my = my * 0.7071 OIDA
         PASST SCHO
-        p.x = klemm(p.x + mx * p.tempo * dauer, p.radius, WELT_B - p.radius) OIDA
-        p.y = klemm(p.y + my * p.tempo * dauer, p.radius, WELT_H - p.radius) OIDA
+        MEI.bewegt = mx != 0 ODA my != 0 OIDA
+
+        SOG AU overdrive = p.overdrive > 0 OIDA
+        WENN overdrive DAUN
+            p.overdrive -= dauer OIDA
+        PASST SCHO
+        WENN p.dash_pause_uhr > 0 DAUN
+            p.dash_pause_uhr -= dauer OIDA
+        PASST SCHO
+        WENN (taste_neich("LAA") ODA taste_neich("SHIFT")) UND p.dash_pause_uhr <= 0 UND p.dash_uhr <= 0 DAUN
+            MEI.dash_start(mx, my) OIDA
+        PASST SCHO
+
+        # Die Figur braucht einen Moment, bis sie auf Tempo ist, und einen, bis sie steht.
+        SOG AU tempo = p.tempo OIDA
+        WENN overdrive DAUN
+            tempo = p.tempo * 1.15 OIDA
+        PASST SCHO
+        SOG AU nochziagn = 1 - E_HOCH(-16 * dauer) OIDA
+        p.vx = zwischn(p.vx, mx * tempo, nochziagn) OIDA
+        p.vy = zwischn(p.vy, my * tempo, nochziagn) OIDA
+        WENN p.dash_uhr > 0 DAUN
+            p.dash_uhr -= dauer OIDA
+            p.x += p.dash_dx * DASH_TEMPO * dauer OIDA
+            p.y += p.dash_dy * DASH_TEMPO * dauer OIDA
+            MEI.dash_spur(dauer) OIDA
+        SUNST
+            p.x += p.vx * dauer OIDA
+            p.y += p.vy * dauer OIDA
+        PASST SCHO
+        p.x = klemm(p.x, p.radius, WELT_B - p.radius) OIDA
+        p.y = klemm(p.y, p.radius, WELT_H - p.radius) OIDA
 
         WENN p.heilung > 0 DAUN
-            p.lebn = KLANSTA(p.max_lebn, p.lebn + p.heilung * dauer) OIDA
+            p.lebn = KLANSTA(1.0 * p.max_lebn, p.lebn + p.heilung * dauer) OIDA
         PASST SCHO
 
-        # Wohin die Figur schaut: bei "hard" zur Maus, sonst zum nächsten Gegner.
-        SOG AU nächsta = MEI.nächsta_gegna(p.x, p.y, p.reichweite) OIDA
-        SOG AU kaun_schiaßn = MEI.modus == "hard" ODA nächsta != NIX OIDA
+        # Zielen: von selbst auf den nächsten Gegner, in "hard" mit der Maus.
+        SOG AU nah = MEI.nächsta_gegna(p.x, p.y, p.reichweite) OIDA
+        SOG AU ans_do = FOISCH OIDA
+        WENN nah != NIX DAUN
+            ans_do = WOAHR OIDA
+        PASST SCHO
         WENN MEI.modus == "hard" DAUN
             p.richtung = WINKL(MEI.maus_y + MEI.kamera.y - p.y, MEI.maus_x + MEI.kamera.x - p.x) OIDA
-        SUNST WENN nächsta != NIX DAUN
-            p.richtung = WINKL(nächsta.y - p.y, nächsta.x - p.x) OIDA
-        SUNST WENN mx != 0 ODA my != 0 DAUN
+        SUNST WENN nah != NIX DAUN
+            p.richtung = WINKL(nah.y - p.y, nah.x - p.x) OIDA
+        SUNST WENN MEI.bewegt DAUN
             p.richtung = WINKL(my, mx) OIDA
         PASST SCHO
 
-        # Schießen geht von selbst.
-        p.schuss_uhr -= dauer OIDA
-        WENN p.schuss_uhr <= 0 UND kaun_schiaßn DAUN
-            p.schuss_uhr = p.schuss_pause OIDA
-            # Mehrere Schüsse gehen als Fächer hinaus.
-            SOG AU anzahl = 1 + p.mehrschuss OIDA
-            SOG AU fächa = 0.12 OIDA
-            SOG AU erste = p.richtung - (anzahl - 1) * fächa / 2 OIDA
+        # Schießen, von selbst
+        SOG AU schuss_tempo = 1.0 OIDA
+        WENN overdrive DAUN
+            schuss_tempo = 1.8 OIDA
+        PASST SCHO
+        p.schuss_uhr -= dauer * schuss_tempo OIDA
+        WENN p.schuss_uhr <= 0 UND (ans_do ODA MEI.modus == "hard") DAUN
+            p.schuss_uhr = GRÖSSTA(SCHUSS_PAUSE_UNTN, p.schuss_pause) OIDA
+            p.rückstoß = 1.0 OIDA
+            SOG AU anzahl = 1 + KLANSTA(MEHRSCHUSS_OBN, p.mehrschuss) OIDA
+            SOG AU erste = p.richtung - (anzahl - 1) * 0.12 / 2 OIDA
             FIA i VON 0 BIS anzahl - 1 TUA
-                SOG AU glückstreffa = ZUFOI() < p.glück OIDA
+                SOG AU krit = ZUFOI() < p.glück OIDA
                 SOG AU schodn = p.schodn OIDA
-                WENN glückstreffa DAUN
+                WENN krit DAUN
                     schodn = ZOI(OBRUNDN(p.schodn * p.glück_moi)) OIDA
                 PASST SCHO
-                HAU EINE(MEI.schüsse, neicha_schuss(p.x, p.y, erste + i * fächa, schodn, p.durchschuss, p.schuss_größe, glückstreffa, FOISCH, p.reichweite / SCHUSS_TEMPO)) OIDA
-                MEI.klang.schuss() OIDA
+                HAU EINE(MEI.schüsse, neicha_schuss(p.x, p.y, erste + i * 0.12, schodn, p.durchschuss, p.schuss_größe, krit, FOISCH, p.reichweite / SCHUSS_TEMPO)) OIDA
+                MEI.schüsse_gfeiat += 1 OIDA
             PASST SCHO
+            MEI.klang.schuss() OIDA
         PASST SCHO
 
         WENN p.schutz > 0 DAUN
             p.schutz -= dauer OIDA
         PASST SCHO
 
+        # Der Lauf dreht sich weich nach, und der Ruck vom Schuss klingt ab.
+        p.lauf += winkl_weg(p.richtung, p.lauf) * (1 - E_HOCH(-22 * dauer)) OIDA
+        p.rückstoß = GRÖSSTA(0.0, p.rückstoß - dauer * 9) OIDA
+
         MEI.waffn_weida(dauer) OIDA
     PASST SCHO
 
-    FUNKTIAUN waffn_weida(dauer KOMMAZOI)
+    # Ausweichen: ein kurzer Sprung in Laufrichtung (im Stehen dorthin, wohin gezielt wird).
+    FUNKTIAUN dash_start(mx KOMMAZOI, my KOMMAZOI)
         SOG AU p = MEI.spiela OIDA
+        WENN mx != 0 ODA my != 0 DAUN
+            p.dash_dx = mx OIDA
+            p.dash_dy = my OIDA
+        SUNST
+            p.dash_dx = KOSINUS(p.richtung) OIDA
+            p.dash_dy = SINUS(p.richtung) OIDA
+        PASST SCHO
+        p.dash_uhr = DASH_DAUER OIDA
+        p.dash_pause_uhr = p.dash_pause OIDA
+        p.schutz = GRÖSSTA(p.schutz, 0.26) OIDA
+        p.dash_geist_uhr = 0.0 OIDA
+        p.dash_numma += 1 OIDA
+        MEI.effekte.ring(p.x, p.y, "#9fe7ff", 44, 0.24, 2) OIDA
+        MEI.klang.dash() OIDA
+    PASST SCHO
 
-        # Das Schild: Kugeln, die um die Figur kreisen, Gegner treffen und ihre Schüsse abfangen.
+    # Während des Sprungs: Nachbilder, und mit "Shock Dash" Schaden für jeden, den man streift.
+    FUNKTIAUN dash_spur(dauer KOMMAZOI)
+        SOG AU p = MEI.spiela OIDA
+        p.dash_geist_uhr -= dauer OIDA
+        WENN p.dash_geist_uhr <= 0 DAUN
+            p.dash_geist_uhr = 0.022 OIDA
+            MEI.effekte.geist(p.x, p.y, p.radius, FOAB_SPIELA) OIDA
+        PASST SCHO
+        WENN p.schock_dash <= 0 DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        SOG AU schodn = ZOI(OBRUNDN(p.schodn * (1.5 + p.schock_dash))) OIDA
+        FIA JEDE g IN MEI.gegna TUA
+            WENN NED g.lebt ODA g.dash_treffa == p.dash_numma DAUN
+                WEIDA OIDA
+            PASST SCHO
+            WENN abstand(p.x, p.y, g.x, g.y) < p.radius + g.radius + 14 DAUN
+                g.dash_treffa = p.dash_numma OIDA
+                gegna_schodn(MEI, g, schodn, FOISCH) OIDA
+                MEI.funkn_bei(g.x, g.y, "#9fe7ff", 6) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    # Ein Blitz trifft einen Gegner. Mit "Storm Chain" springt er zu weiteren.
+    FUNKTIAUN blitz_schlog(vo_x KOMMAZOI, vo_y KOMMAZOI, erste Gegna, schodn KOMMAZOI)
+        SOG AU p = MEI.spiela OIDA
+        SOG AU supra = p.syn_supraleita() OIDA
+        SOG AU troffn LISTN VON Gegna = [erste] OIDA
+        SOG AU x = vo_x OIDA
+        SOG AU y = vo_y OIDA
+        SOG AU menge = schodn OIDA
+        SOG AU ziel = erste OIDA
+        SOG AU sprung = 0 OIDA
+        SOLONG WOAHR TUA
+            SOG AU wert = menge OIDA
+            SOG AU krit = p.blitz_evo UND ZUFOI() < p.glück OIDA
+            WENN krit DAUN
+                wert = wert * p.glück_moi OIDA
+            PASST SCHO
+            WENN supra UND (ziel.brems_zeit > 0 ODA ziel.gfrorn > 0) DAUN
+                wert = wert * (1 + SYN_SUPRALEITA_ZUASCHLOG) OIDA
+            PASST SCHO
+            gegna_schodn(MEI, ziel, GRÖSSTA(1, ZOI(OBRUNDN(wert))), krit) OIDA
+            WENN LÄNGN(MEI.blitze) < HÖCHSTNS_BLITZE DAUN
+                HAU EINE(MEI.blitze, Blitz(x, y, ziel.x, ziel.y)) OIDA
+            PASST SCHO
+            WENN krit DAUN
+                MEI.funkn_bei(ziel.x, ziel.y, "#ffcc44", 4) OIDA
+            SUNST
+                MEI.funkn_bei(ziel.x, ziel.y, "#88ddff", 4) OIDA
+            PASST SCHO
+            WENN NED p.blitz_evo ODA sprung >= EVO_BLITZ_SPRÜNGE DAUN
+                HAU OB OIDA
+            PASST SCHO
+            # Weiter zum nächsten Gegner, den dieser Blitz noch nicht getroffen hat.
+            x = ziel.x OIDA
+            y = ziel.y OIDA
+            menge = menge * EVO_BLITZ_SPRUNG_MOI OIDA
+            SOG AU nächsta VIELLEICHT Gegna = NIX OIDA
+            SOG AU beste = EVO_BLITZ_SPRUNG_WEITE OIDA
+            FIA JEDE c IN MEI.gegna TUA
+                WENN NED c.lebt ODA hot(troffn, c) DAUN
+                    WEIDA OIDA
+                PASST SCHO
+                SOG AU weit = abstand(x, y, c.x, c.y) OIDA
+                WENN weit < beste DAUN
+                    beste = weit OIDA
+                    nächsta = c OIDA
+                PASST SCHO
+            PASST SCHO
+            SOG AU gfundn = nächsta OIDA
+            WENN gfundn != NIX DAUN
+                HAU EINE(troffn, gfundn) OIDA
+                ziel = gfundn OIDA
+            SUNST
+                HAU OB OIDA
+            PASST SCHO
+            sprung += 1 OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Die vier Waffen arbeiten von selbst.
+    FUNKTIAUN waffn_weida(echte_dauer KOMMAZOI)
+        SOG AU p = MEI.spiela OIDA
+        # Im Overdrive laufen auch die Waffen schneller.
+        SOG AU dauer = echte_dauer OIDA
+        WENN p.overdrive > 0 DAUN
+            dauer = echte_dauer * OVERDRIVE_WAFFN_TEMPO OIDA
+        PASST SCHO
+
+        # Schild: Kugeln kreisen um die Figur, treffen Gegner und fangen deren Schüsse ab.
         WENN p.schüd_stufn > 0 DAUN
-            p.schüd_winkl += (3.5 + p.schüd_stufn * 0.5) * dauer OIDA
-            SOG AU schodn = 8 + p.schüd_stufn * 6 OIDA
-            FIA i VON 0 BIS p.schüd_stufn TUA
+            SOG AU stufn = p.schüd_stufn OIDA
+            SOG AU evo = p.schüd_evo OIDA
+            SOG AU drah = 3.5 + stufn * 0.5 OIDA
+            SOG AU schodn = 8 + stufn * 6 OIDA
+            SOG AU pause = 0.3 OIDA
+            WENN evo DAUN
+                drah = EVO_SCHÜD_DRAH OIDA
+                schodn = ZOI(OBRUNDN((8 + stufn * 6) * EVO_SCHÜD_SCHODN_MOI)) OIDA
+                pause = EVO_SCHÜD_PAUSE OIDA
+            PASST SCHO
+            p.schüd_winkl += drah * dauer OIDA
+            SOG AU größe = p.schüd_größe() OIDA
+            # Brennkreis: Die Kugeln lassen Flammen fallen.
+            p.schüd_brenn_uhr -= dauer OIDA
+            SOG AU flamme_foin = p.syn_brennkreis() UND p.schüd_brenn_uhr <= 0 OIDA
+            WENN flamme_foin DAUN
+                p.schüd_brenn_uhr = SYN_BRENNKREIS_PAUSE OIDA
+            PASST SCHO
+            FIA i VON 0 BIS p.schüd_anzahl() - 1 TUA
                 SOG AU w = p.schüd_winkl_von(i) OIDA
                 SOG AU kx = p.x + KOSINUS(w) * p.schüd_obstand() OIDA
                 SOG AU ky = p.y + SINUS(w) * p.schüd_obstand() OIDA
-                FIA JEDE s IN MEI.schüsse TUA
-                    WENN s.lebt UND s.vom_gegna UND abstand(kx, ky, s.x, s.y) < 12 + s.radius DAUN
-                        s.lebt = FOISCH OIDA
-                        MEI.funkn_bei(kx, ky, "#88ccff", 3) OIDA
+                FIA JEDE schuss IN MEI.schüsse TUA
+                    WENN NED schuss.lebt ODA NED schuss.vom_gegna DAUN
+                        WEIDA OIDA
+                    PASST SCHO
+                    WENN abstand(kx, ky, schuss.x, schuss.y) < größe + schuss.radius DAUN
+                        WENN evo DAUN
+                            # Die Singularity wirft den Schuss zurück: Jetzt gehört er der Figur.
+                            SOG AU tempo = GRÖSSTA(1.0, WURZL(schuss.vx * schuss.vx + schuss.vy * schuss.vy)) OIDA
+                            schuss.vx = -schuss.vx / tempo * SCHUSS_TEMPO OIDA
+                            schuss.vy = -schuss.vy / tempo * SCHUSS_TEMPO OIDA
+                            schuss.vom_gegna = FOISCH OIDA
+                            schuss.schodn = p.schodn OIDA
+                            schuss.durchschuss = 0 OIDA
+                            schuss.treffa = 0 OIDA
+                            schuss.troffn = [] OIDA
+                            schuss.lebn = 1.2 OIDA
+                            MEI.funkn_bei(kx, ky, "#ffd700", 3) OIDA
+                        SUNST
+                            schuss.lebt = FOISCH OIDA
+                            MEI.funkn_bei(kx, ky, "#88ccff", 3) OIDA
+                        PASST SCHO
                     PASST SCHO
                 PASST SCHO
                 FIA JEDE g IN MEI.gegna TUA
-                    WENN g.lebt UND g.schüd_pause <= 0 UND abstand(kx, ky, g.x, g.y) < 12 + g.radius DAUN
-                        MEI.gegna_triff(g, schodn) OIDA
-                        g.schüd_pause = 0.3 OIDA
+                    WENN NED g.lebt DAUN
+                        WEIDA OIDA
+                    PASST SCHO
+                    WENN evo UND NED g.is_boss() UND g.oat != OAT_WÄCHTA DAUN
+                        # Die Singularity zieht alle in der Nähe zu sich.
+                        SOG AU weit = abstand(kx, ky, g.x, g.y) OIDA
+                        WENN weit < EVO_SCHÜD_ZUG_WEITE UND weit > 1 DAUN
+                            SOG AU zug = EVO_SCHÜD_ZUG_KROFT * (1 - weit / EVO_SCHÜD_ZUG_WEITE) * echte_dauer OIDA
+                            g.x += (kx - g.x) / weit * zug OIDA
+                            g.y += (ky - g.y) / weit * zug OIDA
+                        PASST SCHO
+                    PASST SCHO
+                    WENN abstand(kx, ky, g.x, g.y) < größe + g.radius UND g.schüd_pause <= 0 DAUN
+                        gegna_schodn(MEI, g, schodn, FOISCH) OIDA
+                        g.schüd_pause = pause OIDA
                         MEI.funkn_bei(kx, ky, FOAB_AKZENT, 3) OIDA
                     PASST SCHO
+                PASST SCHO
+                WENN flamme_foin UND LÄNGN(MEI.flammen) < HÖCHSTNS_FLAMMEN DAUN
+                    SOG AU feia = p.feia_stufn OIDA
+                    SOG AU lebn = 1 + feia * 0.3 OIDA
+                    WENN p.feia_evo DAUN
+                        lebn = lebn * EVO_FEIA_LEBN_MOI OIDA
+                    PASST SCHO
+                    HAU EINE(MEI.flammen, Flamme(kx, ky, 12 + feia * 2.5, 4 + feia * 4, lebn, lebn, p.feia_evo)) OIDA
                 PASST SCHO
             PASST SCHO
             FIA JEDE g IN MEI.gegna TUA
@@ -389,66 +1016,74 @@ KLASSE Spü
             PASST SCHO
         PASST SCHO
 
-        # Der Blitz: trifft immer wieder die nächsten Gegner in der Nähe.
+        # Blitz: trifft die nächsten Gegner, je höher die Stufe, desto mehr und öfter.
         WENN p.blitz_stufn > 0 DAUN
+            SOG AU stufn = p.blitz_stufn OIDA
             p.blitz_uhr -= dauer OIDA
             WENN p.blitz_uhr <= 0 DAUN
-                p.blitz_uhr = GRÖSSTA(0.15, 0.8 - p.blitz_stufn * 0.12) OIDA
-                SOG AU weite = 120.0 + p.blitz_stufn * 30 OIDA
-                SOG AU schodn = 10 + p.blitz_stufn * 8 OIDA
-                SOG AU ziele = 1 + p.blitz_stufn OIDA
-                SOG AU in_da_näh LISTN VON Nah = [] OIDA
+                p.blitz_uhr = GRÖSSTA(0.15, 0.8 - stufn * 0.12) OIDA
+                SOG AU weite = 120.0 + stufn * 30 OIDA
+                SOG AU nahe LISTN VON Nah = [] OIDA
                 FIA JEDE g IN MEI.gegna TUA
-                    SOG AU weit = abstand(p.x, p.y, g.x, g.y) OIDA
-                    WENN g.lebt UND weit < weite DAUN
-                        HAU EINE(in_da_näh, Nah(g, weit)) OIDA
+                    WENN g.lebt DAUN
+                        SOG AU weit = abstand(p.x, p.y, g.x, g.y) OIDA
+                        WENN weit < weite DAUN
+                            HAU EINE(nahe, Nah(g, weit)) OIDA
+                        PASST SCHO
                     PASST SCHO
                 PASST SCHO
-                sortier(in_da_näh, FUNKTIAUN(a Nah, b Nah) => a.weit < b.weit) OIDA
-                FIA i VON 0 BIS KLANSTA(ziele, LÄNGN(in_da_näh)) - 1 TUA
-                    SOG AU g = in_da_näh[i].gegna OIDA
-                    MEI.gegna_triff(g, schodn) OIDA
-                    WENN LÄNGN(MEI.blitze) < HÖCHSTNS_BLITZE DAUN
-                        HAU EINE(MEI.blitze, Blitz(p.x, p.y, g.x, g.y)) OIDA
-                    PASST SCHO
-                    MEI.funkn_bei(g.x, g.y, "#88ddff", 4) OIDA
+                nahe = sortiert(nahe, FUNKTIAUN(a Nah, b Nah) => a.weit < b.weit) OIDA
+                FIA i VON 0 BIS KLANSTA(1 + stufn, LÄNGN(nahe)) - 1 TUA
+                    MEI.blitz_schlog(p.x, p.y, nahe[i].gegna, 10.0 + stufn * 8) OIDA
                 PASST SCHO
             PASST SCHO
         PASST SCHO
 
-        # Der Frost: ein Ring, der alle in der Nähe trifft und bremst.
+        # Frost: ein Ring um die Figur, der Schaden macht und bremst.
         WENN p.frost_stufn > 0 DAUN
+            SOG AU stufn = p.frost_stufn OIDA
             p.frost_uhr -= dauer OIDA
             WENN p.frost_uhr <= 0 DAUN
-                p.frost_uhr = GRÖSSTA(1.5, 4.5 - p.frost_stufn * 0.6) OIDA
-                SOG AU weite = 130.0 + p.frost_stufn * 25 OIDA
-                SOG AU schodn = 5 + p.frost_stufn * 4 OIDA
+                p.frost_uhr = GRÖSSTA(1.5, 4.5 - stufn * 0.6) OIDA
+                SOG AU weite = 130.0 + stufn * 25 OIDA
+                WENN p.frost_evo DAUN
+                    weite = GRÖSSTA(weite, p.reichweite * EVO_FROST_WEITE_MOI) OIDA
+                PASST SCHO
                 HAU EINE(MEI.frostwön, Frostwön(p.x, p.y, weite)) OIDA
                 FIA JEDE g IN MEI.gegna TUA
-                    WENN g.lebt UND abstand(p.x, p.y, g.x, g.y) < weite DAUN
-                        MEI.gegna_triff(g, schodn) OIDA
-                        g.brems_zeit = 1.5 + p.frost_stufn * 0.3 OIDA
-                        g.brems_faktor = 0.35 OIDA
+                    WENN NED g.lebt ODA abstand(p.x, p.y, g.x, g.y) >= weite DAUN
+                        WEIDA OIDA
                     PASST SCHO
+                    # Absolute Zero: Wer noch gebremst ist, friert ganz ein.
+                    WENN p.frost_evo UND g.brems_zeit > 0 UND g.frier_pause <= 0 UND NED g.is_boss() DAUN
+                        g.gfrorn = EVO_FROST_FRIER_ZEIT OIDA
+                        g.frier_pause = EVO_FROST_FRIER_ZEIT + EVO_FROST_FRIER_PAUSE OIDA
+                        MEI.funkn_bei(g.x, g.y, "#dff6ff", 5) OIDA
+                    PASST SCHO
+                    gegna_schodn(MEI, g, 5 + stufn * 4, FOISCH) OIDA
+                    g.brems_zeit = 1.5 + stufn * 0.3 OIDA
+                    g.brems_faktor = 0.35 OIDA
                 PASST SCHO
             PASST SCHO
         PASST SCHO
 
-        # Das Feuer: Wo die Figur geht, bleiben Flammen zurück.
+        # Feuer: Wo die Figur geht, bleibt eine brennende Spur.
         WENN p.feia_stufn > 0 DAUN
+            SOG AU stufn = p.feia_stufn OIDA
             p.feia_uhr -= dauer OIDA
-            SOG AU bewegt = BETROG(p.x - p.feia_x) > 6 ODA BETROG(p.y - p.feia_y) > 6 OIDA
-            WENN p.feia_uhr <= 0 UND LÄNGN(MEI.flammen) < HÖCHSTNS_FLAMMEN UND bewegt DAUN
+            WENN p.feia_uhr <= 0 UND LÄNGN(MEI.flammen) < HÖCHSTNS_FLAMMEN UND (BETROG(p.x - p.feia_x) > 6 ODA BETROG(p.y - p.feia_y) > 6) DAUN
                 p.feia_uhr = 0.08 OIDA
                 p.feia_x = p.x OIDA
                 p.feia_y = p.y OIDA
-                SOG AU dauert = 1.5 + p.feia_stufn * 0.4 OIDA
-                HAU EINE(MEI.flammen, Flamme(p.x, p.y, 16 + p.feia_stufn * 3, 4 + p.feia_stufn * 4, dauert, dauert)) OIDA
+                SOG AU lebn = 1.5 + stufn * 0.4 OIDA
+                WENN p.feia_evo DAUN
+                    lebn = lebn * EVO_FEIA_LEBN_MOI OIDA
+                PASST SCHO
+                HAU EINE(MEI.flammen, Flamme(p.x, p.y, 16.0 + stufn * 3, 4 + stufn * 4, lebn, lebn, p.feia_evo)) OIDA
             PASST SCHO
         PASST SCHO
     PASST SCHO
 
-    # Die Figur wird getroffen.
     FUNKTIAUN spiela_triff(wert ZOI)
         SOG AU p = MEI.spiela OIDA
         WENN p.schutz > 0 DAUN
@@ -456,7 +1091,8 @@ KLASSE Spü
         PASST SCHO
         p.lebn -= GRÖSSTA(1, wert - p.rüstung) OIDA
         p.schutz = 0.35 OIDA
-        MEI.wackl() OIDA
+        MEI.kamera.wackl(7) OIDA
+        MEI.aufblitzn("#ff2244", 0.14) OIDA
         MEI.funkn_bei(p.x, p.y, FOAB_GFOAH, 8) OIDA
         MEI.klang.spiela_troffn() OIDA
         WENN p.lebn <= 0 DAUN
@@ -472,244 +1108,864 @@ KLASSE Spü
         SOLONG p.xp >= p.xp_ziel TUA
             p.xp -= p.xp_ziel OIDA
             p.stufn += 1 OIDA
-            p.xp_ziel = ZOI(OBRUNDN(p.xp_ziel * 1.4)) OIDA
-            MEI.woi_zeign(FOISCH, OAT_NORMAL) OIDA
+            p.xp_ziel = ZOI(OBRUNDN(p.xp_ziel * MEI.oat().xp_wochstum)) OIDA
+            MEI.woi_zeign(FOISCH, FOISCH) OIDA
         PASST SCHO
     PASST SCHO
 
-    # ----------------------------------------------------------- Gegner
-
-    # Der nächste Gegner innerhalb von `weite`, oder NIX.
+    # Der nächste lebende Gegner, höchstens `weite` weit weg; oder NIX.
     FUNKTIAUN nächsta_gegna(x KOMMAZOI, y KOMMAZOI, weite KOMMAZOI) GIBT ZRUCK VIELLEICHT Gegna
         SOG AU nächsta VIELLEICHT Gegna = NIX OIDA
-        SOG AU beste = weite OIDA
+        SOG AU beste = weite * weite OIDA
         FIA JEDE g IN MEI.gegna TUA
-            SOG AU weit = abstand(x, y, g.x, g.y) OIDA
-            WENN g.lebt UND weit < beste DAUN
-                beste = weit OIDA
-                nächsta = g OIDA
+            WENN g.lebt DAUN
+                SOG AU dx = g.x - x OIDA
+                SOG AU dy = g.y - y OIDA
+                WENN dx * dx + dy * dy < beste DAUN
+                    beste = dx * dx + dy * dy OIDA
+                    nächsta = g OIDA
+                PASST SCHO
             PASST SCHO
         PASST SCHO
         GIB ZRUCK nächsta OIDA
     PASST SCHO
 
-    # Ein Gegner wird getroffen. Stirbt er, gibt es Erfahrung; ein Sprenger
-    # reißt dabei alle in der Nähe mit (und die vielleicht wieder andere).
-    FUNKTIAUN gegna_triff(g Gegna, wert ZOI)
-        WENN NED g.lebt DAUN
-            GIB ZRUCK OIDA
-        PASST SCHO
-        g.lebn -= wert OIDA
-        g.blitzt = 0.1 OIDA
-        WENN g.lebn > 0 DAUN
-            GIB ZRUCK OIDA
-        PASST SCHO
-        g.lebt = FOISCH OIDA
-        MEI.gegna_tot(g) OIDA
-        WENN g.oat == OAT_SPRENGA UND NED g.gsprengt DAUN
-            g.gsprengt = WOAHR OIDA
-            WENN abstand(g.x, g.y, MEI.spiela.x, MEI.spiela.y) < 80 DAUN
-                MEI.spiela_triff(20) OIDA
-            PASST SCHO
-            FIA JEDE aundara IN MEI.gegna TUA
-                WENN aundara != g UND aundara.lebt UND abstand(g.x, g.y, aundara.x, aundara.y) < 80 DAUN
-                    MEI.gegna_triff(aundara, 10) OIDA
-                PASST SCHO
-            PASST SCHO
-            MEI.funkn_bei(g.x, g.y, FOAB_SPRENGA, 20) OIDA
-            MEI.wackl() OIDA
-            MEI.klang.explosion() OIDA
-        PASST SCHO
-    PASST SCHO
-
-    FUNKTIAUN gegna_tot(g Gegna)
-        MEI.tote += 1 OIDA
-        MEI.wön_tote += 1 OIDA
-        MEI.funkn_bei(g.x, g.y, FOAB_GEGNA_A, 12) OIDA
-        WENN LÄNGN(MEI.xp_kugln) < HÖCHSTNS_XP DAUN
-            # Bei "easy" gibt es mit jeder Welle mehr Erfahrung.
-            SOG AU leicht = 1.0 OIDA
-            WENN MEI.modus == "easy" DAUN
-                leicht = 1 + MEI.wön * 0.15 OIDA
-            PASST SCHO
-            SOG AU menge = ZOI(OBRUNDN((XP_GRUND + MEI.wön * 2) * g.xp_moi * leicht * MEI.spiela.xp_moi)) OIDA
-            HAU EINE(MEI.xp_kugln, XpKugl(g.x, g.y, XP_RADIUS, menge)) OIDA
-        PASST SCHO
-        MEI.klang.gegna_tot() OIDA
-        # Ein Boss lässt eine Verbesserung da; sie kommt nach der Welle.
-        WENN g.is_boss() DAUN
-            MEI.offn_boss_woi = WOAHR OIDA
-            MEI.offn_boss_oat = g.oat OIDA
-        PASST SCHO
-    PASST SCHO
-
     FUNKTIAUN funkn_bei(x KOMMAZOI, y KOMMAZOI, foab KETTN, wievü ZOI)
-        SOG AU anzahl = KLANSTA(wievü, HÖCHSTNS_FUNKN - LÄNGN(MEI.funkn)) OIDA
-        FIA i VON 1 BIS anzahl TUA
+        SOG AU n = KLANSTA(wievü, HÖCHSTNS_FUNKN - LÄNGN(MEI.funkn)) OIDA
+        FIA i VON 1 BIS n TUA
             HAU EINE(MEI.funkn, neicha_funkn(x, y, foab)) OIDA
         PASST SCHO
     PASST SCHO
 
-    FUNKTIAUN wackl()
-        WENN MEI.wackln DAUN
-            MEI.kamera.wackl_uhr = WACKL_DAUER OIDA
+    # Eine neue Schadenszahl; NIX, wenn schon zu viele in der Luft sind.
+    FUNKTIAUN neiche_zoi(x KOMMAZOI, y KOMMAZOI, menge ZOI, foab KETTN, krit JONA) GIBT ZRUCK VIELLEICHT Schodnszoi
+        WENN LÄNGN(MEI.zoin) >= HÖCHSTNS_ZOIN DAUN
+            GIB ZRUCK NIX OIDA
+        PASST SCHO
+        SOG AU größe = 1.0 OIDA
+        WENN krit DAUN
+            größe = 1.9 OIDA
+        PASST SCHO
+        SOG AU z = Schodnszoi(x + zufoi_von(-8, 8), y, menge, foab, krit, größe) OIDA
+        HAU EINE(MEI.zoin, z) OIDA
+        GIB ZRUCK z OIDA
+    PASST SCHO
+
+    # Scherben aus einem Ereignis, und dazu ein wenig Leben.
+    FUNKTIAUN scherbn_dazua(menge ZOI)
+        MEI.scherbn += menge OIDA
+        WENN MEI.spiela.lebt DAUN
+            MEI.spiela.lebn = KLANSTA(1.0 * MEI.spiela.max_lebn, MEI.spiela.lebn + HEILUNG_BEI_LOHN) OIDA
         PASST SCHO
     PASST SCHO
 
-    # ----------------------------------------------------------- Wellen
+    # Was der Lauf an Scherben wert ist.
+    FUNKTIAUN scherbn_gwinn(gwunna JONA) GIBT ZRUCK ZOI
+        SOG AU grund = MEI.tote * 0.45 + MEI.wön * 3 OIDA
+        WENN gwunna DAUN
+            grund += 35 OIDA
+        PASST SCHO
+        GIB ZRUCK GRÖSSTA(5, ZOI(OBRUNDN(grund)) + MEI.scherbn) OIDA
+    PASST SCHO
+
+    # Ein Gegner ist gefallen: zählen, Erfahrung, Lohn, und was sonst an seinem Tod hängt.
+    FUNKTIAUN gegna_tot(g Gegna)
+        SOG AU p = MEI.spiela OIDA
+        MEI.tote += 1 OIDA
+        MEI.wön_tote += 1 OIDA
+        WENN g.is_boss() DAUN
+            MEI.bosse_gschlogn += 1 OIDA
+        PASST SCHO
+
+        MEI.combo += 1 OIDA
+        MEI.combo_uhr = COMBO_ZEIT OIDA
+        MEI.combo_puls = 1.0 OIDA
+        MEI.beste_combo = GRÖSSTA(MEI.beste_combo, MEI.combo) OIDA
+        SOG AU marke = MEI.combo == 10 ODA MEI.combo == 25 ODA MEI.combo == 50 ODA (MEI.combo >= 100 UND MEI.combo % 100 == 0) OIDA
+        WENN marke UND MEI.combo_klang_uhr <= 0 DAUN
+            MEI.klang.combo(MEI.combo) OIDA
+            MEI.combo_klang_uhr = 0.55 OIDA
+            WENN MEI.combo >= 25 DAUN
+                MEI.aufblitzn("#66ddff", 0.14) OIDA
+            PASST SCHO
+        PASST SCHO
+
+        tod_ring(MEI, g) OIDA
+        ding_vielleicht(MEI, g) OIDA
+        MEI.funkn_bei(g.x, g.y, g.foab, 12) OIDA
+        MEI.effekte.geist(g.x, g.y, g.radius * 1.5, g.foab) OIDA
+        WENN g.is_elite DAUN
+            MEI.funkn_bei(g.x, g.y, "#ffd166", 10) OIDA
+            MEI.kamera.wackl(3) OIDA
+            # Ein kurzer Stillstand, aber nicht bei jedem Elite in einer Menge.
+            WENN MEI.spüzeit - MEI.letzta_elite_stü > 2 DAUN
+                MEI.letzta_elite_stü = MEI.spüzeit OIDA
+                MEI.stü_uhr = GRÖSSTA(MEI.stü_uhr, 0.045 * MEI.effekte_stärke) OIDA
+            PASST SCHO
+        PASST SCHO
+        WENN g.oat == OAT_PANZA DAUN
+            MEI.funkn_bei(g.x, g.y, "#226622", 6) OIDA
+        SUNST WENN g.oat == OAT_MINIBOSS ODA g.oat == OAT_BIGBOSS DAUN
+            MEI.funkn_bei(g.x, g.y, "#ffd700", 20) OIDA
+            MEI.funkn_bei(g.x, g.y, "#ffffff", 10) OIDA
+            MEI.klang.boss_tot(FOISCH) OIDA
+            MEI.kamera.wackl(9) OIDA
+            MEI.stü_uhr = 0.14 * MEI.effekte_stärke OIDA
+            MEI.aufblitzn("#ffd166", 0.24) OIDA
+            MEI.hinweis(g.nam + " defeated!", "#ffd166", 1.2) OIDA
+        SUNST WENN g.oat == OAT_ENDBOSS DAUN
+            MEI.funkn_bei(g.x, g.y, "#ff00ff", 30) OIDA
+            MEI.funkn_bei(g.x, g.y, "#ffffff", 25) OIDA
+            MEI.funkn_bei(g.x, g.y, "#ffd700", 20) OIDA
+            MEI.klang.boss_tot(WOAHR) OIDA
+            MEI.kamera.wackl(11) OIDA
+            MEI.stü_uhr = 0.24 * MEI.effekte_stärke OIDA
+            MEI.klang.explosion() OIDA
+            MEI.aufblitzn("#ff55cc", 0.32) OIDA
+            MEI.hinweis("FINAL BOSS SLAIN!", "#ff66dd", 1.5) OIDA
+            MEI.endboss_do = FOISCH OIDA
+            MEI.boss = NIX OIDA
+            MEI.wön_rennt = FOISCH OIDA
+            WENN MEI.endlos DAUN
+                # Endlos: Der Lauf geht weiter, mit einem Lohn für den Boss.
+                MEI.offn_gwunna = FOISCH OIDA
+                MEI.scherbn_dazua(25) OIDA
+                MEI.hinweis("Endless Wave " + KETTN(MEI.wön) + " cleared  +25✦", "#c38bff", 2.0) OIDA
+                MEI.rast_uhr = 2.5 * MEI.oat().rast_moi OIDA
+            SUNST
+                MEI.offn_gwunna = WOAHR OIDA
+                MEI.rast_uhr = 1.5 * MEI.oat().rast_moi OIDA
+            PASST SCHO
+        PASST SCHO
+
+        # Erfahrung. Vom Endboss gibt es keine: Mit ihm ist der Lauf entschieden.
+        WENN g.oat != OAT_ENDBOSS UND LÄNGN(MEI.kugln) < HÖCHSTNS_XP DAUN
+            SOG AU menge = (XP_GRUND + MEI.wön * 2) * HOCH(XP_WÖN_WOCHSTUM, MEI.wön - 1) * g.xp_moi * MEI.oat().xp_moi * KLANSTA(XP_MOI_OBN, p.xp_moi) OIDA
+            HAU EINE(MEI.kugln, XpKugl(g.x, g.y, XP_RADIUS, ZOI(OBRUNDN(menge)))) OIDA
+        PASST SCHO
+        MEI.klang.gegna_tot() OIDA
+
+        # Lohn aus den Ereignissen
+        WENN g.trogt_schotz DAUN
+            MEI.scherbn_dazua(12) OIDA
+            MEI.schotz_träga = NIX OIDA
+            MEI.funkn_bei(g.x, g.y, "#c38bff", 16) OIDA
+            MEI.hinweis("Shard Cache +12", "#c38bff", 1.6) OIDA
+        PASST SCHO
+        WENN g.is_kopfgöd DAUN
+            MEI.scherbn_dazua(12) OIDA
+            MEI.jogd_ziel = NIX OIDA
+            MEI.hinweis("Bounty claimed +12", "#ff66dd", 1.6) OIDA
+            MEI.aufblitzn("#ff66dd", 0.2) OIDA
+        SUNST WENN g.is_elite UND ZUFOI() < 0.35 DAUN
+            MEI.scherbn_dazua(3) OIDA
+        PASST SCHO
+
+        # Der Spalter zerfällt in zwei kleinere, die nicht noch einmal zerfallen.
+        WENN g.oat == OAT_SPOITA UND NED g.is_stickl DAUN
+            FIA i VON 0 BIS 1 TUA
+                SOG AU w = PI * i + zufoi_von(-0.4, 0.4) OIDA
+                SOG AU kx = g.x + KOSINUS(w) * 26 OIDA
+                SOG AU ky = g.y + SINUS(w) * 26 OIDA
+                SOG AU kind = neicha_gegna(OAT_SPOITA, kx, ky, 1.0, 1.0) OIDA
+                kind.max_lebn = g.max_lebn * 0.32 OIDA
+                kind.lebn = kind.max_lebn OIDA
+                kind.tempo = g.tempo * 1.25 OIDA
+                kind.is_stickl = WOAHR OIDA
+                kind.radius = GRÖSSTA(8.0, g.radius * 0.62) OIDA
+                kind.schodn = GRÖSSTA(1, ZOI(OBRUNDN(g.schodn * 0.6))) OIDA
+                kind.xp_moi = g.xp_moi * 0.4 OIDA
+                HAU EINE(MEI.neiche_gegna, kind) OIDA
+                MEI.funkn_bei(kx, ky, kind.foab, 6) OIDA
+            PASST SCHO
+        PASST SCHO
+
+        # Ein gefallener Boss bringt sofort eine Auswahl, beim großen aus vier Karten.
+        WENN g.oat == OAT_MINIBOSS ODA g.oat == OAT_BIGBOSS DAUN
+            MEI.woi_zeign(WOAHR, g.oat == OAT_BIGBOSS) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # ------------------------------------------------------------- Wellen
+
+    # Wie viele gewöhnliche Gegner mindestens da sein sollen (Bosse zählen nicht).
+    FUNKTIAUN gedränge(numma ZOI) GIBT ZRUCK ZOI
+        SOG AU soi = KLANSTA(1.0 * GEDRÄNGE_OBN, GEDRÄNGE_GRUND + GEDRÄNGE_PRO_WÖN * (numma - 1)) OIDA
+        GIB ZRUCK ZOI(RUNDN(soi / MEI.oat().pause_moi)) OIDA
+    PASST SCHO
+
+    FUNKTIAUN gwöhnliche() GIBT ZRUCK ZOI
+        SOG AU n = 0 OIDA
+        FIA JEDE g IN MEI.gegna TUA
+            WENN g.lebt UND NED g.is_boss() DAUN
+                n += 1 OIDA
+            PASST SCHO
+        PASST SCHO
+        GIB ZRUCK n OIDA
+    PASST SCHO
 
     FUNKTIAUN wön_weida(dauer KOMMAZOI)
+        WENN MEI.endboss_do DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
         WENN MEI.wön_rennt DAUN
-            # Genug erwischt: Die Welle ist geschafft.
             WENN MEI.wön_tote >= MEI.wön_ziel DAUN
                 MEI.wön_rennt = FOISCH OIDA
-                MEI.rast_uhr = WÖN_RAST OIDA
+                MEI.rast_uhr = WÖN_RAST * MEI.oat().rast_moi OIDA
+                MEI.klang.wön_gschofft() OIDA
+                MEI.kamera.wackl(4) OIDA
+                MEI.banna_uhr = GRÖSSTA(MEI.banna_uhr, 1.3) OIDA
+                MEI.banna_text = "WAVE " + KETTN(MEI.wön) + " CLEARED!" OIDA
+                MEI.aufblitzn("#77ccff", 0.2) OIDA
+                MEI.hinweis("Wave " + KETTN(MEI.wön) + " Clear", "#77ccff", 1.0) OIDA
+                # Nach der letzten Welle kommt der Endboss; im Endlosen alle fünf Wellen wieder einer.
                 WENN MEI.wön == WÖN_LETZTE DAUN
-                    MEI.offn_gwunna = WOAHR OIDA
+                    MEI.offn_endboss = WOAHR OIDA
+                SUNST WENN MEI.endlos UND endlos_tiafn(MEI.wön) % 5 == 0 DAUN
+                    MEI.offn_endboss = WOAHR OIDA
                 PASST SCHO
                 GIB ZRUCK OIDA
             PASST SCHO
+            # Solange ein Boss da ist, kommt sonst niemand: Der Kampf gehört ihm.
+            SOG AU boss_do = MEI.boss_lebt() OIDA
             MEI.neiche_uhr -= dauer OIDA
             WENN MEI.neiche_uhr <= 0 DAUN
                 MEI.neiche_uhr += MEI.neiche_pause OIDA
+                WENN NED boss_do DAUN
+                    MEI.neicha_wön_gegna() OIDA
+                PASST SCHO
+            PASST SCHO
+            # Gedränge: Es rückt nach, damit das Feld nie leer wirkt.
+            MEI.nochfüll_uhr -= dauer OIDA
+            WENN MEI.nochfüll_uhr <= 0 UND NED boss_do UND MEI.gwöhnliche() < MEI.gedränge(MEI.wön) DAUN
+                MEI.nochfüll_uhr = GEDRÄNGE_PAUSE OIDA
                 MEI.neicha_wön_gegna() OIDA
             PASST SCHO
-            GIB ZRUCK OIDA
-        PASST SCHO
-        MEI.rast_uhr -= dauer OIDA
-        WENN MEI.rast_uhr <= 0 DAUN
-            WENN MEI.offn_gwunna DAUN
-                MEI.offn_gwunna = FOISCH OIDA
-                MEI.gwunna() OIDA
-            SUNST WENN MEI.offn_boss_woi DAUN
-                MEI.offn_boss_woi = FOISCH OIDA
-                MEI.woi_zeign(WOAHR, MEI.offn_boss_oat) OIDA
-            SUNST
-                MEI.nächste_wön() OIDA
+        SUNST
+            MEI.rast_uhr -= dauer OIDA
+            WENN MEI.rast_uhr <= 0 DAUN
+                WENN MEI.offn_gwunna DAUN
+                    MEI.offn_gwunna = FOISCH OIDA
+                    MEI.gwunna() OIDA
+                SUNST WENN MEI.offn_endboss DAUN
+                    MEI.offn_endboss = FOISCH OIDA
+                    MEI.endboss_kummt() OIDA
+                SUNST
+                    MEI.nächste_wön() OIDA
+                PASST SCHO
             PASST SCHO
         PASST SCHO
+    PASST SCHO
+
+    # Um wie viel Leben, Tempo und Schaden der Gegner mit der Welle wachsen.
+    FUNKTIAUN wön_lebn_moi() GIBT ZRUCK KOMMAZOI
+        GIB ZRUCK HOCH(WÖN_LEBN_MOI, MEI.wön - 1) * HOCH(ENDLOS_LEBN_MOI, endlos_tiafn(MEI.wön)) OIDA
+    PASST SCHO
+
+    FUNKTIAUN wön_tempo_moi() GIBT ZRUCK KOMMAZOI
+        GIB ZRUCK HOCH(WÖN_TEMPO_MOI, MEI.wön - 1) OIDA
+    PASST SCHO
+
+    FUNKTIAUN wön_schodn_moi() GIBT ZRUCK KOMMAZOI
+        GIB ZRUCK HOCH(WÖN_SCHODN_MOI, MEI.wön - 1) * HOCH(ENDLOS_SCHODN_MOI, endlos_tiafn(MEI.wön)) OIDA
+    PASST SCHO
+
+    # Das Leben eines Bosses: für die fünf festen Wellen von Hand eingestellt.
+    FUNKTIAUN boss_lebn(numma ZOI) GIBT ZRUCK KOMMAZOI
+        WENN numma == 5 DAUN
+            GIB ZRUCK 3400.0 OIDA
+        PASST SCHO
+        WENN numma == 10 DAUN
+            GIB ZRUCK 10000.0 OIDA
+        PASST SCHO
+        WENN numma == 15 DAUN
+            GIB ZRUCK 15000.0 OIDA
+        PASST SCHO
+        WENN numma == 20 DAUN
+            GIB ZRUCK 85000.0 OIDA
+        PASST SCHO
+        WENN numma == 25 DAUN
+            GIB ZRUCK 314000.0 OIDA
+        PASST SCHO
+        GIB ZRUCK OBRUNDN(GEGNA_LEBN * HOCH(WÖN_LEBN_MOI, numma - 1)) OIDA
+    PASST SCHO
+
+    # So viel Schaden in der Sekunde erwartet die Tabelle oben von der Figur.
+    FUNKTIAUN erwoateta_schodn(numma ZOI) GIBT ZRUCK KOMMAZOI
+        WENN numma == 5 DAUN
+            GIB ZRUCK 175.0 OIDA
+        PASST SCHO
+        WENN numma == 10 DAUN
+            GIB ZRUCK 372.0 OIDA
+        PASST SCHO
+        WENN numma == 15 DAUN
+            GIB ZRUCK 774.0 OIDA
+        PASST SCHO
+        WENN numma == 20 DAUN
+            GIB ZRUCK 1499.0 OIDA
+        PASST SCHO
+        GIB ZRUCK 0.0 OIDA
     PASST SCHO
 
     FUNKTIAUN nächste_wön()
+        SOG AU oat = MEI.oat() OIDA
+        MEI.ereignis_aus() OIDA
         MEI.wön += 1 OIDA
         MEI.wön_tote = 0 OIDA
-        MEI.wön_ziel = WÖN_GRUND_TOTE + (MEI.wön - 1) * WÖN_TOTE_DAZUA OIDA
-        MEI.neiche_pause = GRÖSSTA(WÖN_KLANSTE_PAUSE, WÖN_GRUND_PAUSE * HOCH(WÖN_PAUSE_MOI, MEI.wön - 1)) OIDA
+        SOG AU tiafn = endlos_tiafn(MEI.wön) OIDA
+        MEI.wön_ziel = GRÖSSTA(5, ZOI(OBRUNDN((WÖN_GRUND_TOTE + (MEI.wön - 1) * WÖN_TOTE_DAZUA + tiafn * ENDLOS_TOTE_DAZUA) * oat.tote_moi))) OIDA
+        # Im Endlosen werden die Pausen noch kürzer; die Untergrenze bleibt.
+        SOG AU pause = WÖN_GRUND_PAUSE * HOCH(WÖN_PAUSE_MOI, MEI.wön - 1) OIDA
+        WENN tiafn > 0 DAUN
+            pause = WÖN_GRUND_PAUSE * HOCH(ENDLOS_PAUSE_MOI, WÖN_LETZTE - 1) OIDA
+        PASST SCHO
+        MEI.neiche_pause = GRÖSSTA(WÖN_KLANSTE_PAUSE, pause * oat.pause_moi) OIDA
         MEI.neiche_uhr = 0.0 OIDA
         MEI.wön_rennt = WOAHR OIDA
+
+        # Alle paar Wellen gibt es ein Ereignis (nie bei einem Boss und nie kurz vor dem Ende).
+        WENN MEI.is_ereignis_wön(MEI.wön) DAUN
+            SOG AU e = MEI.zieh_ereignis() OIDA
+            WENN e != EREIGNIS_KANS DAUN
+                MEI.ereignis_start(e) OIDA
+            PASST SCHO
+        PASST SCHO
+
+        # Jede Welle beginnt mit einem ganzen Schwung; nur der Boss kommt allein.
+        WENN NED MEI.is_boss_wön(MEI.wön) DAUN
+            SOG AU schwung = KLANSTA(GEDRÄNGE_ANFANG, MEI.gedränge(MEI.wön)) - MEI.gwöhnliche() OIDA
+            FIA i VON 1 BIS schwung TUA
+                MEI.neicha_wön_gegna() OIDA
+            PASST SCHO
+        PASST SCHO
+
+        MEI.klang.musik_gebiet(MEI.gebiet()) OIDA
+        MEI.banna_uhr = 2.0 OIDA
+        WENN MEI.is_boss_wön(MEI.wön) DAUN
+            MEI.banna_text = "⚠ BOSS WAVE " + KETTN(MEI.wön) + " ⚠" OIDA
+        SUNST WENN MEI.endlos DAUN
+            MEI.banna_text = "♾ ENDLESS WAVE " + KETTN(MEI.wön) OIDA
+        SUNST
+            MEI.banna_text = "WAVE " + KETTN(MEI.wön) OIDA
+        PASST SCHO
         MEI.klang.wön_start() OIDA
 
-        # In den Wellen 5, 10, 15 und 20 kommt ein Boss von oben ins Bild.
-        WENN MEI.wön == 5 ODA MEI.wön == 10 ODA MEI.wön == 15 ODA MEI.wön == 20 DAUN
-            SOG AU oat = OAT_MINIBOSS OIDA
-            WENN MEI.wön == 10 ODA MEI.wön == 20 DAUN
-                oat = OAT_ENDBOSS OIDA
-            PASST SCHO
-            SOG AU bx = klemm(MEI.spiela.x + zufoi_von(-200, 200), 100, WELT_B - 100) OIDA
-            SOG AU by = klemm(MEI.kamera.y - 120, 100, WELT_H - 100) OIDA
-            SOG AU neicha = neicha_gegna(oat, bx, by, MEI.wön_lebn(), MEI.wön_tempo()) OIDA
-            neicha.schodn = ZOI(OBRUNDN(neicha.schodn * MEI.wön_schodn())) OIDA
-            HAU EINE(MEI.gegna, neicha) OIDA
-            MEI.boss = neicha OIDA
+        WENN MEI.is_boss_wön(MEI.wön) DAUN
+            MEI.boss_kummt() OIDA
         PASST SCHO
     PASST SCHO
 
-    # Mit jeder Welle halten die Gegner mehr aus, sind schneller und tun mehr weh.
-    FUNKTIAUN wön_lebn() GIBT ZRUCK ZOI
-        GIB ZRUCK ZOI(OBRUNDN(GEGNA_LEBN * HOCH(WÖN_LEBN_MOI, MEI.wön - 1))) OIDA
+    # Der Boss einer Welle: auf 5 und 15 der Shard Warden, auf 10 der Iron Tyrant, auf 20 der Abyss Colossus.
+    FUNKTIAUN boss_kummt()
+        SOG AU oat = MEI.oat() OIDA
+        SOG AU p = MEI.spiela OIDA
+        SOG AU groß = MEI.wön == 10 ODA MEI.wön == 20 OIDA
+        SOG AU boss_oat = OAT_MINIBOSS OIDA
+        WENN groß DAUN
+            boss_oat = OAT_BIGBOSS OIDA
+        PASST SCHO
+        SOG AU bx = klemm(p.x + zufoi_von(-200, 200), 100.0, WELT_B - 100) OIDA
+        SOG AU by = klemm(MEI.kamera.y - 120, 100.0, WELT_H - 100) OIDA
+        SOG AU g = neicha_gegna(boss_oat, bx, by, 1.0, GEGNA_TEMPO * MEI.wön_tempo_moi() * oat.tempo_moi) OIDA
+        WENN MEI.wön == 20 DAUN
+            g.nam = "Abyss Colossus" OIDA
+        PASST SCHO
+        # Wer weit über dem liegt, was die Tabelle erwartet, bekommt einen zäheren Boss: So dauert der Kampf immer ähnlich lang.
+        SOG AU erwoatet = MEI.erwoateta_schodn(MEI.wön) OIDA
+        SOG AU zäh = 1.0 OIDA
+        WENN erwoatet > 0 DAUN
+            zäh = klemm(p.schodn_pro_sekund() / erwoatet, 1.0, 4.0) OIDA
+        PASST SCHO
+        g.max_lebn = OBRUNDN(MEI.boss_lebn(MEI.wön) * oat.lebn_moi * zäh) OIDA
+        g.lebn = g.max_lebn OIDA
+        g.schodn = ZOI(OBRUNDN(g.schodn * MEI.wön_schodn_moi() * oat.schodn_moi)) OIDA
+        g.angriff_grund = ZOI(OBRUNDN(boss_angriff_grund(MEI.wön) * oat.schodn_moi)) OIDA
+        SOG AU kit = KIT_WÄCHTA OIDA
+        WENN groß DAUN
+            kit = KIT_TYRANN OIDA
+            WENN MEI.wön >= 20 DAUN
+                kit = KIT_KOLOSS OIDA
+            PASST SCHO
+        PASST SCHO
+        SOG AU stufn = 1 OIDA
+        WENN MEI.wön >= 15 DAUN
+            stufn = 2 OIDA
+        PASST SCHO
+        g.kit = BossKit(kit, boss_tempo(MEI.wön), stufn) OIDA
+        HAU EINE(MEI.gegna, g) OIDA
+        MEI.boss = g OIDA
+        MEI.boss_eigenschoftn(g) OIDA
     PASST SCHO
 
-    FUNKTIAUN wön_tempo() GIBT ZRUCK KOMMAZOI
-        GIB ZRUCK GEGNA_TEMPO * HOCH(WÖN_TEMPO_MOI, MEI.wön - 1) OIDA
+    FUNKTIAUN endboss_kummt()
+        SOG AU oat = MEI.oat() OIDA
+        SOG AU p = MEI.spiela OIDA
+        MEI.endboss_do = WOAHR OIDA
+        # Das Feld wird frei gemacht.
+        MEI.gegna = [] OIDA
+        MEI.neiche_gegna = [] OIDA
+        SOG AU bx = klemm(p.x + zufoi_von(-150, 150), 200.0, WELT_B - 200) OIDA
+        SOG AU by = klemm(MEI.kamera.y - 200, 200.0, WELT_H - 200) OIDA
+        SOG AU g = neicha_gegna(OAT_ENDBOSS, bx, by, 1.0, GEGNA_TEMPO * MEI.wön_tempo_moi() * oat.tempo_moi) OIDA
+        g.max_lebn = OBRUNDN(MEI.boss_lebn(MEI.wön) * oat.lebn_moi) OIDA
+        g.lebn = g.max_lebn OIDA
+        g.schodn = ZOI(OBRUNDN(g.schodn * MEI.wön_schodn_moi() * oat.schodn_moi)) OIDA
+        HAU EINE(MEI.gegna, g) OIDA
+        MEI.boss = g OIDA
+        MEI.boss_eigenschoftn(g) OIDA
+        MEI.klang.musik_boss() OIDA
+        MEI.banna_uhr = 3.0 OIDA
+        MEI.banna_text = "☠ The Null Sovereign APPROACHES ☠" OIDA
+        MEI.kamera.wackl(WACKL_STÄRKE) OIDA
+        MEI.klang.explosion() OIDA
     PASST SCHO
 
-    FUNKTIAUN wön_schodn() GIBT ZRUCK KOMMAZOI
-        GIB ZRUCK HOCH(WÖN_SCHODN_MOI, MEI.wön - 1) OIDA
+    # Jeder Boss bekommt ein oder zwei Eigenschaften, nie dieselbe doppelt.
+    FUNKTIAUN boss_eigenschoftn(g Gegna)
+        SOG AU wievü = 2 OIDA
+        WENN g.oat == OAT_ENDBOSS ODA MEI.wön == 5 DAUN
+            wievü = 1 OIDA
+        PASST SCHO
+        SOG AU nama = ["Shield Wall", "Berserker", "Summoner", "Siphon", "Brutal", "Brittle"] OIDA
+        SOG AU foabn = ["#66ddff", "#ff5566", "#c38bff", "#66ff99", "#ff9900", "#b9f1ff"] OIDA
+        SOG AU gwichte = [18, 16, 16, 14, 14, 14] OIDA
+        SOG AU zua_hom = [0, 1, 2, 3, 4, 5] OIDA
+        SOG AU zeile = "" OIDA
+        SOG AU meldung = "" OIDA
+        FIA i VON 1 BIS wievü TUA
+            SOG AU summe = 0 OIDA
+            FIA JEDE k IN zua_hom TUA
+                summe += gwichte[k] OIDA
+            PASST SCHO
+            SOG AU wurf = ZUFOI() * summe OIDA
+            SOG AU stö = LÄNGN(zua_hom) - 1 OIDA
+            FIA j VON 0 BIS LÄNGN(zua_hom) - 1 TUA
+                wurf -= gwichte[zua_hom[j]] OIDA
+                WENN wurf <= 0 DAUN
+                    stö = j OIDA
+                    HAU OB OIDA
+                PASST SCHO
+            PASST SCHO
+            SOG AU wos = zua_hom[stö] OIDA
+            HAU AUSSE(zua_hom, stö) OIDA
+            WENN wos == 0 DAUN
+                g.mod_schüdwaund = WOAHR OIDA
+            SUNST WENN wos == 1 DAUN
+                g.mod_berserka = WOAHR OIDA
+            SUNST WENN wos == 2 DAUN
+                g.mod_beschwöra = WOAHR OIDA
+                g.beschwör_uhr = 8.0 OIDA
+            SUNST WENN wos == 3 DAUN
+                g.mod_aussauga = WOAHR OIDA
+            SUNST WENN wos == 4 DAUN
+                # Brutal: zäher und härter, dafür etwas langsamer
+                g.max_lebn = OBRUNDN(g.max_lebn * 1.6) OIDA
+                g.lebn = g.max_lebn OIDA
+                g.schodn = ZOI(OBRUNDN(g.schodn * 1.4)) OIDA
+                g.tempo = g.tempo * 0.9 OIDA
+            SUNST
+                # Brittle: zerbrechlich, aber es lohnt sich
+                g.max_lebn = GRÖSSTA(1.0, OBRUNDN(g.max_lebn * 0.65)) OIDA
+                g.lebn = g.max_lebn OIDA
+                g.scherbn_moi = g.scherbn_moi * 2.2 OIDA
+                g.xp_moi = g.xp_moi * 2.0 OIDA
+            PASST SCHO
+            WENN zeile == "" DAUN
+                zeile = nama[wos] OIDA
+                meldung = nama[wos] OIDA
+                g.mod_foab = foabn[wos] OIDA
+            SUNST
+                zeile = zeile + "  ·  " + nama[wos] OIDA
+                meldung = meldung + " + " + nama[wos] OIDA
+            PASST SCHO
+        PASST SCHO
+        g.mod_text = zeile OIDA
+        MEI.hinweis(g.nam + ": " + meldung, g.mod_foab, 2.2) OIDA
+    PASST SCHO
+
+    # Ein Gegner für diese Welle, mit allem, was Welle, Spielart und Ereignis an ihm
+    # ändern. Mit `fest` steht er an (fx, fy), sonst kommt er vom Bildrand. NIX, wenn schon zu viele da sind.
+    FUNKTIAUN wön_gegna(fest JONA, fx KOMMAZOI, fy KOMMAZOI) GIBT ZRUCK VIELLEICHT Gegna
+        WENN LÄNGN(MEI.gegna) + LÄNGN(MEI.neiche_gegna) >= HÖCHSTNS_GEGNA DAUN
+            GIB ZRUCK NIX OIDA
+        PASST SCHO
+        SOG AU oat = MEI.oat() OIDA
+        SOG AU p = MEI.spiela OIDA
+
+        # Je höher die Welle, desto mehr Arten kommen vor.
+        SOG AU oatn LISTN VON ZOI = [] OIDA
+        WENN MEI.wön >= 3 DAUN
+            HAU EINE(oatn, OAT_FLITZA) OIDA
+        PASST SCHO
+        WENN MEI.wön >= 5 DAUN
+            HAU EINE(oatn, OAT_PANZA) OIDA
+        PASST SCHO
+        WENN MEI.wön >= 7 DAUN
+            HAU EINE(oatn, OAT_SCHÜTZ) OIDA
+        PASST SCHO
+        WENN MEI.wön >= 9 DAUN
+            HAU EINE(oatn, OAT_SPRENGA) OIDA
+        PASST SCHO
+        WENN MEI.wön >= 12 DAUN
+            HAU EINE(oatn, OAT_PHASA) OIDA
+        PASST SCHO
+        WENN MEI.wön >= 14 DAUN
+            HAU EINE(oatn, OAT_SPOITA) OIDA
+        PASST SCHO
+        WENN MEI.wön >= 16 DAUN
+            HAU EINE(oatn, OAT_WÄCHTA) OIDA
+        PASST SCHO
+        SOG AU bsundare = KLANSTA(0.9, (0.1 + MEI.wön * 0.04) * oat.bsundare_moi) OIDA
+
+        # Wo er erscheint: knapp innerhalb vom Bildrand (er blendet sich ein), aber nie direkt bei der Figur.
+        SOG AU x = fx OIDA
+        SOG AU y = fy OIDA
+        WENN NED fest DAUN
+            SOG AU kx = MEI.kamera.x OIDA
+            SOG AU ky = MEI.kamera.y OIDA
+            SOG AU seitn = ZUFOI(0, 3) OIDA
+            WENN seitn == 0 DAUN
+                x = zufoi_von(kx + 40, kx + FELD_B - 40) OIDA
+                y = ky + 40 OIDA
+            SUNST WENN seitn == 1 DAUN
+                x = zufoi_von(kx + 40, kx + FELD_B - 40) OIDA
+                y = ky + FELD_H - 40 OIDA
+            SUNST WENN seitn == 2 DAUN
+                x = kx + 40 OIDA
+                y = zufoi_von(ky + 40, ky + FELD_H - 40) OIDA
+            SUNST
+                x = kx + FELD_B - 40 OIDA
+                y = zufoi_von(ky + 40, ky + FELD_H - 40) OIDA
+            PASST SCHO
+        PASST SCHO
+        x = klemm(x, 0.0, WELT_B) OIDA
+        y = klemm(y, 0.0, WELT_H) OIDA
+        WENN NED fest DAUN
+            SOG AU weit = abstand(x, y, p.x, p.y) OIDA
+            WENN weit < 260 DAUN
+                SOG AU w = ZUFOI() * 2 * PI OIDA
+                WENN weit > 0.001 DAUN
+                    w = WINKL(y - p.y, x - p.x) OIDA
+                PASST SCHO
+                x = klemm(p.x + KOSINUS(w) * 260, 0.0, WELT_B) OIDA
+                y = klemm(p.y + SINUS(w) * 260, 0.0, WELT_H) OIDA
+            PASST SCHO
+        PASST SCHO
+
+        # Was das Ereignis ändert
+        SOG AU e = MEI.ereignis OIDA
+        SOG AU e_lebn = 1.0 OIDA
+        SOG AU e_tempo = 1.0 OIDA
+        SOG AU e_schodn = 1.0 OIDA
+        SOG AU e_xp = 1.0 OIDA
+        WENN e == EREIGNIS_ELITE DAUN
+            e_lebn = 1.35 OIDA
+            e_xp = 1.6 OIDA
+        SUNST WENN e == EREIGNIS_STURM DAUN
+            e_lebn = 0.75 OIDA
+            e_tempo = 1.3 OIDA
+            e_schodn = 0.9 OIDA
+        SUNST WENN e == EREIGNIS_BRUNNEN DAUN
+            e_xp = 0.4 OIDA
+        PASST SCHO
+
+        SOG AU lebn = OBRUNDN(GEGNA_LEBN * MEI.wön_lebn_moi() * oat.lebn_moi * e_lebn) OIDA
+        SOG AU tempo = GEGNA_TEMPO * MEI.wön_tempo_moi() * oat.tempo_moi * e_tempo OIDA
+        SOG AU wöche = OAT_NORMAL OIDA
+        WENN LÄNGN(oatn) > 0 UND ZUFOI() < bsundare DAUN
+            wöche = oatn[ZUFOI(0, LÄNGN(oatn) - 1)] OIDA
+        PASST SCHO
+        SOG AU g = neicha_gegna(wöche, x, y, lebn, tempo) OIDA
+        g.schodn = ZOI(OBRUNDN(g.schodn * MEI.wön_schodn_moi() * oat.schodn_moi * e_schodn)) OIDA
+        g.xp_moi = g.xp_moi * e_xp OIDA
+
+        # Elite: mit Glück, und beim Ereignis "Elite Wave" jeder
+        WENN e == EREIGNIS_ELITE DAUN
+            MEI.mach_elite(g) OIDA
+        SUNST WENN MEI.wön >= ELITE_AB_WÖN DAUN
+            WENN ZUFOI() < KLANSTA(ELITE_GLÜCK_OBN, ELITE_GRUND_GLÜCK + (MEI.wön - ELITE_AB_WÖN) * ELITE_GLÜCK_PRO_WÖN) DAUN
+                MEI.mach_elite(g) OIDA
+            PASST SCHO
+        PASST SCHO
+
+        # Scherben: Einer trägt sie, solange das Ereignis läuft.
+        WENN MEI.schotz_offn UND MEI.schotz_träga == NIX UND ZUFOI() < 0.22 DAUN
+            g.trogt_schotz = WOAHR OIDA
+            MEI.schotz_träga = g OIDA
+        PASST SCHO
+        GIB ZRUCK g OIDA
     PASST SCHO
 
     FUNKTIAUN neicha_wön_gegna()
-        WENN LÄNGN(MEI.gegna) >= HÖCHSTNS_GEGNA DAUN
+        # Beim Hinterhalt kommen sie nur in Rudeln.
+        WENN MEI.ereignis == EREIGNIS_HINTAHOIT DAUN
             GIB ZRUCK OIDA
         PASST SCHO
+        SOG AU g = MEI.wön_gegna(FOISCH, 0.0, 0.0) OIDA
+        WENN g != NIX DAUN
+            HAU EINE(MEI.gegna, g) OIDA
+        PASST SCHO
+    PASST SCHO
 
-        # Welche besonderen Arten es in dieser Welle schon gibt
-        SOG AU bsundare LISTN VON ZOI = [] OIDA
-        WENN MEI.wön >= 3 DAUN
-            HAU EINE(bsundare, OAT_FLITZA) OIDA
-        PASST SCHO
-        WENN MEI.wön >= 5 DAUN
-            HAU EINE(bsundare, OAT_PANZA) OIDA
-        PASST SCHO
-        WENN MEI.wön >= 7 DAUN
-            HAU EINE(bsundare, OAT_SCHÜTZ) OIDA
-        PASST SCHO
-        WENN MEI.wön >= 9 DAUN
-            HAU EINE(bsundare, OAT_SPRENGA) OIDA
-        PASST SCHO
+    # Aus einem Gegner wird ein Elite: zäher, schneller, härter, und er bringt viel mehr Erfahrung.
+    FUNKTIAUN mach_elite(g Gegna)
+        g.is_elite = WOAHR OIDA
+        g.max_lebn = OBRUNDN(g.max_lebn * ELITE_LEBN_MOI) OIDA
+        g.lebn = g.max_lebn OIDA
+        g.tempo = g.tempo * ELITE_TEMPO_MOI OIDA
+        g.schodn = ZOI(OBRUNDN(g.schodn * ELITE_SCHODN_MOI)) OIDA
+        g.xp_moi = g.xp_moi * ELITE_XP_MOI OIDA
+    PASST SCHO
 
-        # Er kommt an einem der vier Ränder knapp außerhalb vom Bild herein.
-        SOG AU rand = 80.0 OIDA
-        SOG AU k = MEI.kamera OIDA
+    # ---------------------------------------------------------- Ereignisse
+
+    FUNKTIAUN is_ereignis_wön(numma ZOI) GIBT ZRUCK JONA
+        WENN numma < EREIGNIS_AB_WÖN ODA numma >= EREIGNIS_NED_AB ODA numma >= WÖN_LETZTE DAUN
+            GIB ZRUCK FOISCH OIDA
+        PASST SCHO
+        WENN MEI.is_boss_wön(numma) DAUN
+            GIB ZRUCK FOISCH OIDA
+        PASST SCHO
+        GIB ZRUCK (numma - EREIGNIS_AB_WÖN) % EREIGNIS_OLLE == 0 OIDA
+    PASST SCHO
+
+    # Zieht ein Ereignis, nie dasselbe zweimal hintereinander.
+    FUNKTIAUN zieh_ereignis() GIBT ZRUCK ZOI
+        SOG AU summe = 0 OIDA
+        FIA e VON EREIGNIS_ELITE BIS EREIGNIS_JOGD TUA
+            WENN e != MEI.letzts_ereignis DAUN
+                summe += ereignis_gwicht(e) OIDA
+            PASST SCHO
+        PASST SCHO
+        SOG AU wurf = ZUFOI() * summe OIDA
+        SOG AU letzts = EREIGNIS_KANS OIDA
+        FIA e VON EREIGNIS_ELITE BIS EREIGNIS_JOGD TUA
+            WENN e != MEI.letzts_ereignis DAUN
+                letzts = e OIDA
+                wurf -= ereignis_gwicht(e) OIDA
+                WENN wurf <= 0 DAUN
+                    GIB ZRUCK e OIDA
+                PASST SCHO
+            PASST SCHO
+        PASST SCHO
+        GIB ZRUCK letzts OIDA
+    PASST SCHO
+
+    FUNKTIAUN ereignis_start(e ZOI)
+        MEI.ereignis = e OIDA
+        MEI.letzts_ereignis = e OIDA
+        WENN e == EREIGNIS_ELITE DAUN
+            MEI.wön_ziel = GRÖSSTA(5, ZOI(OBRUNDN(MEI.wön_ziel * 1.25))) OIDA
+        SUNST WENN e == EREIGNIS_BRUNNEN DAUN
+            MEI.brunnen_heilung = 4.0 OIDA
+        SUNST WENN e == EREIGNIS_HINTAHOIT DAUN
+            MEI.wön_ziel = GRÖSSTA(5, ZOI(OBRUNDN(MEI.wön_ziel * 0.8))) OIDA
+            MEI.hintahoit_uhr = 1.4 OIDA
+        SUNST WENN e == EREIGNIS_SCHOTZ DAUN
+            MEI.schotz_offn = WOAHR OIDA
+        SUNST WENN e == EREIGNIS_JOGD DAUN
+            MEI.jogd_ziel_kummt() OIDA
+        PASST SCHO
+        MEI.banna_uhr = 2.4 OIDA
+        MEI.banna_text = "◆ " + ereignis_nam(e) + " ◆" OIDA
+        MEI.hinweis(ereignis_wos(e), ereignis_foab(e), 2.6) OIDA
+        MEI.aufblitzn(ereignis_foab(e), 0.25) OIDA
+    PASST SCHO
+
+    FUNKTIAUN ereignis_aus()
+        MEI.ereignis = EREIGNIS_KANS OIDA
+        MEI.brunnen_heilung = 0.0 OIDA
+        MEI.schotz_offn = FOISCH OIDA
+        MEI.schotz_träga = NIX OIDA
+        MEI.jogd_ziel = NIX OIDA
+        MEI.hintahoit_gsetzt = FOISCH OIDA
+        MEI.hintahoit_uhr = 0.0 OIDA
+    PASST SCHO
+
+    FUNKTIAUN ereignis_weida(dauer KOMMAZOI)
+        SOG AU p = MEI.spiela OIDA
+        WENN MEI.brunnen_heilung > 0 UND p.lebt DAUN
+            p.lebn = KLANSTA(1.0 * p.max_lebn, p.lebn + MEI.brunnen_heilung * dauer) OIDA
+        PASST SCHO
+        WENN MEI.ereignis == EREIGNIS_HINTAHOIT DAUN
+            MEI.hintahoit_uhr -= dauer OIDA
+            WENN MEI.hintahoit_uhr <= 0 DAUN
+                MEI.hintahoit_uhr += 1.4 OIDA
+                MEI.hintahoit_rudl() OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    # Hinterhalt: sechs auf einmal, immer aus derselben Richtung.
+    FUNKTIAUN hintahoit_rudl()
+        WENN NED MEI.hintahoit_gsetzt DAUN
+            SOG AU seitn = ZUFOI(0, 3) OIDA
+            MEI.hintahoit_dx = 0.0 OIDA
+            MEI.hintahoit_dy = 0.0 OIDA
+            WENN seitn == 0 DAUN
+                MEI.hintahoit_dy = -1.0 OIDA
+            SUNST WENN seitn == 1 DAUN
+                MEI.hintahoit_dy = 1.0 OIDA
+            SUNST WENN seitn == 2 DAUN
+                MEI.hintahoit_dx = -1.0 OIDA
+            SUNST
+                MEI.hintahoit_dx = 1.0 OIDA
+            PASST SCHO
+            MEI.hintahoit_gsetzt = WOAHR OIDA
+        PASST SCHO
+        FIA i VON 1 BIS 6 TUA
+            SOG AU streuung = zufoi_von(-260, 260) OIDA
+            SOG AU x = MEI.kamera.x + FELD_B / 2 + streuung OIDA
+            SOG AU y = MEI.kamera.y + FELD_H / 2 + streuung OIDA
+            WENN MEI.hintahoit_dx != 0 DAUN
+                x = MEI.kamera.x + FELD_B / 2 + MEI.hintahoit_dx * (FELD_B / 2 + 90) OIDA
+            PASST SCHO
+            WENN MEI.hintahoit_dy != 0 DAUN
+                y = MEI.kamera.y + FELD_H / 2 + MEI.hintahoit_dy * (FELD_H / 2 + 90) OIDA
+            PASST SCHO
+            SOG AU g = MEI.wön_gegna(WOAHR, x, y) OIDA
+            WENN g != NIX DAUN
+                HAU EINE(MEI.gegna, g) OIDA
+            SUNST
+                HAU OB OIDA
+            PASST SCHO
+        PASST SCHO
+        MEI.kamera.wackl(3) OIDA
+    PASST SCHO
+
+    # Jagd: ein einzelner, stark gemachter und deutlich markierter Elite.
+    FUNKTIAUN jogd_ziel_kummt()
+        SOG AU kx = MEI.kamera.x OIDA
+        SOG AU ky = MEI.kamera.y OIDA
         SOG AU seitn = ZUFOI(0, 3) OIDA
-        SOG AU ex = 0.0 OIDA
-        SOG AU ey = 0.0 OIDA
-        WENN seitn == 0 DAUN
-            ex = zufoi_von(k.x - rand, k.x + FELD_B + rand) OIDA
-            ey = k.y - rand OIDA
-        SUNST WENN seitn == 1 DAUN
-            ex = zufoi_von(k.x - rand, k.x + FELD_B + rand) OIDA
-            ey = k.y + FELD_H + rand OIDA
+        SOG AU x = zufoi_von(kx - 90, kx + FELD_B + 90) OIDA
+        SOG AU y = ky - 90 OIDA
+        WENN seitn == 1 DAUN
+            y = ky + FELD_H + 90 OIDA
         SUNST WENN seitn == 2 DAUN
-            ex = k.x - rand OIDA
-            ey = zufoi_von(k.y - rand, k.y + FELD_H + rand) OIDA
-        SUNST
-            ex = k.x + FELD_B + rand OIDA
-            ey = zufoi_von(k.y - rand, k.y + FELD_H + rand) OIDA
+            x = kx - 90 OIDA
+            y = zufoi_von(ky - 90, ky + FELD_H + 90) OIDA
+        SUNST WENN seitn == 3 DAUN
+            x = kx + FELD_B + 90 OIDA
+            y = zufoi_von(ky - 90, ky + FELD_H + 90) OIDA
         PASST SCHO
-        ex = klemm(ex, 0, WELT_B) OIDA
-        ey = klemm(ey, 0, WELT_H) OIDA
+        SOG AU g = MEI.wön_gegna(WOAHR, klemm(x, 0.0, WELT_B), klemm(y, 0.0, WELT_H)) OIDA
+        WENN g != NIX DAUN
+            MEI.mach_elite(g) OIDA
+            g.max_lebn = OBRUNDN(g.max_lebn * 3.4) OIDA
+            g.lebn = g.max_lebn OIDA
+            g.tempo = g.tempo * 1.3 OIDA
+            g.is_kopfgöd = WOAHR OIDA
+            MEI.jogd_ziel = g OIDA
+            HAU EINE(MEI.gegna, g) OIDA
+            MEI.hinweis("Bounty is in the arena!", "#ff66dd", 1.8) OIDA
+        PASST SCHO
+    PASST SCHO
 
-        # Je weiter die Wellen, desto öfter ist es einer von den besonderen.
-        SOG AU oat = OAT_NORMAL OIDA
-        WENN LÄNGN(bsundare) > 0 UND ZUFOI() < KLANSTA(0.7, 0.1 + MEI.wön * 0.04) DAUN
-            oat = bsundare[ZUFOI(0, LÄNGN(bsundare) - 1)] OIDA
+    # ------------------------------------------------------ Ende eines Laufs
+
+    # Verloren: Der Lauf kommt in die Bestenliste (nur einmal).
+    FUNKTIAUN valuan()
+        WENN MEI.fertig DAUN
+            GIB ZRUCK OIDA
         PASST SCHO
-        SOG AU neicha = neicha_gegna(oat, ex, ey, MEI.wön_lebn(), MEI.wön_tempo()) OIDA
-        neicha.schodn = ZOI(OBRUNDN(neicha.schodn * MEI.wön_schodn())) OIDA
-        HAU EINE(MEI.gegna, neicha) OIDA
+        MEI.rang = MEI.bestenlistn.eintragn(MEI.modus, MEI.wön, MEI.tote, MEI.spüzeit, FOISCH) OIDA
+        WENN MEI.rang == 1 DAUN
+            MEI.klang.bestwert() OIDA
+        PASST SCHO
+        MEI.fertig = WOAHR OIDA
     PASST SCHO
 
     FUNKTIAUN gwunna()
+        WENN MEI.fertig DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
         MEI.zustand = ZUSTAND_GWUNNA OIDA
         MEI.klang.musik_stopp() OIDA
         MEI.klang.bestwert() OIDA
         MEI.rang = MEI.bestenlistn.eintragn(MEI.modus, MEI.wön, MEI.tote, MEI.spüzeit, WOAHR) OIDA
+        MEI.fertig = WOAHR OIDA
     PASST SCHO
 
-    # --------------------------------------------------- Verbesserungen
+    # Nach dem Sieg weiterspielen: Die Wellen hören nicht mehr auf und werden schnell härter.
+    FUNKTIAUN endlos_start()
+        MEI.endlos = WOAHR OIDA
+        MEI.fertig = FOISCH OIDA
+        MEI.offn_gwunna = FOISCH OIDA
+        MEI.zustand = ZUSTAND_SPÜ OIDA
+        MEI.wön_rennt = FOISCH OIDA
+        MEI.rast_uhr = 2.0 OIDA
+        MEI.klang.musik_gebiet(MEI.gebiet()) OIDA
+        MEI.aufblitzn("#c38bff", 0.35) OIDA
+        MEI.banna_uhr = 3.0 OIDA
+        MEI.banna_text = "♾ ENDLESS MODE — WAVE " + KETTN(MEI.wön + 1) OIDA
+        MEI.hinweis("Endless mode: the waves do not stop", "#c38bff", 2.4) OIDA
+    PASST SCHO
 
-    # Zeigt drei zufällige Verbesserungen zur Wahl; nach dem großen Boss vier.
-    FUNKTIAUN woi_zeign(vom_boss JONA, boss_oat ZOI)
+    # Den Lauf aufgeben (aus der Pause).
+    FUNKTIAUN aufgebn()
+        MEI.valuan() OIDA
+        MEI.klang.musik_stopp() OIDA
+        MEI.geh_zua(ZUSTAND_ANFANG) OIDA
+    PASST SCHO
+
+    # --------------------------------------------------- Verbesserungen wählen
+
+    # Zeigt die Auswahl. `is_lohn` heißt: nach einem Boss, ohne dass eine Stufe dafür nötig war.
+    FUNKTIAUN woi_zeign(is_lohn JONA, vom_bigboss JONA)
+        # Ist der Endboss gefallen, gibt es keine Auswahl mehr: Sonst bliebe die Uhr bis zum Sieg stehen.
+        WENN MEI.offn_gwunna ODA MEI.fertig DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        # Kommt eine Stufe, während schon gewählt wird, wartet sie.
+        WENN MEI.zustand == ZUSTAND_VABESSARUNG DAUN
+            HAU EINE(MEI.woi_schlange, Wortend(is_lohn, vom_bigboss)) OIDA
+            GIB ZRUCK OIDA
+        PASST SCHO
         SOG AU anzahl = WOI_ANZAHL OIDA
-        WENN vom_boss UND boss_oat == OAT_ENDBOSS DAUN
+        WENN is_lohn UND vom_bigboss DAUN
             anzahl = 4 OIDA
         PASST SCHO
-        SOG AU olle = kopie(MEI.vabessarungen) OIDA
-        misch(olle) OIDA
-        MEI.woi = ausschnitt(olle, 0, anzahl) OIDA
-        MEI.woi_vom_boss = vom_boss OIDA
+        MEI.woi = zieh_vabessarungen(MEI.vabessarungen, MEI.spiela, anzahl, MEI.wön, is_lohn, vom_bigboss) OIDA
+        MEI.woi_is_lohn = is_lohn OIDA
         MEI.zustand = ZUSTAND_VABESSARUNG OIDA
+        MEI.stufn_blitz_uhr = 0.3 OIDA
         MEI.klang.stufn_auf() OIDA
     PASST SCHO
 
     FUNKTIAUN woi_nehma(stö ZOI)
-        SOG AU v = MEI.woi[stö] OIDA
-        v.wirkung(SÖWA) OIDA
-        WENN NED v.waffn DAUN
-            SOG AU p = MEI.spiela OIDA
-            p.zähla[v.kennung] = (p.zähla[v.kennung] ODA HOID 0) + 1 OIDA
+        WENN stö < 0 ODA stö >= LÄNGN(MEI.woi) DAUN
+            GIB ZRUCK OIDA
         PASST SCHO
-        MEI.zustand = ZUSTAND_SPÜ OIDA
+        SOG AU v = MEI.woi[stö] OIDA
+        SOG AU p = MEI.spiela OIDA
+        SOG AU vuaher = synergien(p) OIDA
+        v.wirkung(p) OIDA
+        WENN v.evo >= 0 DAUN
+            MEI.hinweis(SCHREI(v.nam), "#c38bff", 1.6) OIDA
+        SUNST
+            FIA JEDE nam IN synergien(p) TUA
+                WENN NED hot(vuaher, nam) DAUN
+                    MEI.hinweis("Synergy: " + nam, "#c38bff", 1.6) OIDA
+                    HAU OB OIDA
+                PASST SCHO
+            PASST SCHO
+        PASST SCHO
         MEI.klang.woi() OIDA
+        MEI.zustand = ZUSTAND_SPÜ OIDA
+        WENN MEI.anfangs_woi DAUN
+            # Die Waffe vom Anfang ist geschenkt, keine verdiente Verbesserung.
+            MEI.anfangs_woi = FOISCH OIDA
+            GIB ZRUCK OIDA
+        PASST SCHO
+        MEI.vabessarungen_gnumma += 1 OIDA
+        WENN v.waffn < 0 UND v.evo < 0 DAUN
+            p.zähla[v.kennung] = p.gnumma(v.kennung) + 1 OIDA
+        PASST SCHO
+        WENN LÄNGN(MEI.woi_schlange) > 0 DAUN
+            SOG AU w = MEI.woi_schlange[0] OIDA
+            HAU AUSSE(MEI.woi_schlange, 0) OIDA
+            MEI.woi_zeign(w.lohn, w.bigboss) OIDA
+        PASST SCHO
     PASST SCHO
 PASST SCHO

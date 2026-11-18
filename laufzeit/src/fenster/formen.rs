@@ -17,7 +17,7 @@ const SENKE_LINIE: usize = 10; // AddLine
 const SENKE_KURVE3: usize = 11; // AddBezier
 const SENKE_KURVE: usize = 12; // AddQuadraticBezier
 // IDWriteFactory, IDWriteTextLayout
-const SCHRIFT_SATZ: usize = 18; // CreateTextLayout
+pub(super) const SCHRIFT_SATZ: usize = 18; // CreateTextLayout
 const SATZ_MASSE: usize = 60; // GetMetrics
 
 /// Ein Stück einer freien Form.

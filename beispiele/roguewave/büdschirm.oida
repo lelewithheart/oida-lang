@@ -3,34 +3,200 @@
 
 BRAUCH fensta OIDA
 BRAUCH mathe OIDA
+BRAUCH texte OIDA
 BRAUCH "werte.oida" OIDA
+BRAUCH "dinge.oida" OIDA
+BRAUCH "gegna.oida" OIDA
+BRAUCH "effekte.oida" OIDA
+BRAUCH "vabessarungen.oida" OIDA
+BRAUCH "bestenlistn.oida" OIDA
 BRAUCH "spü.oida" OIDA
 
+# ------------------------------------------------------------- Bausteine
+
 # Ein Knopf mit Text; gibt WOAHR zurück, wenn er in diesem Bild angeklickt wurde.
-FUNKTIAUN knopf(s Spü, aufschrift KETTN, x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI) GIBT ZRUCK JONA
+FUNKTIAUN knopf(s Spü, aufschrift KETTN, x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, schrift_größe KOMMAZOI) GIBT ZRUCK JONA
     SOG AU drauf = s.maus_drin(x, y, breite, höhe) OIDA
+    valauf_grod(x, y, x, y + höhe) OIDA
     WENN drauf DAUN
-        foab_hex(FOAB_AKZENT_HÖ) OIDA
+        valauf_foab(0, "#7be6ff", 1) OIDA
+        valauf_foab(1, FOAB_AKZENT, 1) OIDA
+        deckung(0.92 + 0.08 * SINUS(s.jetzt * 0.012)) OIDA
     SUNST
-        foab_hex(FOAB_AKZENT) OIDA
-        deckung(0.85) OIDA
+        valauf_foab(0, FOAB_AKZENT_HÖ, 1) OIDA
+        valauf_foab(1, "#1f7ea8", 1) OIDA
+        deckung(0.88) OIDA
     PASST SCHO
     rechteck_rund(x, y, breite, höhe, 8) OIDA
+    WENN drauf DAUN
+        foab_hex("#c5f7ff") OIDA
+        deckung(0.95) OIDA
+        rechteck_rund_rand(x, y, breite, höhe, 8, 1.8) OIDA
+    SUNST
+        foab_hex("#84dcf6") OIDA
+        deckung(0.65) OIDA
+        rechteck_rund_rand(x, y, breite, höhe, 8, 1.2) OIDA
+        foab_hex("#0a1018") OIDA
+        deckung(0.35) OIDA
+        rechteck_rund_rand(x + 1, y + 1, breite - 2, höhe - 2, 7, 1) OIDA
+    PASST SCHO
     deckung(1) OIDA
-    foab_hex("#000000") OIDA
-    schrift_fett(18) OIDA
+    foab_hex("#0b1220") OIDA
+    schrift_fett(schrift_größe) OIDA
     text_mittig(x + breite / 2, y + höhe / 2, aufschrift) OIDA
     GIB ZRUCK drauf UND s.klick OIDA
 PASST SCHO
 
-# Eine Tafel: dunkel, leicht durchscheinend, mit Rand.
-FUNKTIAUN tafl(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, radius KOMMAZOI, rand_foab KETTN, rand_dicke KOMMAZOI)
-    foab_hex(FOAB_TAFL) OIDA
-    deckung(DECKUNG_TAFL) OIDA
+# Eine Tafel: eine Fläche mit runden Ecken, auf Wunsch mit Rand (bei `rand_dicke` 0 ohne).
+FUNKTIAUN tafl(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, radius KOMMAZOI, hex KETTN, dicht KOMMAZOI, rand_hex KETTN, rand_dicht KOMMAZOI, rand_dicke KOMMAZOI)
+    foab_hex(hex) OIDA
+    deckung(dicht) OIDA
     rechteck_rund(x, y, breite, höhe, radius) OIDA
+    WENN rand_dicke > 0 DAUN
+        foab_hex(rand_hex) OIDA
+        deckung(rand_dicht) OIDA
+        rechteck_rund_rand(x, y, breite, höhe, radius, rand_dicke) OIDA
+    PASST SCHO
     deckung(1) OIDA
-    foab_hex(rand_foab) OIDA
-    rechteck_rund_rand(x, y, breite, höhe, radius, rand_dicke) OIDA
+PASST SCHO
+
+# Ein Schieberegler im Stil der Knöpfe. Gibt den neuen Wert (0 bis 1) zurück, solange
+# man ihn zieht, sonst den alten. `numma` hält das Ziehen fest, auch wenn die Maus ihn verlässt.
+FUNKTIAUN schiebaregla(s Spü, aufschrift KETTN, x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, wert KOMMAZOI, numma ZOI) GIBT ZRUCK KOMMAZOI
+    SOG AU neich = wert OIDA
+    SOG AU drüba = s.maus_drin(x, y, breite, höhe) OIDA
+    WENN s.maus_druckt UND (s.schieba == numma ODA (s.schieba == 0 UND drüba)) DAUN
+        s.schieba = numma OIDA
+        neich = klemm((s.maus_x - (x + 14)) / (breite - 28), 0.0, 1.0) OIDA
+    SUNST WENN NED s.maus_druckt UND s.schieba == numma DAUN
+        s.schieba = 0 OIDA
+    PASST SCHO
+    SOG AU drauf = drüba ODA s.schieba == numma OIDA
+    foab_hex("#0c1622") OIDA
+    deckung(0.9) OIDA
+    rechteck_rund(x, y, breite, höhe, 8) OIDA
+    WENN drauf DAUN
+        foab_hex("#c5f7ff") OIDA
+        deckung(0.95) OIDA
+        rechteck_rund_rand(x, y, breite, höhe, 8, 1.8) OIDA
+    SUNST
+        foab_hex("#84dcf6") OIDA
+        deckung(0.65) OIDA
+        rechteck_rund_rand(x, y, breite, höhe, 8, 1.2) OIDA
+    PASST SCHO
+    # Die Schiene, gefüllt bis zum Wert, und der Griff
+    SOG AU sx = x + 14 OIDA
+    SOG AU sb = breite - 28 OIDA
+    SOG AU sy = y + höhe - 11 OIDA
+    foab_hex("#ffffff") OIDA
+    deckung(0.14) OIDA
+    rechteck_rund(sx, sy, sb, 5, 2.5) OIDA
+    deckung(1) OIDA
+    foab_hex(FOAB_AKZENT) OIDA
+    rechteck_rund(sx, sy, GRÖSSTA(5.0, sb * neich), 5, 2.5) OIDA
+    SOG AU griff = 7.0 OIDA
+    WENN drauf DAUN
+        foab_hex("#7be6ff") OIDA
+        griff = 8.0 OIDA
+    PASST SCHO
+    kreis(sx + sb * neich, sy + 2.5, griff) OIDA
+    foab_hex("#ffffff") OIDA
+    kreis_rand(sx + sb * neich, sy + 2.5, griff, 1.5) OIDA
+    WENN NED drauf DAUN
+        foab_hex(FOAB_TEXT) OIDA
+    PASST SCHO
+    schrift_fett(15) OIDA
+    text_mittig(x + breite / 2, y + 14, aufschrift + ": " + KETTN(ZOI(RUNDN(neich * 100))) + "%") OIDA
+    GIB ZRUCK neich OIDA
+PASST SCHO
+
+# Die Übersicht über alles, was die Figur kann, in der Höhe mittig. Mit
+# `mit_vuaschau` steht bei jedem Wert, der sich ändern würde, "alt → neu".
+FUNKTIAUN bau_tafl(x KOMMAZOI, breite KOMMAZOI, p Spiela, vuaschau LISTN VON BauZeile, mit_vuaschau JONA)
+    SOG AU zeiln = bau_zeiln(p) OIDA
+    SOG AU höhe = 44.0 OIDA
+    SOG AU ruhe_höhe = 44.0 OIDA    # ohne die Zeilen, die erst die Vorschau bringt
+    FIA i VON 0 BIS LÄNGN(zeiln) - 1 TUA
+        SOG AU z = zeiln[i] OIDA
+        SOG AU zeilen_höhe = 17.0 OIDA
+        WENN z.kopf DAUN
+            zeilen_höhe = 24.0 OIDA
+        PASST SCHO
+        WENN z.zeig DAUN
+            höhe += zeilen_höhe OIDA
+            ruhe_höhe += zeilen_höhe OIDA
+        SUNST WENN mit_vuaschau DAUN
+            WENN vuaschau[i].zeig DAUN
+                höhe += zeilen_höhe OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+    # Mittig nach der Höhe in Ruhe, damit die Tafel nicht springt, wenn man über eine Karte fährt.
+    SOG AU y = GRÖSSTA(8.0, OBRUNDN((FELD_H - ruhe_höhe) / 2)) OIDA
+    SOG AU links = x + 14 OIDA
+    SOG AU rechts = x + breite - 14 OIDA
+    tafl(x, y, breite, höhe, 8, "#080818", 0.92, FOAB_AKZENT, 1, 1.5) OIDA
+    foab_hex(FOAB_AKZENT) OIDA
+    schrift_fett(14) OIDA
+    text_mittig(x + breite / 2, y + 19, "BUILD") OIDA
+
+    SOG AU zy = y + 34 OIDA
+    FIA i VON 0 BIS LÄNGN(zeiln) - 1 TUA
+        SOG AU z = zeiln[i] OIDA
+        SOG AU dann = z.wert OIDA
+        SOG AU zeig = z.zeig OIDA
+        WENN mit_vuaschau DAUN
+            dann = vuaschau[i].wert OIDA
+            zeig = z.zeig ODA vuaschau[i].zeig OIDA
+        PASST SCHO
+        WENN NED zeig DAUN
+            WEIDA OIDA
+        PASST SCHO
+        WENN z.kopf DAUN
+            schrift_fett(10) OIDA
+            foab_hex(FOAB_AKZENT) OIDA
+            text_links_mitte(links, zy + 14, z.nam) OIDA
+            SOG AU kopf_breite = text_breite(z.nam) OIDA
+            foab_hex("#66ccff") OIDA
+            deckung(0.25) OIDA
+            linie(links + kopf_breite + 8, zy + 14.5, rechts, zy + 14.5, 1) OIDA
+            deckung(1) OIDA
+            zy += 24 OIDA
+            WEIDA OIDA
+        PASST SCHO
+        SOG AU mitte = zy + 8.5 OIDA
+        SOG AU aundas = dann != z.wert OIDA
+        WENN aundas DAUN
+            foab_hex("#66ff99") OIDA
+            deckung(0.1) OIDA
+            rechteck(x + 6, zy, breite - 12, 17) OIDA
+            deckung(1) OIDA
+            foab_hex(FOAB_TEXT) OIDA
+        SUNST
+            foab_hex(FOAB_TEXT_MATT) OIDA
+        PASST SCHO
+        schrift(12) OIDA
+        text_links_mitte(links, mitte, z.nam) OIDA
+        schrift_fett(12) OIDA
+        WENN aundas DAUN
+            foab_hex("#66ff99") OIDA
+            text_rechts_mitte(rechts, mitte, dann) OIDA
+            SOG AU dann_breite = text_breite(dann) OIDA
+            schrift(12) OIDA
+            foab_hex(FOAB_TEXT_MATT) OIDA
+            text_rechts_mitte(rechts - dann_breite, mitte, z.wert + " → ") OIDA
+        SUNST
+            WENN z.matt DAUN
+                foab_hex(FOAB_TEXT_MATT) OIDA
+                deckung(0.55) OIDA
+            SUNST
+                foab_hex(FOAB_TEXT) OIDA
+            PASST SCHO
+            text_rechts_mitte(rechts, mitte, z.wert) OIDA
+            deckung(1) OIDA
+        PASST SCHO
+        zy += 17 OIDA
+    PASST SCHO
 PASST SCHO
 
 # Eine Zeile der Bestenliste, wie sie nach dem Spiel gezeigt wird.
@@ -71,431 +237,898 @@ PASST SCHO
 
 # ------------------------------------------------------------ das Spielfeld
 
+# Das Gitter am Boden; jede fünfte Linie ist heller, damit man die Bewegung gut sieht.
 FUNKTIAUN moi_gitta(s Spü)
+    SOG AU gebiet = gebiet_von(s.gebiet()) OIDA
     SOG AU weite = 80.0 OIDA
     SOG AU links = OBRUNDN(s.kamera.x / weite) * weite OIDA
     SOG AU obn = OBRUNDN(s.kamera.y / weite) * weite OIDA
-    foab_hex(FOAB_GITTA) OIDA
+    SOG AU rechts = s.kamera.x + FELD_B + weite OIDA
+    SOG AU untn = s.kamera.y + FELD_H + weite OIDA
+    foab_hex(gebiet.gitta) OIDA
+    deckung(0.55) OIDA
     SOG AU x = links OIDA
-    SOLONG x < s.kamera.x + FELD_B + weite TUA
+    SOLONG x < rechts TUA
         linie(x, obn, x, obn + FELD_H + weite, 1) OIDA
         x += weite OIDA
     PASST SCHO
     SOG AU y = obn OIDA
-    SOLONG y < s.kamera.y + FELD_H + weite TUA
+    SOLONG y < untn TUA
         linie(links, y, links + FELD_B + weite, y, 1) OIDA
         y += weite OIDA
     PASST SCHO
+    SOG AU grob = weite * 5 OIDA
+    foab_hex(gebiet.rand) OIDA
+    deckung(0.09) OIDA
+    x = OBRUNDN(links / grob) * grob OIDA
+    SOLONG x < rechts TUA
+        linie(x, obn, x, obn + FELD_H + weite, 1.5) OIDA
+        x += grob OIDA
+    PASST SCHO
+    y = OBRUNDN(obn / grob) * grob OIDA
+    SOLONG y < untn TUA
+        linie(links, y, links + FELD_B + weite, y, 1.5) OIDA
+        y += grob OIDA
+    PASST SCHO
+    deckung(1) OIDA
 PASST SCHO
 
 FUNKTIAUN moi_spüfeld(s Spü)
-    # Alles in der Welt ist um die Kamera verschoben.
-    lage_merkn() OIDA
-    schiab(-RUNDN(s.kamera.x + s.kamera.wackl_x), -RUNDN(s.kamera.y + s.kamera.wackl_y)) OIDA
+    SOG AU k = s.kamera OIDA
+    SOG AU jetzt = s.jetzt OIDA
+    SOG AU gebiet = gebiet_von(s.gebiet()) OIDA
 
-    moi_gitta(s) OIDA
-    foab_hex(FOAB_AKZENT) OIDA
-    rechteck_rand(0, 0, WELT_B, WELT_H, 3) OIDA
-
-    # Flammen am Boden: außen orange, innen gelb, und sie flackern.
-    FIA JEDE f IN s.flammen TUA
-        SOG AU stärke = klemm(f.lebn / f.max_lebn, 0.0, 1.0) * 0.5 OIDA
-        SOG AU flackan = 0.8 + 0.2 * SINUS(s.jetzt * 0.02 + f.x) OIDA
-        foab_hex("#ff6400") OIDA
-        deckung(stärke) OIDA
-        kreis(f.x, f.y, f.radius * flackan) OIDA
-        foab_hex("#ffc832") OIDA
-        deckung(stärke * 0.6) OIDA
-        kreis(f.x, f.y, f.radius * 0.5 * flackan) OIDA
+    # Hintergrund und Sterne stehen fast still: Sie liegen weit hinter der Welt.
+    s.effekte.grund_moi(k.x, k.y, s.gebiet(), 1.0 / 60) OIDA
+    foab_hex("#b4c8ff") OIDA
+    FIA JEDE st IN s.sterne TUA
+        SOG AU sx = st.x - k.x * 0.3 OIDA
+        SOG AU sy = st.y - k.y * 0.3 OIDA
+        deckung(klemm(st.hell + 0.15 * SINUS(jetzt * st.tempo + st.vasotz), 0.0, 0.6)) OIDA
+        kreis(sx - FELD_B * OBRUNDN(sx / FELD_B), sy - FELD_H * OBRUNDN(sy / FELD_H), st.radius) OIDA
     PASST SCHO
     deckung(1) OIDA
 
-    FIA JEDE k IN s.xp_kugln TUA
-        k.moi(s.jetzt) OIDA
+    # Ab hier in den Maßen der Welt: Die Kamera verschiebt alles.
+    lage_merkn() OIDA
+    schiab(-(k.x + k.wackl_x), -(k.y + k.wackl_y)) OIDA
+    moi_gitta(s) OIDA
+
+    # Der Rand der Welt leuchtet in der Farbe vom Gebiet.
+    leuchtn(8, gebiet.rand, 1) OIDA
+    foab_hex(gebiet.rand) OIDA
+    rechteck_rand(0, 0, WELT_B, WELT_H, 3) OIDA
+    leuchtn_aus() OIDA
+
+    FIA JEDE fl IN s.flammen TUA
+        SOG AU dicht = klemm(fl.lebn / fl.max_lebn, 0.0, 1.0) * 0.5 OIDA
+        SOG AU flackan = 0.8 + 0.2 * SINUS(jetzt * 0.02 + fl.x) OIDA
+        foab_hex("#ff6400") OIDA
+        deckung(dicht) OIDA
+        kreis(fl.x, fl.y, fl.radius * flackan) OIDA
+        foab_hex("#ffc832") OIDA
+        deckung(dicht * 0.6) OIDA
+        kreis(fl.x, fl.y, fl.radius * 0.5 * flackan) OIDA
     PASST SCHO
-    FIA JEDE g IN s.gegna TUA
-        g.moi(s.jetzt) OIDA
-    PASST SCHO
-    FIA JEDE schuss IN s.schüsse TUA
-        schuss.moi() OIDA
-    PASST SCHO
-    s.spiela.moi() OIDA
-    FIA JEDE f IN s.funkn TUA
-        f.moi() OIDA
+    deckung(1) OIDA
+
+    FIA JEDE sp IN s.spurn TUA
+        sp.moi() OIDA
     PASST SCHO
 
-    # Blitze: jedes Bild ein bisschen anders gezackt
+    # Gezeichnet wird nur, was zu sehen ist.
+    SOG AU l = k.x - 90 OIDA
+    SOG AU r = k.x + FELD_B + 90 OIDA
+    SOG AU o = k.y - 90 OIDA
+    SOG AU u = k.y + FELD_H + 90 OIDA
+    FIA JEDE kugl IN s.kugln TUA
+        WENN kugl.x > l UND kugl.x < r UND kugl.y > o UND kugl.y < u DAUN
+            kugl.moi(jetzt) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FIA JEDE g IN s.gegna TUA
+        WENN g.radius <= 40 UND (g.x < l ODA g.x > r ODA g.y < o ODA g.y > u) DAUN
+            WEIDA OIDA
+        PASST SCHO
+        mischn_dazua() OIDA
+        schein(g.x, g.y, g.radius * 4.2, g.foab, 0.45) OIDA
+        mischn_normal() OIDA
+        WENN g.oita < 0.22 DAUN
+            # Ein neuer Gegner wächst kurz auf seine Größe.
+            SOG AU t = g.oita / 0.22 OIDA
+            lage_merkn() OIDA
+            schiab(g.x, g.y) OIDA
+            vergrößa(0.35 + 0.65 * (1 - (1 - t) * (1 - t))) OIDA
+            schiab(-g.x, -g.y) OIDA
+            gegna_moi(s, g) OIDA
+            lage_zruck() OIDA
+        SUNST
+            gegna_moi(s, g) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    dinga_moi(s) OIDA
+    s.effekte.geista_moi() OIDA
+
+    FIA JEDE schuss IN s.schüsse TUA
+        WENN schuss.x > l UND schuss.x < r UND schuss.y > o UND schuss.y < u DAUN
+            schuss.moi(jetzt) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    s.spiela.moi(jetzt, s.haut) OIDA
+
+    mischn_dazua() OIDA
+    linien_rund(WOAHR) OIDA
+    FIA JEDE f IN s.funkn TUA
+        WENN f.x > l UND f.x < r UND f.y > o UND f.y < u DAUN
+            f.moi() OIDA
+        PASST SCHO
+    PASST SCHO
+    linien_rund(FOISCH) OIDA
+    mischn_normal() OIDA
+    deckung(1) OIDA
+    s.effekte.ringe_moi() OIDA
+
+    FIA JEDE z IN s.zoin TUA
+        WENN z.x > l UND z.x < r UND z.y > o UND z.y < u DAUN
+            z.moi() OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Blitze: jedes Bild neu gezackt, darum flackern sie.
     FIA JEDE b IN s.blitze TUA
-        SOG AU stärke = klemm(b.lebn / 0.15, 0.0, 1.0) OIDA
+        SOG AU dicht = klemm(b.lebn / 0.15, 0.0, 1.0) OIDA
         SOG AU punkte = [b.x1, b.y1] OIDA
         FIA i VON 1 BIS 5 TUA
-            SOG AU zack_x = 0.0 OIDA
-            SOG AU zack_y = 0.0 OIDA
+            SOG AU t = i / 5.0 OIDA
+            SOG AU zx = 0.0 OIDA
+            SOG AU zy = 0.0 OIDA
             WENN i < 5 DAUN
-                zack_x = zufoi_von(-12, 12) OIDA
-                zack_y = zufoi_von(-12, 12) OIDA
+                zx = zufoi_von(-12, 12) OIDA
+                zy = zufoi_von(-12, 12) OIDA
             PASST SCHO
-            HAU EINE(punkte, b.x1 + (b.x2 - b.x1) * i / 5 + zack_x) OIDA
-            HAU EINE(punkte, b.y1 + (b.y2 - b.y1) * i / 5 + zack_y) OIDA
+            HAU EINE(punkte, b.x1 + (b.x2 - b.x1) * t + zx) OIDA
+            HAU EINE(punkte, b.y1 + (b.y2 - b.y1) * t + zy) OIDA
         PASST SCHO
         foab_hex("#88ddff") OIDA
-        deckung(stärke) OIDA
+        deckung(dicht) OIDA
         linienzug(punkte, 2.5, FOISCH) OIDA
         foab_hex("#ffffff") OIDA
-        deckung(stärke * 0.6) OIDA
+        deckung(dicht * 0.6) OIDA
         linienzug(punkte, 1, FOISCH) OIDA
     PASST SCHO
-    deckung(1) OIDA
 
-    # Die Ringe vom Frost
+    foab_hex("#64c8ff") OIDA
     FIA JEDE w IN s.frostwön TUA
-        SOG AU stärke = klemm(w.lebn / 0.4, 0.0, 1.0) * 0.4 OIDA
-        foab_hex("#64c8ff") OIDA
-        deckung(stärke) OIDA
+        SOG AU dicht = klemm(w.lebn / 0.4, 0.0, 1.0) * 0.4 OIDA
+        deckung(dicht) OIDA
         kreis_rand(w.x, w.y, w.radius, 3) OIDA
-        deckung(stärke * 0.3) OIDA
+        deckung(dicht * 0.3) OIDA
         kreis(w.x, w.y, w.radius) OIDA
     PASST SCHO
     deckung(1) OIDA
-
     lage_zruck() OIDA
+
+    randschottn_moi() OIDA
+
+    # Jedes Gebiet hat seine eigene Stimmung.
+    WENN s.gebiet() == 1 DAUN
+        # Acid Grid: zwei blasse Linien wandern über das Bild.
+        SOG AU weg = jetzt * 0.15 OIDA
+        SOG AU zeile = weg - (FELD_H + 40) * OBRUNDN(weg / (FELD_H + 40)) - 20 OIDA
+        foab_hex("#66ff99") OIDA
+        deckung(0.03) OIDA
+        rechteck(0, zeile, FELD_B, 3) OIDA
+        rechteck(0, zeile - FELD_H * 0.5, FELD_B, 2) OIDA
+    SUNST WENN s.gebiet() == 2 DAUN
+        # Crimson Core: Das Bild pulsiert rötlich, und Glut steigt auf.
+        foab_hex("#ff2828") OIDA
+        deckung(0.02 + 0.015 * SINUS(jetzt * 0.004)) OIDA
+        rechteck(0, 0, FELD_B, FELD_H) OIDA
+        foab_hex("#ff643c") OIDA
+        FIA i VON 0 BIS 11 TUA
+            SOG AU gx = i * 83 + jetzt * 0.03 OIDA
+            SOG AU gy = i * 127 + jetzt * 0.05 OIDA
+            deckung(0.15 + 0.1 * SINUS(jetzt * 0.005 + i)) OIDA
+            kreis(gx - FELD_B * OBRUNDN(gx / FELD_B), FELD_H - (gy - FELD_H * OBRUNDN(gy / FELD_H)), 1.5) OIDA
+        PASST SCHO
+    PASST SCHO
+    deckung(1) OIDA
+
+    # Ein kurzes Aufleuchten beim Stufenaufstieg und bei besonderen Momenten
+    WENN s.stufn_blitz_uhr > 0 DAUN
+        foab_hex(FOAB_AKZENT) OIDA
+        deckung(klemm(s.stufn_blitz_uhr / 0.3, 0.0, 0.25)) OIDA
+        rechteck(0, 0, FELD_B, FELD_H) OIDA
+    PASST SCHO
+    WENN s.blitz_uhr > 0 DAUN
+        foab_hex(s.blitz_foab) OIDA
+        deckung(klemm(s.blitz_uhr / 0.26, 0.0, 0.24) * s.effekte_stärke) OIDA
+        rechteck(0, 0, FELD_B, FELD_H) OIDA
+    PASST SCHO
+    WENN s.hinweis_uhr > 0 DAUN
+        SOG AU t = klemm(s.hinweis_uhr / 1.1, 0.0, 1.0) OIDA
+        foab_hex(s.hinweis_foab) OIDA
+        deckung(t) OIDA
+        schrift_fett(20) OIDA
+        text_mittig(FELD_B / 2, 190 - (1 - t) * 10, s.hinweis_text) OIDA
+    PASST SCHO
+    deckung(1) OIDA
 
     WENN s.zustand == ZUSTAND_SPÜ DAUN
         moi_anzeige(s) OIDA
     PASST SCHO
 PASST SCHO
 
-# -------------------------------------------------- die Anzeige über dem Spiel
+# --------------------------------------------------------------- Anzeige
 
-# Ein Balken mit Text darin: Leben und Erfahrung.
-FUNKTIAUN boikn(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, anteil KOMMAZOI, foab KETTN, grund KETTN, aufschrift KETTN)
-    foab_hex(grund) OIDA
-    rechteck_rund(x, y, breite, höhe, 4) OIDA
-    foab_hex(foab) OIDA
-    SOG AU voi = breite * klemm(anteil, 0.0, 1.0) OIDA
-    WENN voi > 0 DAUN
-        rechteck_rund(x, y, voi, höhe, KLANSTA(4.0, voi / 2)) OIDA
-    PASST SCHO
-    foab_hex(FOAB_TEXT) OIDA
-    schrift_fett(12) OIDA
-    text_mittig(x + breite / 2, y + höhe / 2, aufschrift) OIDA
-PASST SCHO
-
+# Leben, Erfahrung, Welle, Zeit und alles andere, was über dem Spielfeld steht.
 FUNKTIAUN moi_anzeige(s Spü)
     SOG AU p = s.spiela OIDA
+    SOG AU jetzt = s.jetzt OIDA
     SOG AU rand = 16.0 OIDA
-    SOG AU breite = 220.0 OIDA
-    SOG AU höhe = 18.0 OIDA
-    SOG AU xp_y = rand + höhe + 6 OIDA
+    SOG AU mitte = FELD_B / 2.0 OIDA
 
-    boikn(rand, rand, breite, höhe, p.lebn / p.max_lebn, FOAB_LEBN, FOAB_LEBN_GRUND, "HP  " + KETTN(ZOI(AUFRUNDN(p.lebn))) + " / " + KETTN(p.max_lebn)) OIDA
-    boikn(rand, xp_y, breite, höhe, KOMMAZOI(p.xp) / p.xp_ziel, FOAB_XP_BOIKN, FOAB_XP_GRUND, "XP  " + KETTN(p.xp) + " / " + KETTN(p.xp_ziel)) OIDA
+    # Dunkle Flächen hinter den Zahlen, damit man sie über allem lesen kann
+    tafl(rand - 6, rand - 6, 280, 68, 8, "#080a18", 0.72, "", 0, 0) OIDA
+    SOG AU mittn_höhe = 54.0 OIDA
+    WENN s.endboss_do DAUN
+        mittn_höhe = 58.0 OIDA
+    PASST SCHO
+    WENN s.ereignis != EREIGNIS_KANS DAUN
+        mittn_höhe += 18 OIDA
+    PASST SCHO
+    tafl(mitte - 125, rand - 8, 250, mittn_höhe, 8, "#080a18", 0.68, "", 0, 0) OIDA
+    tafl(FELD_B - 136 - rand + 2, rand - 8, 136, 58, 8, "#080a18", 0.68, "", 0, 0) OIDA
+
+    # Bei wenig Leben wird der Bildrand rot.
+    SOG AU lebn_anteil = p.lebn / p.max_lebn OIDA
+    WENN lebn_anteil < 0.3 DAUN
+        valauf_rund(mitte, FELD_H / 2, FELD_B * 0.3, FELD_B * 0.7) OIDA
+        valauf_foab(0, "#000000", 0) OIDA
+        valauf_foab(1, "#b40000", (1 - lebn_anteil / 0.3) * (0.1 + 0.06 * SINUS(jetzt * 0.008))) OIDA
+        deckung(1) OIDA
+        rechteck(0, 0, FELD_B, FELD_H) OIDA
+    PASST SCHO
+
+    # Leben: Der Balken folgt weich, dahinter steht kurz, was gerade verloren ging.
+    SOG AU werte = s.effekte.boikn_werte(p, s.büd_dauer) OIDA
+    SOG AU bb = 220.0 OIDA
+    SOG AU bh = 18.0 OIDA
+    foab_hex(FOAB_LEBN_GRUND) OIDA
+    deckung(1) OIDA
+    rechteck_rund(rand, rand, bb, bh, 4) OIDA
+    foab_hex("#ffe6e6") OIDA
+    deckung(0.55) OIDA
+    rechteck_rund(rand, rand, bb * werte[1], bh, 4) OIDA
+    deckung(1) OIDA
+    WENN lebn_anteil < 0.25 DAUN
+        foab_hex(FOAB_GFOAH) OIDA
+    SUNST WENN lebn_anteil < 0.5 DAUN
+        foab_hex("#dd8822") OIDA
+    SUNST
+        foab_hex(FOAB_LEBN) OIDA
+    PASST SCHO
+    rechteck_rund(rand, rand, bb * werte[0], bh, 4) OIDA
+    foab_hex(FOAB_TEXT) OIDA
+    schrift_fett(12) OIDA
+    text_mittig(rand + bb / 2, rand + bh / 2, "HP  " + KETTN(ZOI(AUFRUNDN(p.lebn))) + " / " + KETTN(p.max_lebn)) OIDA
+
+    # Erfahrung
+    SOG AU xp_y = rand + bh + 6 OIDA
+    foab_hex(FOAB_XP_GRUND) OIDA
+    rechteck_rund(rand, xp_y, bb, bh, 4) OIDA
+    foab_hex(FOAB_XP_BOIKN) OIDA
+    rechteck_rund(rand, xp_y, bb * werte[2], bh, 4) OIDA
+    foab_hex(FOAB_TEXT) OIDA
+    text_mittig(rand + bb / 2, xp_y + bh / 2, "XP  " + KETTN(p.xp) + " / " + KETTN(p.xp_ziel)) OIDA
 
     foab_hex(FOAB_AKZENT) OIDA
     schrift_fett(16) OIDA
-    text_links_mitte(rand + breite + 10, rand + höhe / 2 + 6, "LV " + KETTN(p.stufn)) OIDA
-
+    text_links_mitte(rand + bb + 10, rand + bh / 2 + 6, "LV " + KETTN(p.stufn)) OIDA
     WENN p.heilung > 0 DAUN
-        schrift_fett(12) OIDA
         foab_hex("#55dd88") OIDA
-        text_links_mitte(rand + breite + 10, xp_y + höhe / 2 + 2, "💚 +" + KETTN(p.heilung) + "/s") OIDA
+        schrift_fett(12) OIDA
+        text_links_mitte(rand + bb + 10, xp_y + bh / 2 + 2, "+" + KETTN(p.heilung) + " HP/s") OIDA
     PASST SCHO
     WENN p.rüstung > 0 DAUN
-        schrift_fett(12) OIDA
         foab_hex("#88bbff") OIDA
-        text_links_mitte(rand, xp_y + höhe + 16, "🛡️ " + KETTN(p.rüstung) + " Armor (−" + KETTN(p.rüstung) + " dmg taken)") OIDA
+        schrift_fett(12) OIDA
+        text_links_mitte(rand, xp_y + bh + 16, KETTN(p.rüstung) + " Armor (-" + KETTN(p.rüstung) + " dmg taken)") OIDA
     PASST SCHO
 
-    # Oben in der Mitte: die Welle und wie weit sie ist
-    foab_hex(FOAB_TEXT) OIDA
-    schrift_fett(22) OIDA
-    text_mittig(FELD_B / 2, rand + 14, "Wave " + KETTN(s.wön)) OIDA
-    schrift(14) OIDA
-    foab_hex(FOAB_TEXT_MATT) OIDA
-    text_mittig(FELD_B / 2, rand + 36, "Kills: " + KETTN(s.wön_tote) + " / " + KETTN(s.wön_ziel)) OIDA
+    # Oben in der Mitte: die Welle, oder der Endboss mit seinem Leben
+    WENN s.endboss_do DAUN
+        foab_hex("#ff00ff") OIDA
+        schrift_fett(24) OIDA
+        text_mittig(mitte, rand + 14, "☠ The Null Sovereign ☠") OIDA
+        SOG AU boss = s.boss OIDA
+        WENN boss != NIX DAUN
+            WENN boss.lebt DAUN
+                SOG AU anteil = klemm(boss.lebn / boss.max_lebn, 0.0, 1.0) OIDA
+                foab_hex(FOAB_LEBN_GRUND) OIDA
+                rechteck(mitte - 150, rand + 26, 300, 12) OIDA
+                WENN boss.phasn == 3 DAUN
+                    foab_hex("#ff0044") OIDA
+                SUNST WENN boss.phasn == 2 DAUN
+                    foab_hex("#ff44aa") OIDA
+                SUNST
+                    foab_hex("#ff00ff") OIDA
+                PASST SCHO
+                rechteck(mitte - 150, rand + 26, 300 * anteil, 12) OIDA
+                foab_hex("#ffffff") OIDA
+                schrift_fett(11) OIDA
+                text_mittig(mitte, rand + 32, "Phase " + KETTN(boss.phasn) + " — " + KETTN(ZOI(AUFRUNDN(anteil * 100))) + "%") OIDA
+            PASST SCHO
+        PASST SCHO
+    SUNST
+        foab_hex(FOAB_TEXT) OIDA
+        schrift_fett(24) OIDA
+        WENN s.endlos DAUN
+            text_mittig(mitte, rand + 14, "♾ ENDLESS " + KETTN(s.wön)) OIDA
+        SUNST
+            text_mittig(mitte, rand + 14, "Wave " + KETTN(s.wön)) OIDA
+        PASST SCHO
+        foab_hex("#b5c2d3") OIDA
+        schrift_fett(14) OIDA
+        text_mittig(mitte, rand + 36, "Kills: " + KETTN(s.wön_tote) + " / " + KETTN(s.wön_ziel)) OIDA
+    PASST SCHO
+    WENN s.ereignis != EREIGNIS_KANS DAUN
+        foab_hex(ereignis_foab(s.ereignis)) OIDA
+        schrift_fett(12) OIDA
+        SOG AU ey = rand + 56 OIDA
+        WENN s.endboss_do DAUN
+            ey = rand + 36 OIDA
+        PASST SCHO
+        text_mittig(mitte, ey, "◆ " + ereignis_nam(s.ereignis)) OIDA
+    PASST SCHO
 
-    # Rechts oben: alle Treffer, die Zeit, die Spielart
+    # Rechts oben: Treffer, Zeit, Spielart
     foab_hex(FOAB_TEXT) OIDA
     schrift_fett(16) OIDA
-    text_rechts_mitte(FELD_B - rand, rand + 16, "☠ " + KETTN(s.tote)) OIDA
-    schrift(14) OIDA
-    foab_hex(FOAB_TEXT_MATT) OIDA
+    SOG AU tote = KETTN(s.tote) OIDA
+    text_rechts_mitte(FELD_B - rand, rand + 16, tote) OIDA
+    text_rechts_mitte(FELD_B - rand - text_breite(tote) - 6, rand + 16, "☠") OIDA
+    foab_hex("#b5c2d3") OIDA
+    schrift_fett(14) OIDA
     text_rechts_mitte(FELD_B - rand, rand + 38, zeit_text(s.spüzeit)) OIDA
-    WENN s.modus == "easy" DAUN
+    WENN s.modus != "normal" DAUN
         schrift_fett(12) OIDA
-        foab_hex("#55ff88") OIDA
-        text_rechts_mitte(FELD_B - rand, rand + 56, "😊 EASY") OIDA
-    SUNST WENN s.modus == "hard" DAUN
-        schrift_fett(12) OIDA
-        foab_hex(FOAB_GFOAH) OIDA
-        text_rechts_mitte(FELD_B - rand, rand + 56, "💀 HARD") OIDA
+        WENN s.modus == "easy" DAUN
+            foab_hex("#55ff88") OIDA
+        SUNST
+            foab_hex(FOAB_GFOAH) OIDA
+        PASST SCHO
+        text_rechts_mitte(FELD_B - rand, rand + 56, modus_nam(s.modus)) OIDA
     PASST SCHO
 
-    # Zwischen zwei Wellen: die Ankündigung, pulsierend
-    WENN NED s.wön_rennt UND s.rast_uhr > 0 UND NED s.offn_gwunna DAUN
-        foab_hex(FOAB_AKZENT) OIDA
+    # Zwischen zwei Wellen: was als Nächstes kommt
+    WENN NED s.wön_rennt UND s.rast_uhr > 0 UND NED s.offn_gwunna UND NED s.endboss_do DAUN
+        deckung(0.6 + 0.4 * SINUS(jetzt * 0.005)) OIDA
         schrift_fett(28) OIDA
-        deckung(0.6 + 0.4 * SINUS(s.jetzt * 0.005)) OIDA
-        WENN s.wön + 1 == WÖN_LETZTE DAUN
-            text_mittig(FELD_B / 2, FELD_H / 2 - 40, "⚠️ FINAL WAVE Incoming...") OIDA
+        WENN s.offn_endboss DAUN
+            foab_hex("#ff00ff") OIDA
+            text_mittig(mitte, FELD_H / 2 - 40, "☠ FINAL BOSS Incoming... ☠") OIDA
+        SUNST WENN s.wön + 1 == WÖN_LETZTE DAUN
+            foab_hex(FOAB_AKZENT) OIDA
+            text_mittig(mitte, FELD_H / 2 - 40, "⚠️ FINAL WAVE Incoming...") OIDA
         SUNST
-            text_mittig(FELD_B / 2, FELD_H / 2 - 40, "Wave " + KETTN(s.wön + 1) + " Incoming...") OIDA
+            foab_hex(FOAB_AKZENT) OIDA
+            text_mittig(mitte, FELD_H / 2 - 40, "Wave " + KETTN(s.wön + 1) + " Incoming...") OIDA
         PASST SCHO
         deckung(1) OIDA
     PASST SCHO
 
-    # Unten in der Mitte: der Lebensbalken vom Boss
+    # Das Banner zur Welle: schiebt sich herein und verblasst.
+    WENN s.banna_uhr > 0 DAUN
+        SOG AU foatschritt = 1 - s.banna_uhr / 2.0 OIDA
+        SOG AU eina = 1.0 OIDA
+        WENN foatschritt < 0.15 DAUN
+            eina = GRÖSSTA(0.0, foatschritt / 0.15) OIDA
+        PASST SCHO
+        SOG AU aussa = 1.0 OIDA
+        WENN s.banna_uhr < 0.5 DAUN
+            aussa = s.banna_uhr / 0.5 OIDA
+        PASST SCHO
+        SOG AU dicht = aussa * eina * 0.92 OIDA
+        SOG AU by = 92 - (1 - eina) * 14 OIDA
+        SOG AU vom_boss = enthoit(s.banna_text, "BOSS") OIDA
+        WENN vom_boss DAUN
+            tafl(mitte - 170, by, 340, 50, 10, "#b4143c", 0.85 * dicht, "#ff4488", dicht, 2) OIDA
+            foab_hex(FOAB_GOID) OIDA
+        SUNST
+            tafl(mitte - 170, by, 340, 50, 10, "#0a0f28", 0.85 * dicht, FOAB_AKZENT, dicht, 2) OIDA
+            foab_hex(FOAB_AKZENT) OIDA
+        PASST SCHO
+        deckung(dicht) OIDA
+        schrift_fett(22) OIDA
+        text_mittig(mitte, by + 25, s.banna_text) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+
+    # Die Trefferserie: je länger, desto größer und bunter
+    WENN s.combo >= 3 UND s.combo_uhr > 0 DAUN
+        SOG AU stufn = 0 OIDA
+        SOG AU hex = "#66ddff" OIDA
+        WENN s.combo >= 25 DAUN
+            stufn = 3 OIDA
+            hex = "#ff55ff" OIDA
+        SUNST WENN s.combo >= 10 DAUN
+            stufn = 2 OIDA
+            hex = "#ffd700" OIDA
+        SUNST WENN s.combo >= 5 DAUN
+            stufn = 1 OIDA
+            hex = "#ff8844" OIDA
+        PASST SCHO
+        SOG AU größe = OBRUNDN((26 + stufn * 4) * (1 + s.combo_puls * 0.35)) OIDA
+        SOG AU dicht = klemm(s.combo_uhr / 0.5, 0.4, 1.0) OIDA
+        SOG AU zoi_text = KETTN(s.combo) + "x" OIDA
+        schrift_fett(größe) OIDA
+        foab_hex("#000000") OIDA
+        deckung(0.6 * dicht) OIDA
+        text_mittig(mitte + 2, 160, zoi_text) OIDA
+        text_mittig(mitte - 2, 156, zoi_text) OIDA
+        foab_hex(hex) OIDA
+        deckung(dicht) OIDA
+        text_mittig(mitte, 158, zoi_text) OIDA
+        foab_hex("#ffffff") OIDA
+        deckung(0.75 * dicht) OIDA
+        schrift_fett(10) OIDA
+        text_mittig(mitte, 158 + größe * 0.55 + 6, "COMBO") OIDA
+        # Der Balken läuft mit der Zeit ab, die noch bleibt.
+        deckung(0.15 * dicht) OIDA
+        rechteck(mitte - 40, 158 + größe * 0.55 + 15, 80, 3) OIDA
+        foab_hex(hex) OIDA
+        deckung(dicht) OIDA
+        rechteck(mitte - 40, 158 + größe * 0.55 + 15, 80 * klemm(s.combo_uhr / COMBO_ZEIT, 0.0, 1.0), 3) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+
+    # Die Tipps am Anfang, immer nur einer
+    WENN NED s.lern_fertig DAUN
+        SOG AU tipp = "WASD or arrows to move" OIDA
+        SOG AU bleibt = 8.0 OIDA
+        WENN s.lern_stufn == 1 DAUN
+            tipp = "You aim and shoot automatically. Grab the green XP." OIDA
+            WENN s.modus == "hard" DAUN
+                tipp = "The mouse aims. Grab the green XP." OIDA
+            PASST SCHO
+            bleibt = 5.0 OIDA
+        SUNST WENN s.lern_stufn == 2 DAUN
+            tipp = "SPACE: dash through enemies" OIDA
+            bleibt = 4.0 OIDA
+        PASST SCHO
+        SOG AU eina = KLANSTA(1.0, s.lern_uhr * 4) OIDA
+        SOG AU dicht = eina OIDA
+        WENN s.lern_stufn > 0 DAUN
+            dicht = eina * klemm((bleibt - s.lern_uhr) * 2, 0.0, 1.0) OIDA
+        PASST SCHO
+        schrift_fett(15) OIDA
+        SOG AU tb = text_breite(tipp) + 36 OIDA
+        SOG AU ty = FELD_H - 118 + (1 - eina) * 8 OIDA
+        tafl(mitte - tb / 2, ty, tb, 34, 17, "#080a18", 0.88 * dicht, "#66ccff", 0.6 * dicht, 1.2) OIDA
+        foab_hex(FOAB_TEXT) OIDA
+        deckung(dicht) OIDA
+        schrift_fett(15) OIDA
+        text_mittig(mitte, ty + 18, tipp) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+
+    # Das Leben vom Boss, unten in der Mitte. Steht er offen da, ist der Balken golden.
     SOG AU boss = s.boss OIDA
     WENN boss != NIX DAUN
-        WENN boss.lebt DAUN
-            SOG AU groß = boss.oat == OAT_ENDBOSS OIDA
-            SOG AU bb = 300.0 OIDA
-            SOG AU bh = 10.0 OIDA
-            SOG AU hell = "#ff88bb" OIDA
-            SOG AU dunkl = "#dd2277" OIDA
-            SOG AU nam = "★ MINIBOSS ★" OIDA
+        WENN boss.lebt UND boss.oat != OAT_ENDBOSS DAUN
+            SOG AU groß = boss.oat == OAT_BIGBOSS OIDA
+            SOG AU breite = 300.0 OIDA
+            SOG AU höhe = 10.0 OIDA
+            SOG AU hex = "#dd2277" OIDA
+            SOG AU hö = "#ff88bb" OIDA
             WENN groß DAUN
-                bb = 400.0 OIDA
-                bh = 14.0 OIDA
-                hell = "#ff3333" OIDA
-                dunkl = "#cc0000" OIDA
-                nam = "★ BIG BOSS ★" OIDA
+                breite = 400.0 OIDA
+                höhe = 14.0 OIDA
+                hex = "#cc0000" OIDA
+                hö = "#ff3333" OIDA
             PASST SCHO
-            SOG AU bx = FELD_B / 2 - bb / 2 OIDA
+            SOG AU bx = mitte - breite / 2 OIDA
             SOG AU by = FELD_H - rand - 44 OIDA
+            foab_hex(hö) OIDA
             schrift_fett(12) OIDA
-            foab_hex(hell) OIDA
-            text_mittig(FELD_B / 2, by - 4, nam) OIDA
+            text_mittig(mitte, by - 10, "★ " + boss.nam + " ★") OIDA
+            WENN boss.is_offn() DAUN
+                hex = "#ffd700" OIDA
+                hö = "#ffd700" OIDA
+            PASST SCHO
             foab_hex("#330000") OIDA
-            rechteck(bx, by, bb, bh) OIDA
-            foab_hex(dunkl) OIDA
-            rechteck(bx, by, bb * klemm(KOMMAZOI(boss.lebn) / boss.max_lebn, 0.0, 1.0), bh) OIDA
-            foab_hex(hell) OIDA
-            rechteck_rand(bx, by, bb, bh, 1.5) OIDA
-        SUNST
-            s.boss = NIX OIDA
+            rechteck(bx, by, breite, höhe) OIDA
+            foab_hex(hex) OIDA
+            rechteck(bx, by, breite * klemm(boss.lebn / boss.max_lebn, 0.0, 1.0), höhe) OIDA
+            foab_hex(hö) OIDA
+            rechteck_rand(bx, by, breite, höhe, 1.5) OIDA
+            WENN boss.is_offn() DAUN
+                schrift_fett(11) OIDA
+                text_mittig(mitte, by + höhe + 9, "EXPOSED  ×2 damage") OIDA
+            PASST SCHO
         PASST SCHO
     PASST SCHO
 
-    # Links unten: die Waffen mit ihrer Stufe
-    SOG AU waffn_büdl = ["🔵", "⚡", "❄️", "🔥"] OIDA
-    SOG AU waffn_stufn = [p.schüd_stufn, p.blitz_stufn, p.frost_stufn, p.feia_stufn] OIDA
-    SOG AU platz = 0 OIDA
-    FIA i VON 0 BIS 3 TUA
-        WENN waffn_stufn[i] > 0 DAUN
-            SOG AU wx = rand + platz * 50 OIDA
-            SOG AU wy = FELD_H - rand - 10 OIDA
-            foab_hex(FOAB_TEXT) OIDA
-            schrift(22) OIDA
-            text_links_mitte(wx, wy, waffn_büdl[i]) OIDA
+    # Links unten: die Waffen mit ihrer Stufe. Eine weiterentwickelte hat einen goldenen Ring.
+    SOG AU symbole = ["orbit", "lightning", "frost", "flame"] OIDA
+    SOG AU foabn = ["#66ccff", "#88ddff", "#bfeaff", "#ff8a2a"] OIDA
+    SOG AU plotz = 0 OIDA
+    FIA waffn VON 0 BIS 3 TUA
+        WENN p.waffn_stufn(waffn) > 0 DAUN
+            SOG AU wx = rand + 12 + plotz * 50 OIDA
+            SOG AU wy = FELD_H - rand - 14 OIDA
+            WENN p.waffn_evo(waffn) DAUN
+                foab_hex(FOAB_GOID) OIDA
+                kreis_rand(wx, wy, 18, 2) OIDA
+            PASST SCHO
+            symbol(symbole[waffn], wx, wy, 24, foabn[waffn], 2.2) OIDA
             foab_hex(FOAB_AKZENT) OIDA
             schrift_fett(11) OIDA
-            text_links_mitte(wx + 2, wy + 14, "Lv" + KETTN(waffn_stufn[i])) OIDA
-            platz += 1 OIDA
+            text_mittig(wx, wy + 18, "Lv" + KETTN(p.waffn_stufn(waffn))) OIDA
+            plotz += 1 OIDA
         PASST SCHO
     PASST SCHO
 
-    # Rechts unten: welche Verbesserungen wie oft genommen wurden
-    SOG AU büdl LISTN VON KETTN = [] OIDA
+    WENN p.overdrive > 0 DAUN
+        SOG AU oy = FELD_H - rand - 72 OIDA
+        foab_hex("#000000") OIDA
+        deckung(0.5) OIDA
+        rechteck_rund(mitte - 100, oy, 200, 8, 4) OIDA
+        deckung(1) OIDA
+        foab_hex("#ffcc33") OIDA
+        rechteck_rund(mitte - 100, oy, 200 * klemm(p.overdrive / p.overdrive_ganz, 0.0, 1.0), 8, 4) OIDA
+        schrift_fett(11) OIDA
+        text_mittig(mitte, oy - 9, "OVERDRIVE") OIDA
+    PASST SCHO
+
+    pfeile_moi(s) OIDA
+
+    # Rechts unten: welche Verbesserungen man hat und wie oft
+    SOG AU gnumma LISTN VON Gruppn = [] OIDA
     SOG AU wia_oft LISTN VON ZOI = [] OIDA
     FIA JEDE gruppn IN olle_gruppn() TUA
-        SOG AU summe = 0 OIDA
+        SOG AU n = 0 OIDA
         FIA JEDE kennung IN gruppn.kennungen TUA
-            summe += p.zähla[kennung] ODA HOID 0 OIDA
+            n += p.gnumma(kennung) OIDA
         PASST SCHO
-        WENN summe > 0 DAUN
-            HAU EINE(büdl, gruppn.büdl) OIDA
-            HAU EINE(wia_oft, summe) OIDA
+        WENN n > 0 DAUN
+            HAU EINE(gnumma, gruppn) OIDA
+            HAU EINE(wia_oft, n) OIDA
         PASST SCHO
     PASST SCHO
-    FIA i VON 0 BIS LÄNGN(büdl) - 1 TUA
-        SOG AU sx = FELD_B - rand - (LÄNGN(büdl) - i) * 46 + 2 OIDA
+    FIA i VON 0 BIS LÄNGN(gnumma) - 1 TUA
+        SOG AU sx = FELD_B - rand - (LÄNGN(gnumma) - i) * 46 + 2 OIDA
         SOG AU sy = FELD_H - rand - 10 OIDA
         foab_hex(FOAB_TEXT) OIDA
         schrift(22) OIDA
-        text_links_mitte(sx, sy, büdl[i]) OIDA
+        text_links_mitte(sx, sy, gnumma[i].büdl) OIDA
         foab_hex(FOAB_AKZENT) OIDA
         schrift_fett(11) OIDA
         text_links_mitte(sx + 2, sy + 14, "x" + KETTN(wia_oft[i])) OIDA
     PASST SCHO
 PASST SCHO
 
-# ---------------------------------------------------------------- das Menü
+# ------------------------------------------------------------- Anfangsbild
 
 FUNKTIAUN moi_anfang(s Spü)
-    SOG AU mitte = FELD_B / 2 OIDA
-    SOG AU hoib = FELD_H / 2 OIDA
+    SOG AU jetzt = s.jetzt OIDA
+    SOG AU mitte = FELD_B / 2.0 OIDA
+    anfang_grund_moi(jetzt) OIDA
 
+    # Der Titel: von Weiß über Hellblau nach Rosa, mit einem Schein, der atmet
+    leuchtn(28, FOAB_AKZENT, 0.55 + 0.15 * SINUS(jetzt * 0.002)) OIDA
+    valauf_grod(0, 70, 0, 122) OIDA
+    valauf_foab(0, "#ffffff", 1) OIDA
+    valauf_foab(0.55, "#9fe9ff", 1) OIDA
+    valauf_foab(1, "#ff7ad9", 1) OIDA
+    schrift_fett(54) OIDA
+    text_mittig(mitte, 96, "ROGUEWAVE") OIDA
+    leuchtn_aus() OIDA
     foab_hex(FOAB_AKZENT) OIDA
-    schrift_fett(60) OIDA
-    text_mittig(mitte, hoib - 130, "ROGUEWAVE") OIDA
-    foab_hex(FOAB_TEXT_MATT) OIDA
-    schrift(20) OIDA
-    text_mittig(mitte, hoib - 85, "Survivor Roguelite") OIDA
-
-    # Die drei Spielarten zur Auswahl
-    SOG AU modi = ["easy", "normal", "hard"] OIDA
-    SOG AU nam = ["😊 EASY", "⚔️ NORMAL", "💀 HARD"] OIDA
-    SOG AU wos = ["Faster XP progression", "Auto-aim", "Manual aim (mouse)"] OIDA
-    SOG AU mb = 140.0 OIDA
-    SOG AU mh = 46.0 OIDA
-    SOG AU my = hoib - 52.0 OIDA
-    SOG AU mx0 = mitte - (3 * mb + 2 * 8) / 2 OIDA
     schrift_fett(13) OIDA
-    text_mittig(mitte, my - 12, "SELECT MODE") OIDA
+    text_mittig(mitte, 136, "S U R V I V O R   R O G U E L I T E") OIDA
+
+    # Die Spielart: drei Karten nebeneinander
+    SOG AU breite = 520.0 OIDA
+    SOG AU links = mitte - breite / 2 OIDA
+    SOG AU tafl_y = 152.0 OIDA
+    tafl(links - 22, tafl_y, breite + 44, 120, 14, "#080c1a", 0.72, "#66ccff", 0.18, 1.2) OIDA
+    foab_hex(FOAB_TEXT_MATT) OIDA
+    schrift_fett(11) OIDA
+    text_links_mitte(links, tafl_y + 24, "DIFFICULTY") OIDA
+    SOG AU modi = ["easy", "normal", "hard"] OIDA
+    SOG AU wos = ["Faster XP", "Auto-aim", "Manual aim"] OIDA
+    SOG AU koatn_y = tafl_y + 40 OIDA
+    SOG AU koatn_b = (breite - 24) / 3 OIDA
     FIA i VON 0 BIS 2 TUA
-        SOG AU mx = mx0 + i * (mb + 8) OIDA
+        SOG AU kx = links + i * (koatn_b + 12) OIDA
         SOG AU gwöht = s.modus == modi[i] OIDA
-        SOG AU drauf = s.maus_drin(mx, my, mb, mh) OIDA
+        SOG AU drauf = s.maus_drin(kx, koatn_y, koatn_b, 56) OIDA
+        SOG AU schrift_foab = FOAB_TEXT OIDA
+        SOG AU matt_foab = FOAB_TEXT_MATT OIDA
         WENN gwöht DAUN
-            foab_hex(FOAB_AKZENT) OIDA
-            deckung(0.9) OIDA
+            valauf_grod(kx, koatn_y, kx, koatn_y + 56) OIDA
+            valauf_foab(0, "#33ccff", 0.95) OIDA
+            valauf_foab(1, "#1f9fd0", 0.95) OIDA
+            deckung(1) OIDA
+            rechteck_rund(kx, koatn_y, koatn_b, 56, 10) OIDA
+            foab_hex("#8beeff") OIDA
+            rechteck_rund_rand(kx, koatn_y, koatn_b, 56, 10, 2) OIDA
+            schrift_foab = "#062033" OIDA
+            matt_foab = "#0a2a3a" OIDA
         SUNST WENN drauf DAUN
-            foab_hex(FOAB_AKZENT) OIDA
-            deckung(0.18) OIDA
+            tafl(kx, koatn_y, koatn_b, 56, 10, "#33ccff", 0.16, "#8cdcf6", 0.7, 1.3) OIDA
         SUNST
-            foab_hex("#ffffff") OIDA
-            deckung(0.06) OIDA
+            tafl(kx, koatn_y, koatn_b, 56, 10, "#ffffff", 0.05, "#ffffff", 0.14, 1.3) OIDA
         PASST SCHO
-        rechteck_rund(mx, my, mb, mh, 8) OIDA
-        deckung(1) OIDA
-        WENN gwöht DAUN
-            foab_hex(FOAB_AKZENT) OIDA
-            rechteck_rund_rand(mx, my, mb, mh, 8, 2) OIDA
-            foab_hex("#000000") OIDA
-        SUNST WENN drauf DAUN
-            foab_hex(FOAB_AKZENT_HÖ) OIDA
-            rechteck_rund_rand(mx, my, mb, mh, 8, 1.5) OIDA
-        SUNST
-            foab_hex(FOAB_RAHMEN) OIDA
-            rechteck_rund_rand(mx, my, mb, mh, 8, 1.5) OIDA
-            foab_hex(FOAB_TEXT) OIDA
-        PASST SCHO
+        symbol(modi[i], kx + koatn_b / 2, koatn_y + 16, 19, schrift_foab, 2.2) OIDA
+        foab_hex(schrift_foab) OIDA
         schrift_fett(14) OIDA
-        text_mittig(mx + mb / 2, my + mh / 2 - 4, nam[i]) OIDA
-        WENN NED gwöht DAUN
-            foab_hex(FOAB_TEXT_MATT) OIDA
-        PASST SCHO
+        text_mittig(kx + koatn_b / 2, koatn_y + 36, modus_nam(modi[i])) OIDA
+        foab_hex(matt_foab) OIDA
         schrift(10) OIDA
-        text_mittig(mx + mb / 2, my + mh / 2 + 11, wos[i]) OIDA
+        text_mittig(kx + koatn_b / 2, koatn_y + 48, wos[i]) OIDA
         WENN drauf UND s.klick DAUN
             s.modus = modi[i] OIDA
         PASST SCHO
     PASST SCHO
 
-    WENN knopf(s, "▶  PLAY", mitte - 110, hoib + 18, 220, 50) DAUN
-        s.start() OIDA
+    # PLAY: das Auffälligste auf dem Bild
+    SOG AU px = links - 22 OIDA
+    SOG AU py = tafl_y + 120 + 24 OIDA
+    SOG AU pb = breite + 44 OIDA
+    SOG AU ph = 76.0 OIDA
+    SOG AU auf_play = s.maus_drin(px, py, pb, ph) OIDA
+    valauf_grod(px, py, px, py + ph) OIDA
+    WENN auf_play DAUN
+        leuchtn(34, FOAB_AKZENT, 0.85) OIDA
+        valauf_foab(0, "#8beeff", 1) OIDA
+        valauf_foab(1, "#33ccff", 1) OIDA
+    SUNST
+        leuchtn(20, FOAB_AKZENT, 0.45) OIDA
+        valauf_foab(0, "#4fd8ff", 1) OIDA
+        valauf_foab(1, "#1f9fd0", 1) OIDA
     PASST SCHO
-    WENN knopf(s, "⚙  SETTINGS", mitte - 110, hoib + 88, 220, 50) DAUN
-        s.zustand = ZUSTAND_EINSTELLUNGEN OIDA
+    deckung(0.94 + 0.06 * SINUS(jetzt * 0.006)) OIDA
+    rechteck_rund(px, py, pb, ph, 14) OIDA
+    leuchtn_aus() OIDA
+    foab_hex("#dcfaff") OIDA
+    deckung(0.9) OIDA
+    rechteck_rund_rand(px, py, pb, ph, 14, 2) OIDA
+    deckung(1) OIDA
+    foab_hex("#062033") OIDA
+    schrift_fett(32) OIDA
+    text_mittig(mitte, py + ph / 2, "▶  PLAY") OIDA
+    WENN auf_play UND s.klick DAUN
+        s.start() OIDA
+        GIB ZRUCK OIDA
     PASST SCHO
 
-    # Rechts: die Bestenliste dieser Spielart
+    # Der beste Lauf bisher in dieser Spielart
     SOG AU liste = s.bestenlistn.einträge(s.modus) OIDA
     WENN LÄNGN(liste) > 0 DAUN
-        SOG AU tx = FELD_B - 260.0 OIDA
-        SOG AU ty = 60.0 OIDA
-        SOG AU tb = 230.0 OIDA
-        tafl(tx, ty, tb, 30 + LÄNGN(liste) * 28, 8, FOAB_AKZENT, 1.5) OIDA
-        schrift_fett(15) OIDA
-        text_mittig(tx + tb / 2, ty + 18, "🏆 " + modus_nam(s.modus) + " SCORES") OIDA
-        schrift(13) OIDA
-        FIA i VON 0 BIS LÄNGN(liste) - 1 TUA
-            SOG AU e = liste[i] OIDA
-            SOG AU zy = ty + 40 + i * 28 OIDA
-            WENN i == 0 DAUN
-                foab_hex(FOAB_GOID) OIDA
-            SUNST
-                foab_hex(FOAB_TEXT) OIDA
-            PASST SCHO
-            text_links_mitte(tx + 12, zy, KETTN(i + 1) + ".") OIDA
-            text_links_mitte(tx + 32, zy, "W" + KETTN(e.wön)) OIDA
-            foab_hex(FOAB_TEXT_MATT) OIDA
-            text_links_mitte(tx + 80, zy, "☠" + KETTN(e.tote)) OIDA
-            text_rechts_mitte(tx + tb - 12, zy, zeit_text(e.dauer)) OIDA
-        PASST SCHO
+        SOG AU beste = liste[0] OIDA
+        SOG AU zeile = "◆ Best " + modus_nam(s.modus) + " run:  Wave " + KETTN(beste.wön) + "  ·  " + KETTN(beste.tote) + " kills  ·  " + zeit_text(beste.dauer) OIDA
+        schrift_fett(12) OIDA
+        SOG AU zb = text_breite(zeile) + 56 OIDA
+        tafl(mitte - zb / 2, py + ph + 14, zb, 32, 16, "#ffcc66", 0.12, "#ffcc66", 0.7, 1.4) OIDA
+        foab_hex("#ffcc66") OIDA
+        text_mittig(mitte, py + ph + 30, zeile) OIDA
+    PASST SCHO
+
+    # Unten: zu den Einstellungen
+    SOG AU nb = 108.0 OIDA
+    SOG AU nh = 64.0 OIDA
+    SOG AU nx = mitte - nb / 2 OIDA
+    SOG AU ny = FELD_H - nh - 44 OIDA
+    SOG AU auf_knopf = s.maus_drin(nx, ny, nb, nh) OIDA
+    SOG AU knopf_foab = FOAB_TEXT OIDA
+    WENN auf_knopf DAUN
+        tafl(nx, ny, nb, nh, 10, "#33ccff", 0.16, "#8cdcf6", 0.75, 1.8) OIDA
+        knopf_foab = FOAB_AKZENT_HÖ OIDA
+    SUNST
+        tafl(nx, ny, nb, nh, 10, "#ffffff", 0.045, "#ffffff", 0.12, 1.2) OIDA
+    PASST SCHO
+    symbol("settings", nx + nb / 2, ny + 23, 26, knopf_foab, 2.2) OIDA
+    WENN NED auf_knopf DAUN
+        foab_hex(FOAB_TEXT_MATT) OIDA
+    PASST SCHO
+    schrift_fett(11) OIDA
+    text_mittig(nx + nb / 2, ny + 46, "SETTINGS") OIDA
+    WENN auf_knopf UND s.klick DAUN
+        s.geh_zua(ZUSTAND_EINSTELLUNGEN) OIDA
     PASST SCHO
 
     foab_hex(FOAB_TEXT_MATT) OIDA
-    schrift(14) OIDA
+    schrift(12) OIDA
+    SOG AU zün = "Auto-aim" OIDA
     WENN s.modus == "hard" DAUN
-        text_mittig(mitte, FELD_H - 60, "WASD / Arrow Keys to move  •  Mouse to aim & fire") OIDA
-    SUNST
-        text_mittig(mitte, FELD_H - 60, "WASD / Arrow Keys to move  •  Auto-aim & fire") OIDA
+        zün = "Mouse to aim" OIDA
     PASST SCHO
-    text_mittig(mitte, FELD_H - 38, "Press ENTER or click PLAY to start") OIDA
+    text_mittig(mitte, FELD_H - 18, "WASD / Arrows to move  ·  SPACE to dash  ·  " + zün + "  ·  ENTER to play") OIDA
 PASST SCHO
 
-# ------------------------------------------------------- Verbesserung wählen
+# ------------------------------------------------- Verbesserung wählen
 
 FUNKTIAUN moi_woi(s Spü)
-    foab_hex("#000000") OIDA
-    deckung(0.65) OIDA
-    rechteck(0, 0, FELD_B, FELD_H) OIDA
+    SOG AU p = s.spiela OIDA
+    SOG AU jetzt = s.jetzt OIDA
+
+    # Das Spiel dahinter wird dunkler.
+    valauf_rund(FELD_B / 2, 250, 100, FELD_B) OIDA
+    valauf_foab(0, "#000014", 0.5) OIDA
+    valauf_foab(1, "#000000", 0.75) OIDA
     deckung(1) OIDA
+    rechteck(0, 0, FELD_B, FELD_H) OIDA
 
-    schrift_fett(32) OIDA
-    WENN s.woi_vom_boss DAUN
-        foab_hex(FOAB_GOID) OIDA
-        text_mittig(FELD_B / 2, 120, "🏆 BOSS DEFEATED! FREE UPGRADE!") OIDA
-    SUNST
-        foab_hex(FOAB_AKZENT) OIDA
-        text_mittig(FELD_B / 2, 120, "LEVEL UP!") OIDA
-    PASST SCHO
-    foab_hex(FOAB_TEXT_MATT) OIDA
-    schrift(16) OIDA
+    # Links die Übersicht, im Platz daneben die Karten
+    SOG AU bau_x = 16.0 OIDA
+    SOG AU bau_b = 232.0 OIDA
+    SOG AU kb = 210.0 OIDA
+    SOG AU kh = 194.0 OIDA
+    SOG AU lückn = 20.0 OIDA
     SOG AU anzahl = LÄNGN(s.woi) OIDA
-    text_mittig(FELD_B / 2, 155, "Choose an upgrade (click or press 1-" + KETTN(anzahl) + ")") OIDA
+    SOG AU spoitn = KLANSTA(anzahl, 3) OIDA
+    SOG AU gitta_b = spoitn * kb + (spoitn - 1) * lückn OIDA
+    SOG AU mitte = (bau_x + bau_b + FELD_B) / 2 OIDA
+    SOG AU links = mitte - gitta_b / 2 OIDA
+    SOG AU obn = 210.0 OIDA
 
-    SOG AU kb = 200.0 OIDA
-    SOG AU kh = 140.0 OIDA
-    SOG AU lückn = 30.0 OIDA
-    SOG AU erste = FELD_B / 2 - (anzahl * kb + (anzahl - 1) * lückn) / 2 OIDA
+    SOG AU titl = "LEVEL UP!" OIDA
+    SOG AU titl_foab = FOAB_AKZENT OIDA
+    SOG AU drunta = "Choose an upgrade (click or press 1-" + KETTN(anzahl) + ")" OIDA
+    WENN s.anfangs_woi DAUN
+        titl = "CHOOSE YOUR WEAPON" OIDA
+        drunta = "It fights on its own. More weapons and upgrades come with every level." OIDA
+    SUNST WENN s.woi_is_lohn DAUN
+        titl = "🏆 BOSS DEFEATED! FREE UPGRADE!" OIDA
+        titl_foab = FOAB_GOID OIDA
+    PASST SCHO
+    leuchtn(12, titl_foab, 1) OIDA
+    foab_hex(titl_foab) OIDA
+    schrift_fett(34) OIDA
+    text_mittig(mitte, 115, titl) OIDA
+    leuchtn_aus() OIDA
+    foab_hex(FOAB_TEXT_MATT) OIDA
+    schrift(15) OIDA
+    text_mittig(mitte, 150, drunta) OIDA
+    tafl(mitte - 50, 160, 100, 30, 15, FOAB_AKZENT, 0.15, "", 0, 0) OIDA
+    foab_hex(FOAB_AKZENT) OIDA
+    schrift_fett(14) OIDA
+    text_mittig(mitte, 176, "LV " + KETTN(p.stufn)) OIDA
+
+    SOG AU unta_maus = -1 OIDA
     FIA i VON 0 BIS anzahl - 1 TUA
         SOG AU v = s.woi[i] OIDA
-        SOG AU kx = erste + i * (kb + lückn) OIDA
-        SOG AU ky = 200.0 OIDA
+        SOG AU kx = links + (i % spoitn) * (kb + lückn) OIDA
+        SOG AU ky = obn + (i / spoitn) * (kh + 16) OIDA
         SOG AU drauf = s.maus_drin(kx, ky, kb, kh) OIDA
+        WENN drauf DAUN
+            unta_maus = i OIDA
+        PASST SCHO
+        SOG AU is_waffn = v.waffn >= 0 ODA v.evo >= 0 OIDA
+        SOG AU sötn_hex = sötn_foab(v.sötn) OIDA
+        SOG AU puls = 0.5 + 0.5 * SINUS(jetzt * 0.01 + i * 0.6) OIDA
+
+        # Die Karte unter der Maus hebt sich ein wenig.
+        lage_merkn() OIDA
+        WENN drauf DAUN
+            schiab(kx + kb / 2, ky - 6 - SINUS(jetzt * 0.018) * 2 + kh / 2) OIDA
+            vergrößa(1.03) OIDA
+        SUNST
+            schiab(kx + kb / 2, ky + kh / 2) OIDA
+        PASST SCHO
+        SOG AU x0 = -kb / 2 OIDA
+        SOG AU y0 = -kh / 2 OIDA
 
         WENN drauf DAUN
-            foab_hex(FOAB_AKZENT) OIDA
-            deckung(0.18) OIDA
-            rechteck_rund(kx, ky, kb, kh, 10) OIDA
-            deckung(1) OIDA
-            rechteck_rund_rand(kx, ky, kb, kh, 10, 2) OIDA
+            WENN is_waffn DAUN
+                tafl(x0, y0, kb, kh, 12, "#ffcc00", 0.15, "", 0, 0) OIDA
+            SUNST
+                tafl(x0, y0, kb, kh, 12, "#33ccff", 0.18, "", 0, 0) OIDA
+            PASST SCHO
         SUNST
-            tafl(kx, ky, kb, kh, 10, FOAB_RAHMEN, 2) OIDA
+            tafl(x0, y0, kb, kh, 12, "#080a1e", 0.92, "", 0, 0) OIDA
         PASST SCHO
+        # Seltene und epische Karten haben einen Rand, der leuchtet.
+        WENN v.sötn == SÖTN_EPISCH DAUN
+            leuchtn(18, "#c38bff", 0.18 + puls * 0.14) OIDA
+        SUNST WENN v.sötn == SÖTN_SÖTN DAUN
+            leuchtn(18, "#66ddff", 0.15 + puls * 0.12) OIDA
+        PASST SCHO
+        SOG AU rand_dicke = 1.5 OIDA
+        WENN drauf DAUN
+            rand_dicke = 2.5 OIDA
+            WENN is_waffn DAUN
+                foab_hex("#ffcc66") OIDA
+            SUNST
+                foab_hex(FOAB_AKZENT) OIDA
+            PASST SCHO
+        SUNST WENN v.sötn != SÖTN_GWÖHNLICH DAUN
+            foab_hex(sötn_hex) OIDA
+        SUNST
+            foab_hex("#3c4664") OIDA
+            deckung(0.6) OIDA
+        PASST SCHO
+        rechteck_rund_rand(x0, y0, kb, kh, 12, rand_dicke) OIDA
+        leuchtn_aus() OIDA
+        deckung(1) OIDA
 
+        schrift_fett(9) OIDA
+        WENN is_waffn DAUN
+            foab_hex("#ffcc66") OIDA
+            text_mittig(0, y0 + 14, "WEAPON") OIDA
+        SUNST
+            foab_hex("#66ddff") OIDA
+            text_mittig(0, y0 + 14, "STAT") OIDA
+        PASST SCHO
         foab_hex(FOAB_TEXT) OIDA
-        schrift(36) OIDA
-        text_mittig(kx + kb / 2, ky + 45, v.büdl) OIDA
+        schrift(40) OIDA
+        text_mittig(0, y0 + 58, v.büdl) OIDA
         WENN drauf DAUN
             foab_hex(FOAB_AKZENT) OIDA
         PASST SCHO
         schrift_fett(14) OIDA
-        text_mittig(kx + kb / 2, ky + 80, v.nam) OIDA
+        text_mittig(0, y0 + 90, v.nam) OIDA
+        foab_hex(sötn_hex) OIDA
+        schrift_fett(11) OIDA
+        text_mittig(0, y0 + 108, sötn_nam(v.sötn)) OIDA
 
-        SOG AU wos = v.wos OIDA
-        WENN v.kennung == "pierce" DAUN
-            wos = "Bullets pierce through " + KETTN(s.spiela.durchschuss + 1) + " enemies" OIDA
-        PASST SCHO
         foab_hex(FOAB_TEXT_MATT) OIDA
-        WENN wos != "" DAUN
+        schrift(11) OIDA
+        SOG AU zeiln = in_zeiln(vabessarung_text(v, p), 28) OIDA
+        FIA z VON 0 BIS KLANSTA(2, LÄNGN(zeiln)) - 1 TUA
+            text_mittig(0, y0 + 126 + z * 13, zeiln[z]) OIDA
+        PASST SCHO
+
+        # Waffenkarten sagen, wie sich die Waffe weiterentwickelt.
+        SOG AU evo_text = evo_hinweis(v, p) OIDA
+        SOG AU oft = p.gnumma(v.kennung) OIDA
+        WENN evo_text != "" DAUN
+            WENN p.waffn_evo(v.waffn) DAUN
+                foab_hex(FOAB_GOID) OIDA
+            SUNST
+                foab_hex("#c38bff") OIDA
+            PASST SCHO
+            schrift(10) OIDA
+            text_mittig(0, y0 + kh - 34, evo_text) OIDA
+        SUNST WENN oft > 0 DAUN
+            foab_hex("#66ff99") OIDA
             schrift(11) OIDA
-            text_mittig(kx + kb / 2, ky + 98, wos) OIDA
+            text_mittig(0, y0 + kh - 34, "(owned ×" + KETTN(oft) + ")") OIDA
+        PASST SCHO
+
+        WENN drauf DAUN
+            foab_hex(FOAB_AKZENT) OIDA
+        SUNST
+            foab_hex(FOAB_TEXT_MATT) OIDA
         PASST SCHO
         schrift(12) OIDA
-        text_mittig(kx + kb / 2, ky + 125, "Press " + KETTN(i + 1)) OIDA
+        text_mittig(0, y0 + kh - 16, "Press " + KETTN(i + 1)) OIDA
+        lage_zruck() OIDA
 
         WENN drauf UND s.klick DAUN
             s.woi_nehma(i) OIDA
             GIB ZRUCK OIDA
         PASST SCHO
     PASST SCHO
+
+    # Zuletzt die Übersicht: Sie zeigt, was die Karte unter der Maus ändern würde.
+    WENN unta_maus >= 0 DAUN
+        SOG AU probe = p.doppelt() OIDA
+        SOG AU v = s.woi[unta_maus] OIDA
+        v.wirkung(probe) OIDA
+        bau_tafl(bau_x, bau_b, p, bau_zeiln(probe), WOAHR) OIDA
+    SUNST
+        bau_tafl(bau_x, bau_b, p, [], FOISCH) OIDA
+    PASST SCHO
 PASST SCHO
 
-# ----------------------------------------------------------- Einstellungen
+# ------------------------------------------------ Einstellungen und Pause
 
 FUNKTIAUN au_aus(wert JONA) GIBT ZRUCK KETTN
     WENN wert DAUN
@@ -504,147 +1137,266 @@ FUNKTIAUN au_aus(wert JONA) GIBT ZRUCK KETTN
     GIB ZRUCK "OFF" OIDA
 PASST SCHO
 
+# Die Einstellungen; mitten im Lauf ist dasselbe Bild die Pause.
 FUNKTIAUN moi_einstellungen(s Spü)
+    SOG AU pause = s.zustand == ZUSTAND_PAUSE OIDA
+    SOG AU mitte = FELD_B / 2.0 OIDA
     foab_hex(FOAB_TAFL) OIDA
-    deckung(DECKUNG_TAFL) OIDA
-    rechteck(0, 0, FELD_B, FELD_H) OIDA
     deckung(1) OIDA
-
-    SOG AU mitte = FELD_B / 2 OIDA
-    foab_hex(FOAB_AKZENT) OIDA
-    schrift_fett(36) OIDA
-    text_mittig(mitte, 80, "⚙  SETTINGS") OIDA
+    rechteck(0, 0, FELD_B, FELD_H) OIDA
 
     SOG AU kb = 280.0 OIDA
+    SOG AU kh = 44.0 OIDA
     SOG AU kx = mitte - kb / 2 OIDA
-    WENN knopf(s, "Sound: " + au_aus(s.klang.gräusche), kx, 140, kb, 44) DAUN
+    SOG AU obstand = 30.0 OIDA
+    SOG AU zeile = 22.0 OIDA
+    WENN pause DAUN
+        obstand = 18.0 OIDA
+        zeile = 17.0 OIDA
+    PASST SCHO
+    # Erst die ganze Höhe ausrechnen, dann alles in die Mitte setzen.
+    SOG AU gaunz = 40 + 12 + (kh + 8) * 3 + 14 + obstand + 20 + (zeile + 4) * 4 + zeile + obstand + kh OIDA
+    WENN pause DAUN
+        gaunz += kh + 16 OIDA
+    PASST SCHO
+    SOG AU y = GRÖSSTA(30.0, OBRUNDN((FELD_H - gaunz) / 2)) OIDA
+
+    foab_hex(FOAB_AKZENT) OIDA
+    schrift_fett(36) OIDA
+    WENN pause DAUN
+        text_mittig(mitte, y + 18, "⏸  PAUSED") OIDA
+    SUNST
+        text_mittig(mitte, y + 18, "⚙  SETTINGS") OIDA
+    PASST SCHO
+    y += 52 OIDA
+
+    # In der Pause: links die Übersicht, rechts der Stand vom Lauf
+    WENN pause DAUN
+        bau_tafl(30, 232, s.spiela, [], FOISCH) OIDA
+        SOG AU sx = FELD_B - 220.0 - 30 OIDA
+        SOG AU sy = (FELD_H - 160) / 2.0 OIDA
+        tafl(sx, sy, 220, 160, 8, "#080818", 0.92, FOAB_AKZENT, 1, 1.5) OIDA
+        foab_hex(FOAB_AKZENT) OIDA
+        schrift_fett(14) OIDA
+        text_mittig(sx + 110, sy + 16, "RUN STATS") OIDA
+        foab_hex(FOAB_TEXT) OIDA
+        schrift(13) OIDA
+        text_links_mitte(sx + 14, sy + 40, "Wave: " + KETTN(s.wön)) OIDA
+        text_links_mitte(sx + 14, sy + 60, "Kills: " + KETTN(s.wön_tote) + "/" + KETTN(s.wön_ziel)) OIDA
+        text_links_mitte(sx + 14, sy + 80, "Total kills: " + KETTN(s.tote)) OIDA
+        text_links_mitte(sx + 14, sy + 100, "Level: " + KETTN(s.spiela.stufn)) OIDA
+        text_links_mitte(sx + 14, sy + 120, "HP: " + KETTN(GRÖSSTA(0, ZOI(AUFRUNDN(s.spiela.lebn)))) + "/" + KETTN(s.spiela.max_lebn)) OIDA
+        text_links_mitte(sx + 14, sy + 140, "Time: " + zeit_text(s.spüzeit)) OIDA
+    PASST SCHO
+
+    WENN knopf(s, "Sound: " + au_aus(s.klang.gräusche), kx, y, kb, kh, 18) DAUN
         s.klang.gräusche = NED s.klang.gräusche OIDA
     PASST SCHO
-    WENN knopf(s, "Music: " + au_aus(s.klang.musik_au), kx, 200, kb, 44) DAUN
+    y += kh + 8 OIDA
+    WENN knopf(s, "Music: " + au_aus(s.klang.musik_au), kx, y, kb, kh, 18) DAUN
         s.klang.musik_au = NED s.klang.musik_au OIDA
     PASST SCHO
-    WENN knopf(s, "Screen Shake: " + au_aus(s.wackln), kx, 260, kb, 44) DAUN
-        s.wackln = NED s.wackln OIDA
-    PASST SCHO
+    y += kh + 8 OIDA
 
-    foab_hex(FOAB_TEXT) OIDA
-    schrift_fett(18) OIDA
-    text_mittig(mitte, 340, "Controls") OIDA
+    # Wackeln, Aufleuchten und die kurzen Stillstände, von 0 bis 100 %
+    SOG AU stärke = schiebaregla(s, "Screen effects", kx, y, kb, kh, s.effekte_stärke, 1) OIDA
+    WENN stärke != s.effekte_stärke DAUN
+        s.effekte_stärke = stärke OIDA
+        s.wackln = stärke > 0 OIDA
+        s.einstellungen_gödn() OIDA
+    PASST SCHO
     foab_hex(FOAB_TEXT_MATT) OIDA
-    schrift(15) OIDA
-    text_mittig(mitte, 370, "WASD / ZQSD / Arrow Keys — Move") OIDA
-    WENN s.modus == "hard" DAUN
-        text_mittig(mitte, 394, "Manual aim — Move mouse to aim") OIDA
-    SUNST
-        text_mittig(mitte, 394, "Auto-aim — Targets nearest enemy") OIDA
-    PASST SCHO
-    text_mittig(mitte, 418, "1 / 2 / 3 — Select upgrade") OIDA
-    text_mittig(mitte, 442, "ESC — Settings / Back") OIDA
-    schrift(13) OIDA
-    text_mittig(mitte, 492, "Native build, written in OIDA") OIDA
+    schrift(11) OIDA
+    text_mittig(mitte, y + kh + 8, "Shake, flashes and hit-stops") OIDA
+    y += kh + 8 + 14 OIDA
 
-    WENN knopf(s, "← BACK", kx, 542, kb, 44) DAUN
-        s.zruck() OIDA
+    # Die Tasten
+    y += obstand OIDA
+    foab_hex(FOAB_TEXT) OIDA
+    WENN pause DAUN
+        schrift_fett(14) OIDA
+    SUNST
+        schrift_fett(16) OIDA
+    PASST SCHO
+    text_mittig(mitte, y - 5, "Controls") OIDA
+    schrift(13) OIDA
+    foab_hex(FOAB_TEXT_MATT) OIDA
+    y += zeile + 4 OIDA
+    text_mittig(mitte, y - 4, "WASD / ZQSD / Arrow Keys — Move  ·  SPACE — Dash") OIDA
+    y += zeile OIDA
+    WENN s.modus == "hard" DAUN
+        text_mittig(mitte, y - 4, "Manual aim — Move mouse to aim") OIDA
+    SUNST
+        text_mittig(mitte, y - 4, "Auto-aim — Targets nearest enemy") OIDA
+    PASST SCHO
+    y += zeile OIDA
+    text_mittig(mitte, y - 4, "1 / 2 / 3 — Select upgrade") OIDA
+    y += zeile OIDA
+    WENN pause DAUN
+        text_mittig(mitte, y - 4, "ESC — Resume") OIDA
+    SUNST
+        text_mittig(mitte, y - 4, "ESC — Back") OIDA
+    PASST SCHO
+    y += zeile OIDA
+
+    y += obstand OIDA
+    WENN pause DAUN
+        WENN knopf(s, "▶ RESUME", kx, y, kb, kh, 18) DAUN
+            s.zustand = ZUSTAND_SPÜ OIDA
+            GIB ZRUCK OIDA
+        PASST SCHO
+        y += kh + 16 OIDA
+        WENN knopf(s, "⏹  ABANDON RUN", kx, y, kb, kh, 18) DAUN
+            s.aufgebn() OIDA
+        PASST SCHO
+    SUNST
+        WENN knopf(s, "← BACK", kx, y, kb, kh, 18) DAUN
+            s.geh_zua(ZUSTAND_ANFANG) OIDA
+        PASST SCHO
     PASST SCHO
 PASST SCHO
 
-# ----------------------------------------------------------- nach dem Spiel
+# ------------------------------------------------------- Ende eines Laufs
+
+# Wie viele von hundert Schüssen getroffen haben.
+FUNKTIAUN treffsicha(s Spü) GIBT ZRUCK ZOI
+    WENN s.schüsse_gfeiat == 0 DAUN
+        GIB ZRUCK 0 OIDA
+    PASST SCHO
+    GIB ZRUCK ZOI(RUNDN(100.0 * s.schüsse_troffn / s.schüsse_gfeiat)) OIDA
+PASST SCHO
 
 FUNKTIAUN moi_aus(s Spü)
-    SOG AU mitte = FELD_B / 2 OIDA
-    SOG AU hoib = FELD_H / 2 OIDA
-    foab_hex("#000000") OIDA
-    deckung(0.72) OIDA
-    rechteck(0, 0, FELD_B, FELD_H) OIDA
+    SOG AU mitte = FELD_B / 2.0 OIDA
+    valauf_rund(mitte, FELD_H / 2, 50, FELD_B) OIDA
+    valauf_foab(0, "#1e0000", 0.65) OIDA
+    valauf_foab(1, "#000000", 0.82) OIDA
     deckung(1) OIDA
+    rechteck(0, 0, FELD_B, FELD_H) OIDA
 
+    leuchtn(16, FOAB_GFOAH, 1) OIDA
     foab_hex(FOAB_GFOAH) OIDA
     schrift_fett(48) OIDA
-    text_mittig(mitte, hoib - 110, "GAME OVER") OIDA
+    text_mittig(mitte, 68, "GAME OVER") OIDA
+    leuchtn_aus() OIDA
 
-    # Unter die Besten gekommen: Das wird pulsierend gefeiert.
     WENN s.rang > 0 DAUN
         foab_hex(FOAB_GOID) OIDA
-        schrift_fett(26) OIDA
         deckung(0.7 + 0.3 * SINUS(s.jetzt * 0.005)) OIDA
+        schrift_fett(26) OIDA
         WENN s.rang == 1 DAUN
-            text_mittig(mitte, hoib - 72, "🏆 NEW HIGH SCORE! 🏆") OIDA
+            text_mittig(mitte, 106, "🏆 NEW HIGH SCORE! 🏆") OIDA
         SUNST
-            text_mittig(mitte, hoib - 72, "🎖️ TOP " + KETTN(s.rang) + " SCORE! 🎖️") OIDA
+            text_mittig(mitte, 106, "🎖️ TOP " + KETTN(s.rang) + " SCORE! 🎖️") OIDA
         PASST SCHO
         deckung(1) OIDA
     PASST SCHO
 
     foab_hex(FOAB_TEXT) OIDA
     schrift(20) OIDA
-    text_mittig(mitte, hoib - 45, "Wave " + KETTN(s.wön) + "  •  ☠ " + KETTN(s.tote) + " kills") OIDA
+    text_mittig(mitte, 148, "Wave " + KETTN(s.wön) + "  •  ☠ " + KETTN(s.tote) + " kills") OIDA
     foab_hex(FOAB_TEXT_MATT) OIDA
     schrift(16) OIDA
-    text_mittig(mitte, hoib - 18, "Time survived: " + zeit_text(s.spüzeit)) OIDA
+    text_mittig(mitte, 174, "Mode: " + modus_nam(s.letzta_modus)) OIDA
+    SOG AU zeile = "Time survived: " + zeit_text(s.spüzeit) OIDA
+    WENN s.beste_combo >= 3 DAUN
+        zeile += "  •  Best combo: " + KETTN(s.beste_combo) + "x" OIDA
+    PASST SCHO
+    text_mittig(mitte, 198, zeile) OIDA
+    text_mittig(mitte, 220, "Shards earned: +" + KETTN(s.scherbn_gwinn(FOISCH))) OIDA
+    text_mittig(mitte, 242, "Summary: Accuracy " + KETTN(treffsicha(s)) + "%  •  Upgrades " + KETTN(s.vabessarungen_gnumma) + "  •  Bosses " + KETTN(s.bosse_gschlogn)) OIDA
 
     SOG AU liste = s.bestenlistn.einträge(s.modus) OIDA
     WENN LÄNGN(liste) > 0 UND s.rang != 1 DAUN
-        SOG AU bester = liste[0] OIDA
+        SOG AU beste = liste[0] OIDA
         schrift(14) OIDA
-        text_mittig(mitte, hoib + 2, "Best: Wave " + KETTN(bester.wön) + "  •  ☠" + KETTN(bester.tote) + "  •  " + zeit_text(bester.dauer)) OIDA
+        text_mittig(mitte, 264, "Best: Wave " + KETTN(beste.wön) + "  •  ☠" + KETTN(beste.tote) + "  •  " + zeit_text(beste.dauer)) OIDA
     PASST SCHO
 
-    WENN knopf(s, "↻  RESTART", mitte - 110, hoib + 26, 220, 48) DAUN
+    WENN knopf(s, "↻  RESTART", mitte - 110, 292, 220, 48, 18) DAUN
         s.start() OIDA
+        GIB ZRUCK OIDA
     PASST SCHO
-    WENN knopf(s, "🏠  MAIN MENU", mitte - 110, hoib + 84, 220, 48) DAUN
-        s.zustand = ZUSTAND_ANFANG OIDA
+    WENN knopf(s, "🏠  MAIN MENU", mitte - 110, 348, 220, 48, 18) DAUN
+        s.geh_zua(ZUSTAND_ANFANG) OIDA
+        GIB ZRUCK OIDA
     PASST SCHO
 
-    beste_untn(s, hoib + 150, FOAB_AKZENT) OIDA
+    beste_untn(s, 418, FOAB_AKZENT) OIDA
     foab_hex(FOAB_TEXT_MATT) OIDA
     schrift(14) OIDA
     text_mittig(mitte, FELD_H - 40, "Press ENTER to restart") OIDA
 PASST SCHO
 
 FUNKTIAUN moi_gwunna(s Spü)
-    SOG AU mitte = FELD_B / 2 OIDA
-    SOG AU hoib = FELD_H / 2 OIDA
+    SOG AU mitte = FELD_B / 2.0 OIDA
+    SOG AU jetzt = s.jetzt OIDA
+    foab_hex(FOAB_GRUND) OIDA
+    deckung(1) OIDA
+    rechteck(0, 0, FELD_B, FELD_H) OIDA
 
-    # Sterne, die funkeln und langsam über den Himmel ziehen
+    # Goldene Sterne, die langsam wandern
     foab_hex(FOAB_GOID) OIDA
     FIA i VON 0 BIS 59 TUA
-        deckung(0.3 + 0.3 * SINUS(s.jetzt * 0.01 + i)) OIDA
-        kreis((i * 137 + s.jetzt * 0.02) % FELD_B, (i * 211 + s.jetzt * 0.015) % FELD_H, 1.5) OIDA
+        SOG AU sx = i * 137 + jetzt * 0.02 OIDA
+        SOG AU sy = i * 211 + jetzt * 0.015 OIDA
+        deckung(0.3 + 0.3 * SINUS(jetzt * 0.01 + i)) OIDA
+        kreis(sx - FELD_B * OBRUNDN(sx / FELD_B), sy - FELD_H * OBRUNDN(sy / FELD_H), 1.5) OIDA
     PASST SCHO
 
-    deckung(0.85 + 0.15 * SINUS(s.jetzt * 0.006)) OIDA
+    deckung(0.85 + 0.15 * SINUS(jetzt * 0.006)) OIDA
     schrift_fett(56) OIDA
-    text_mittig(mitte, hoib - 110, "🏆 YOU WIN! 🏆") OIDA
+    text_mittig(mitte, 68, "🏆 YOU WIN! 🏆") OIDA
     deckung(1) OIDA
 
     foab_hex(FOAB_TEXT) OIDA
     schrift(22) OIDA
-    text_mittig(mitte, hoib - 60, "Completed all " + KETTN(WÖN_LETZTE) + " waves!") OIDA
+    text_mittig(mitte, 126, "The Null Sovereign has been vanquished!") OIDA
     foab_hex(FOAB_AKZENT) OIDA
     schrift_fett(20) OIDA
-    text_mittig(mitte, hoib - 28, "⏱ Time: " + zeit_text(s.spüzeit) + "  •  ☠ " + KETTN(s.tote) + " kills") OIDA
+    text_mittig(mitte, 154, "⏱ Time: " + zeit_text(s.spüzeit) + "  •  ☠ " + KETTN(s.tote) + " kills") OIDA
     foab_hex(FOAB_TEXT_MATT) OIDA
     schrift(15) OIDA
-    text_mittig(mitte, hoib + 2, "Leaderboard rank is decided by fastest completion time") OIDA
+    text_mittig(mitte, 178, "Mode: " + modus_nam(s.letzta_modus)) OIDA
+    text_mittig(mitte, 198, "Leaderboard rank is decided by fastest completion time") OIDA
+    text_mittig(mitte, 218, "Shards earned: +" + KETTN(s.scherbn_gwinn(WOAHR))) OIDA
+    text_mittig(mitte, 238, "Summary: Accuracy " + KETTN(treffsicha(s)) + "%  •  Upgrades " + KETTN(s.vabessarungen_gnumma) + "  •  Bosses " + KETTN(s.bosse_gschlogn)) OIDA
 
-    WENN knopf(s, "↻  PLAY AGAIN", mitte - 110, hoib + 30, 220, 48) DAUN
+    SOG AU y = 306.0 OIDA
+    WENN NED s.endlos DAUN
+        WENN knopf(s, "♾  ENDLESS  (Wave " + KETTN(WÖN_LETZTE + 1) + "+)", mitte - 110, y, 220, 48, 18) DAUN
+            s.endlos_start() OIDA
+            GIB ZRUCK OIDA
+        PASST SCHO
+        y += 56 OIDA
+    PASST SCHO
+    WENN knopf(s, "↻  PLAY AGAIN", mitte - 110, y, 220, 48, 18) DAUN
         s.start() OIDA
+        GIB ZRUCK OIDA
     PASST SCHO
-    WENN knopf(s, "🏠  MAIN MENU", mitte - 110, hoib + 88, 220, 48) DAUN
-        s.zustand = ZUSTAND_ANFANG OIDA
+    y += 56 OIDA
+    WENN knopf(s, "🏠  MAIN MENU", mitte - 110, y, 220, 48, 18) DAUN
+        s.geh_zua(ZUSTAND_ANFANG) OIDA
+        GIB ZRUCK OIDA
     PASST SCHO
 
-    beste_untn(s, hoib + 154, FOAB_GOID) OIDA
+    beste_untn(s, y + 70, FOAB_GOID) OIDA
     foab_hex(FOAB_TEXT_MATT) OIDA
     schrift(14) OIDA
     text_mittig(mitte, FELD_H - 40, "Press ENTER to restart") OIDA
 PASST SCHO
 
-# Ein ganzes Bild, je nachdem, wo das Spiel gerade steht.
+# --------------------------------------------------------------- Alles
+
 FUNKTIAUN moi_ollas(s Spü)
-    foab_hex(FOAB_GRUND) OIDA
+    deckung(1) OIDA
+    WENN s.zustand == ZUSTAND_SPÜ ODA s.zustand == ZUSTAND_VABESSARUNG ODA s.zustand == ZUSTAND_AUS DAUN
+        foab_hex(gebiet_von(s.gebiet()).grund) OIDA
+    SUNST
+        foab_hex(FOAB_GRUND) OIDA
+    PASST SCHO
     rechteck(0, 0, FELD_B, FELD_H) OIDA
+
     WENN s.zustand == ZUSTAND_ANFANG DAUN
         moi_anfang(s) OIDA
     SUNST WENN s.zustand == ZUSTAND_SPÜ DAUN
@@ -652,12 +1404,21 @@ FUNKTIAUN moi_ollas(s Spü)
     SUNST WENN s.zustand == ZUSTAND_VABESSARUNG DAUN
         moi_spüfeld(s) OIDA
         moi_woi(s) OIDA
-    SUNST WENN s.zustand == ZUSTAND_EINSTELLUNGEN DAUN
+    SUNST WENN s.zustand == ZUSTAND_PAUSE ODA s.zustand == ZUSTAND_EINSTELLUNGEN DAUN
         moi_einstellungen(s) OIDA
     SUNST WENN s.zustand == ZUSTAND_AUS DAUN
         moi_spüfeld(s) OIDA
         moi_aus(s) OIDA
-    SUNST
+    SUNST WENN s.zustand == ZUSTAND_GWUNNA DAUN
         moi_gwunna(s) OIDA
     PASST SCHO
+
+    # Beim Wechsel zwischen zwei Bildern legt sich kurz ein Schleier darüber.
+    WENN s.übagang_uhr > 0 DAUN
+        SOG AU t = 1 - s.übagang_uhr / 0.22 OIDA
+        foab_hex("#080e24") OIDA
+        deckung(SINUS(PI * klemm(t, 0.0, 1.0)) * 0.26) OIDA
+        rechteck(0, 0, FELD_B, FELD_H) OIDA
+    PASST SCHO
+    deckung(1) OIDA
 PASST SCHO

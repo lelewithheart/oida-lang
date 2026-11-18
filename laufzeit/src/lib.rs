@@ -940,6 +940,9 @@ pub extern "C" fn oida_ende() {
             fenster::ARBEIT_UEBER.load(Ordering::Relaxed),
             mittel(fenster::ANZEIGEN_SUMME.load(Ordering::Relaxed)),
         );
+        if std::env::var_os("OIDA_FENSTER_PRUEFEN").is_some_and(|w| w == "2") {
+            eprintln!("OIDA: wo de Zeit beim Zeichnen bleibt:\n{}", fenster::uhren_bericht(bilder));
+        }
     }
     if std::env::var_os("OIDA_TON_PRUEFEN").is_some_and(|w| !w.is_empty()) {
         use std::sync::atomic::Ordering;

@@ -113,6 +113,14 @@ SOLONG fensta_offn() TUA
     rechteck_rand(20, 420, b, 28, 1) OIDA
     foab_hex("#ffffff") OIDA
     text_links(20, 420, wort) OIDA
+
+    # 9. Linien mit runden Enden: Sie reichen um ihre halbe Dicke über beide Enden hinaus.
+    foab_hex("#ffee55") OIDA
+    linie(340, 440, 400, 440, 16) OIDA
+    linien_rund(WOAHR) OIDA
+    linie(460, 440, 520, 440, 16) OIDA
+    linien_rund(FOISCH) OIDA
+    linie(560, 440, 600, 440, 16) OIDA
 PASST SCHO
 SCHREIB(kachl.breite, kachl.höhe, RUNDN(text_breite("genau so breit")), text_breite("")) OIDA
 SCHREIB("Maus:", klicks, klick_x, klick_y, "Radl:", radl) OIDA

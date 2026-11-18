@@ -1,4 +1,5 @@
 # RogueWave: die festen Werte des Spiels und ein paar kleine Helfer.
+# Die Zahlen stammen aus config.js und dem Anfang von game.js des Originals.
 
 BRAUCH texte OIDA
 
@@ -17,6 +18,7 @@ FIX ZUSTAND_VABESSARUNG = 2 OIDA
 FIX ZUSTAND_EINSTELLUNGEN = 3 OIDA
 FIX ZUSTAND_AUS = 4 OIDA
 FIX ZUSTAND_GWUNNA = 5 OIDA
+FIX ZUSTAND_PAUSE = 6 OIDA
 
 # Spielfigur
 FIX SPIELA_RADIUS = 16.0 OIDA
@@ -25,6 +27,9 @@ FIX SPIELA_LEBN = 100 OIDA
 FIX SPIELA_SCHODN = 15 OIDA
 FIX SPIELA_SCHUSS_PAUSE = 0.35 OIDA     # Sekunden zwischen zwei Schüssen
 FIX SPIELA_REICHWEITE = 300.0 OIDA      # so weit wird gezielt
+FIX DASH_DAUER = 0.16 OIDA
+FIX DASH_TEMPO = 640.0 OIDA
+FIX DASH_PAUSE = 2.4 OIDA               # Sekunden, bis man wieder ausweichen kann
 
 # Schüsse
 FIX SCHUSS_TEMPO = 500.0 OIDA
@@ -43,41 +48,137 @@ FIX OAT_FLITZA = 2 OIDA
 FIX OAT_SCHÜTZ = 3 OIDA
 FIX OAT_SPRENGA = 4 OIDA
 FIX OAT_MINIBOSS = 5 OIDA
-FIX OAT_ENDBOSS = 6 OIDA
+FIX OAT_BIGBOSS = 6 OIDA
+FIX OAT_PHASA = 7 OIDA                  # springt durch den Raum
+FIX OAT_SPOITA = 8 OIDA                 # zerfällt beim Tod in zwei kleinere
+FIX OAT_WÄCHTA = 9 OIDA                 # steht fest und dreht einen Strahl
+FIX OAT_ENDBOSS = 10 OIDA
+
+# Obergrenzen für Verbesserungen, die sich stapeln
+FIX SCHUSS_PAUSE_UNTN = 0.1 OIDA        # schneller als zehn Schüsse in der Sekunde geht es nicht
+FIX MEHRSCHUSS_OBN = 6 OIDA             # höchstens sechs Schüsse mehr (sieben zugleich)
+FIX XP_MOI_OBN = 4.0 OIDA
+FIX WAFFN_STUFN_OBN = 8 OIDA            # ab da gibt es keine "+1"-Karte mehr
+FIX WAFFN_EVO_STUFN = 5 OIDA            # ab da kann sich eine Waffe weiterentwickeln
+FIX SYNERGIE_STUFN = 3 OIDA             # beide Waffen brauchen diese Stufe für ihr Zusammenspiel
+FIX OVERDRIVE_WAFFN_TEMPO = 1.5 OIDA    # so viel schneller laufen die Waffen im Overdrive
+
+# Die Weiterentwicklungen der vier Waffen
+FIX EVO_SCHÜD_GRÖSSE = 32.0 OIDA        # Singularity: eine schwere Kugel
+FIX EVO_SCHÜD_OBSTAND = 200.0 OIDA
+FIX EVO_SCHÜD_DRAH = 1.2 OIDA
+FIX EVO_SCHÜD_ZUG_WEITE = 230.0 OIDA    # so weit zieht sie Gegner an
+FIX EVO_SCHÜD_ZUG_KROFT = 380.0 OIDA
+FIX EVO_SCHÜD_SCHODN_MOI = 1.8 OIDA
+FIX EVO_SCHÜD_PAUSE = 0.12 OIDA
+FIX EVO_BLITZ_SPRÜNGE = 3 OIDA          # Storm Chain: der Blitz springt weiter
+FIX EVO_BLITZ_SPRUNG_WEITE = 110.0 OIDA
+FIX EVO_BLITZ_SPRUNG_MOI = 0.7 OIDA
+FIX EVO_FROST_WEITE_MOI = 0.85 OIDA     # Absolute Zero: reicht so weit wie die Schüsse (mal dem)
+FIX EVO_FROST_FRIER_ZEIT = 1.5 OIDA
+FIX EVO_FROST_FRIER_PAUSE = 3.0 OIDA
+FIX EVO_FROST_SPLITTA_ANTEIL = 0.6 OIDA
+FIX EVO_FROST_SPLITTA_RADIUS = 70.0 OIDA
+FIX EVO_FEIA_LEBN_MOI = 2.0 OIDA        # Inferno: Flammen halten doppelt so lang
+FIX EVO_FEIA_BRENN_ZEIT = 3.0 OIDA
+FIX EVO_FEIA_BRENN_ANTEIL = 0.4 OIDA
+# Zusammenspiel zweier Waffen
+FIX SYN_SUPRALEITA_ZUASCHLOG = 0.5 OIDA # Blitze treffen gebremste Gegner um die Hälfte härter
+FIX SYN_HITZESCHOCK_MOI = 2.5 OIDA      # gebremste oder gefrorene Gegner nehmen 2,5-fachen Feuerschaden
+FIX SYN_BRENNKREIS_PAUSE = 0.4 OIDA     # die Kugeln vom Schild lassen so oft Flammen fallen
 
 # Erfahrung
 FIX XP_RADIUS = 6.0 OIDA
 FIX XP_GRUND = 10 OIDA
+FIX XP_ERSTE_STUFN = 160 OIDA           # so viel braucht die erste Stufe
 FIX XP_MAGNET = 100.0 OIDA
+FIX XP_WÖN_WOCHSTUM = 1.07 OIDA         # mit jeder Welle gibt es so viel mehr Erfahrung
 
-# Funken
+# Funken und Zahlen
 FIX FUNKN_LEBN = 0.5 OIDA
+FIX ZOIN_LEBN = 0.8 OIDA                # wie lang eine Schadenszahl zu sehen ist
+FIX ZOIN_STEIG_TEMPO = 60.0 OIDA
+FIX COMBO_ZEIT = 1.5 OIDA               # so lang hält eine Trefferserie ohne neuen Treffer
 
 # Obergrenzen, damit es nie zu viel wird
-FIX HÖCHSTNS_FUNKN = 150 OIDA
+FIX HÖCHSTNS_FUNKN = 240 OIDA
 FIX HÖCHSTNS_GEGNA = 80 OIDA
 FIX HÖCHSTNS_XP = 150 OIDA
-FIX HÖCHSTNS_FLAMMEN = 50 OIDA
+FIX HÖCHSTNS_ZOIN = 60 OIDA
+FIX HÖCHSTNS_FLAMMEN = 110 OIDA
 FIX HÖCHSTNS_BLITZE = 20 OIDA
 
 # Kamera
-FIX KAMERA_TEMPO = 5.0 OIDA             # je höher, desto schneller folgt sie
-FIX WACKL_DAUER = 0.15 OIDA
+FIX KAMERA_TEMPO = 7.0 OIDA             # je höher, desto schneller folgt sie
 FIX WACKL_STÄRKE = 6.0 OIDA
 
 # Wellen: Gegner kommen ohne Ende, eine Welle ist geschafft nach genug Treffern.
-FIX WÖN_GRUND_TOTE = 10 OIDA            # so viele braucht die erste Welle
-FIX WÖN_TOTE_DAZUA = 5 OIDA             # und jede weitere um so viele mehr
+FIX WÖN_GRUND_TOTE = 14 OIDA            # so viele braucht die erste Welle
+FIX WÖN_TOTE_DAZUA = 6 OIDA             # und jede weitere um so viele mehr
 FIX WÖN_GRUND_PAUSE = 1.5 OIDA          # Sekunden zwischen zwei neuen Gegnern (Welle 1)
-FIX WÖN_KLANSTE_PAUSE = 0.3 OIDA
-FIX WÖN_PAUSE_MOI = 0.92 OIDA           # die Pause wird mit jeder Welle so viel kürzer
-FIX WÖN_LEBN_MOI = 1.22 OIDA
+FIX WÖN_KLANSTE_PAUSE = 0.25 OIDA
+FIX WÖN_PAUSE_MOI = 0.91 OIDA           # die Pause wird mit jeder Welle so viel kürzer
+FIX WÖN_LEBN_MOI = 1.18 OIDA
 FIX WÖN_TEMPO_MOI = 1.07 OIDA
-FIX WÖN_SCHODN_MOI = 1.10 OIDA
+FIX WÖN_SCHODN_MOI = 1.12 OIDA
 FIX WÖN_RAST = 2.5 OIDA                 # Sekunden zwischen zwei Wellen
 FIX WÖN_LETZTE = 25 OIDA                # wer die schafft, hat gewonnen
+# Gedränge: So viele gewöhnliche Gegner sind mindestens da (Bosse zählen nicht).
+FIX GEDRÄNGE_GRUND = 8.0 OIDA
+FIX GEDRÄNGE_PRO_WÖN = 0.9 OIDA
+FIX GEDRÄNGE_OBN = 26 OIDA
+FIX GEDRÄNGE_PAUSE = 0.12 OIDA          # höchstens alle so viele Sekunden kommt einer nach
+FIX GEDRÄNGE_ANFANG = 10 OIDA           # so viele kommen am Anfang jeder Welle auf einmal
+# Endlos: nach der letzten Welle weiter, mit steilerer Kurve
+FIX ENDLOS_LEBN_MOI = 1.10 OIDA
+FIX ENDLOS_SCHODN_MOI = 1.06 OIDA
+FIX ENDLOS_PAUSE_MOI = 0.965 OIDA
+FIX ENDLOS_TOTE_DAZUA = 6 OIDA
+
+# Elite-Gegner: mit goldenem Schein, zäher und mehr wert
+FIX ELITE_AB_WÖN = 3 OIDA
+FIX ELITE_GRUND_GLÜCK = 0.06 OIDA
+FIX ELITE_GLÜCK_PRO_WÖN = 0.012 OIDA
+FIX ELITE_GLÜCK_OBN = 0.22 OIDA
+FIX ELITE_LEBN_MOI = 2.2 OIDA
+FIX ELITE_TEMPO_MOI = 1.08 OIDA
+FIX ELITE_SCHODN_MOI = 1.35 OIDA
+FIX ELITE_XP_MOI = 3.6 OIDA
+
+# Ereignisse: jede dritte Welle ab der dritten (nie bei einem Boss)
+FIX EREIGNIS_AB_WÖN = 3 OIDA
+FIX EREIGNIS_OLLE = 3 OIDA
+FIX EREIGNIS_NED_AB = 23 OIDA
+FIX EREIGNIS_KANS = 0 OIDA
+FIX EREIGNIS_ELITE = 1 OIDA             # jeder Gegner ist ein Elite
+FIX EREIGNIS_STURM = 2 OIDA             # schnell und schwach, alles trifft härter
+FIX EREIGNIS_BRUNNEN = 3 OIDA           # man heilt sich, dafür wenig Erfahrung
+FIX EREIGNIS_HINTAHOIT = 4 OIDA         # Rudel aus einer Richtung
+FIX EREIGNIS_SCHOTZ = 5 OIDA            # einer trägt Scherben
+FIX EREIGNIS_JOGD = 6 OIDA              # ein markierter Elite streift herum
+FIX HEILUNG_BEI_LOHN = 12 OIDA          # Leben, wenn ein Ereignis seinen Lohn auszahlt
+
+# Angriffe der Bosse: Schaden = (Grund + pro Welle mal Welle) mal dem Anteil des Angriffs
+FIX BOSS_ANGRIFF_GRUND = 40 OIDA
+FIX BOSS_ANGRIFF_PRO_WÖN = 6 OIDA
+FIX BOSS_OFFN_SCHODN_MOI = 2 OIDA       # so viel mehr Schaden nimmt ein Boss, solange er offen dasteht
+
+# Power-ups
+FIX DING_KANS = -1 OIDA
+FIX DING_MAGNET = 0 OIDA
+FIX DING_REPARATUR = 1 OIDA
+FIX DING_EMP = 2 OIDA
+FIX DING_OVERDRIVE = 3 OIDA
+FIX DING_LEBN = 15.0 OIDA               # so lang liegt eines da
+FIX DING_OBN = 3 OIDA                   # höchstens so viele zugleich
 
 FIX WOI_ANZAHL = 3 OIDA                 # Verbesserungen zur Auswahl
+
+# Seltenheit der Verbesserungen
+FIX SÖTN_GWÖHNLICH = 0 OIDA
+FIX SÖTN_SÖTN = 1 OIDA
+FIX SÖTN_EPISCH = 2 OIDA
+FIX EPISCH_AB_WÖN = 6 OIDA
 
 # Farben
 FIX FOAB_GRUND = "#111122" OIDA
@@ -102,6 +203,13 @@ FIX FOAB_GEGNA_SCHUSS = "#ff55ff" OIDA
 FIX FOAB_SPRENGA = "#ff8800" OIDA
 FIX FOAB_GOID = "#ffd700" OIDA
 FIX FOAB_RAHMEN = "#333344" OIDA
+# Die Tafeln der neuen Oberfläche
+FIX FOAB_TAFL_NEICH = "#080a18" OIDA
+FIX FOAB_TAFL_RAND = "#66ccff" OIDA
+FIX FOAB_KNOPF_TEXT = "#eaf6ff" OIDA
+FIX FOAB_SÖTN_GWÖHNLICH = "#cfd9e6" OIDA
+FIX FOAB_SÖTN_SÖTN = "#66ddff" OIDA
+FIX FOAB_SÖTN_EPISCH = "#c38bff" OIDA
 
 # ------------------------------------------------------------------ Helfer
 
@@ -125,4 +233,74 @@ FUNKTIAUN modus_nam(modus KETTN) GIBT ZRUCK KETTN
         GIB ZRUCK "HARD" OIDA
     PASST SCHO
     GIB ZRUCK "NORMAL" OIDA
+PASST SCHO
+
+# Wie weit der Punkt (px, py) von der Strecke a-b weg ist.
+FUNKTIAUN obstand_zua_streckn(px KOMMAZOI, py KOMMAZOI, ax KOMMAZOI, ay KOMMAZOI, bx KOMMAZOI, by KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    SOG AU vx = bx - ax OIDA
+    SOG AU vy = by - ay OIDA
+    SOG AU läng = vx * vx + vy * vy OIDA
+    WENN läng == 0 DAUN
+        läng = 1.0 OIDA
+    PASST SCHO
+    SOG AU t = GRÖSSTA(0.0, KLANSTA(1.0, ((px - ax) * vx + (py - ay) * vy) / läng)) OIDA
+    SOG AU dx = px - (ax + vx * t) OIDA
+    SOG AU dy = py - (ay + vy * t) OIDA
+    GIB ZRUCK WURZL(dx * dx + dy * dy) OIDA
+PASST SCHO
+
+# Was die Spielart ändert: leichter, gewöhnlich oder härter.
+STRUKTUR Spüoat
+    tote_moi KOMMAZOI           # wie viele Treffer eine Welle braucht
+    pause_moi KOMMAZOI          # Pause zwischen neuen Gegnern
+    lebn_moi KOMMAZOI
+    tempo_moi KOMMAZOI
+    schodn_moi KOMMAZOI
+    xp_moi KOMMAZOI
+    xp_wochstum KOMMAZOI        # um so viel wächst der Bedarf für die nächste Stufe
+    rast_moi KOMMAZOI
+    bsundare_moi KOMMAZOI       # wie oft besondere Gegner kommen
+PASST SCHO
+
+FUNKTIAUN spüoat_von(modus KETTN) GIBT ZRUCK Spüoat
+    WENN modus == "easy" DAUN
+        GIB ZRUCK Spüoat(0.78, 1.25, 0.8, 0.82, 0.8, 1.9, 1.10, 1.12, 0.9) OIDA
+    PASST SCHO
+    WENN modus == "hard" DAUN
+        GIB ZRUCK Spüoat(1.35, 0.72, 1.3, 1.28, 1.35, 0.72, 1.12, 0.85, 1.25) OIDA
+    PASST SCHO
+    GIB ZRUCK Spüoat(1, 1, 1, 1, 1, 1, 1.10, 1, 1) OIDA
+PASST SCHO
+
+# Die drei Gebiete: alle paar Wellen sieht die Welt anders aus.
+STRUKTUR Gebiet
+    nam KETTN
+    grund KETTN
+    gitta KETTN
+    rand KETTN
+PASST SCHO
+
+FUNKTIAUN gebiet_von(numma ZOI) GIBT ZRUCK Gebiet
+    WENN numma % 3 == 1 DAUN
+        GIB ZRUCK Gebiet("Acid Grid", "#131b17", "#1d3a2c", "#66ff99") OIDA
+    PASST SCHO
+    WENN numma % 3 == 2 DAUN
+        GIB ZRUCK Gebiet("Crimson Core", "#1d1016", "#3a1d28", "#ff6688") OIDA
+    PASST SCHO
+    GIB ZRUCK Gebiet("Neon District", "#101226", "#1a2448", "#33ccff") OIDA
+PASST SCHO
+
+# Wie viele Wellen über die letzte hinaus (0 im gewöhnlichen Spiel).
+FUNKTIAUN endlos_tiafn(wön ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK GRÖSSTA(0, wön - WÖN_LETZTE) OIDA
+PASST SCHO
+
+# Mit der Welle werden Ankündigung und Pause der Boss-Angriffe etwas kürzer, höchstens um ein gutes Drittel.
+FUNKTIAUN boss_tempo(wön ZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK GRÖSSTA(0.65, KLANSTA(1.0, 1 - (wön - 5) * 0.015)) OIDA
+PASST SCHO
+
+# Der Grundwert für den Schaden der Boss-Angriffe; jeder Angriff nimmt einen Teil davon.
+FUNKTIAUN boss_angriff_grund(wön ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK BOSS_ANGRIFF_GRUND + wön * BOSS_ANGRIFF_PRO_WÖN OIDA
 PASST SCHO

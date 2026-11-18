@@ -1,49 +1,94 @@
-# RogueWave: Geräusche und Musik, alles errechnet (keine Tondateien).
+# RogueWave: Geräusche und Musik. Die Geräusche sind errechnet, die Musik
+# kommt aus den MP3-Dateien im Ordner "musik".
 
 BRAUCH ton OIDA
+BRAUCH "werte.oida" OIDA
 
 # Wie laut Geräusche und Musik im Vergleich zu "voll" sind.
 FIX LAUT_KLANG = 0.4 OIDA
-FIX LAUT_MUSIK = 0.3 OIDA
-# 140 Schläge in der Minute; gespielt werden Achtelnoten.
-FIX ACHTL = 60.0 / 140.0 * 0.5 OIDA
+FIX LAUT_MUSIK = 0.25 OIDA
 
-# Die Melodie: acht Takte zu acht Achteln, als Tonhöhen in Hertz (0 ist eine Pause).
-FUNKTIAUN melodie() GIBT ZRUCK LISTN VON ZOI
+# Wo welche Musik läuft. Hat ein Ort mehrere Stücke, wechseln sie sich ab:
+# Jedes spielt einmal durch, dann kommt das nächste.
+FIX SZENE_KANE = -1 OIDA
+FIX SZENE_MENÜ = 0 OIDA
+FIX SZENE_GEBIET0 = 1 OIDA
+FIX SZENE_GEBIET1 = 2 OIDA
+FIX SZENE_GEBIET2 = 3 OIDA
+FIX SZENE_BOSS = 4 OIDA
+FIX SZENE_GFOAH = 5 OIDA            # statt der Musik vom Gebiet, wenn die Figur kaum mehr Leben hat
+
+FIX GFOAH_AB = 0.3 OIDA             # unter diesem Anteil Leben beginnt die Gefahr-Musik
+FIX GFOAH_BIS = 0.45 OIDA           # und so weit muss man sich erholen, damit sie aufhört
+FIX GFOAH_MINDESTNS = 8.0 OIDA      # sie läuft mindestens so viele Sekunden
+# Jede Datei hat vorne eine halbe Sekunde Anlauf; wiederholt wird der Teil danach.
+FIX SCHLEIFN_AB = 0.5 OIDA
+
+# Ein Musikstück: die Datei und wie lang die Schleife ist (Takte mal 240 durch das Tempo).
+KLASSE Liadl
+    datei KETTN
+    läng KOMMAZOI
+    numma ZOI = -1                  # die Nummer vom geladenen Stück, oder -1
+    frei_ab KOMMAZOI = -1.0         # ab wann es wieder hergegeben werden kann
+PASST SCHO
+
+FUNKTIAUN olle_liadln() GIBT ZRUCK LISTN VON Liadl
     GIB ZRUCK [
-        262, 330, 392, 330, 262, 330, 392, 523,
-        440, 392, 330, 262, 330, 392, 440, 392,
-        349, 440, 523, 440, 349, 330, 262, 330,
-        392, 330, 262, 220, 262, 330, 392, 330,
-        262, 330, 392, 523, 440, 392, 330, 392,
-        440, 523, 440, 392, 330, 262, 330, 392,
-        349, 330, 262, 330, 349, 440, 523, 440,
-        392, 330, 262, 220, 196, 220, 262, 0
+        Liadl("standby.mp3", 64.0),
+        Liadl("neon-district.mp3", 96.0),
+        Liadl("signal-rain.mp3", 9600.0 / 114),
+        Liadl("acid-grid.mp3", 640.0 / 7),
+        Liadl("voltage.mp3", 90.0),
+        Liadl("crimson-core.mp3", 96.0),
+        Liadl("black-ice.mp3", 8640.0 / 104),
+        Liadl("warden.mp3", 51.2),
+        Liadl("redline.mp3", 36.0),
+        Liadl("flatline.mp3", 5760.0 / 140)
     ] OIDA
 PASST SCHO
 
-FUNKTIAUN bass() GIBT ZRUCK LISTN VON ZOI
-    GIB ZRUCK [
-        131, 0, 131, 0, 165, 0, 165, 0,
-        220, 0, 220, 0, 196, 0, 196, 0,
-        175, 0, 175, 0, 165, 0, 165, 0,
-        196, 0, 196, 0, 131, 0, 131, 0,
-        131, 0, 131, 0, 220, 0, 220, 0,
-        220, 0, 220, 0, 196, 0, 196, 0,
-        175, 0, 175, 0, 220, 0, 220, 0,
-        196, 0, 196, 0, 131, 0, 131, 0
-    ] OIDA
+# Welche Stücke zu einem Ort gehören (als Stellen in olle_liadln).
+FUNKTIAUN szenen_liadln(szene ZOI) GIBT ZRUCK LISTN VON ZOI
+    WENN szene == SZENE_MENÜ DAUN
+        GIB ZRUCK [0] OIDA
+    PASST SCHO
+    WENN szene == SZENE_GEBIET0 DAUN
+        GIB ZRUCK [1, 2] OIDA
+    PASST SCHO
+    WENN szene == SZENE_GEBIET1 DAUN
+        GIB ZRUCK [3, 4] OIDA
+    PASST SCHO
+    WENN szene == SZENE_GEBIET2 DAUN
+        GIB ZRUCK [5, 6] OIDA
+    PASST SCHO
+    WENN szene == SZENE_BOSS DAUN
+        GIB ZRUCK [7] OIDA
+    PASST SCHO
+    GIB ZRUCK [8, 9] OIDA
+PASST SCHO
+
+# Was gerade zu hören ist. Es gibt zwei Schichten: die Musik vom Ort, und
+# darüber die Gefahr-Musik. Solange die läuft, spielt die vom Ort stumm
+# weiter und ist danach dort, wo sie sonst auch wäre.
+KLASSE Schicht
+    szene ZOI = SZENE_KANE
+    liadl ZOI = -1
+    anfang KOMMAZOI = 0.0           # wann das Stück begonnen hat (auf der Uhr der Töne)
+    laut KOMMAZOI = 1.0
 PASST SCHO
 
 KLASSE Klang
-    melodie LISTN VON ZOI
-    bass LISTN VON ZOI
+    ordna KETTN                     # dort liegen die MP3-Dateien
+    liadln LISTN VON Liadl
+    grund Schicht
+    drüba Schicht
     gräusche JONA = WOAHR           # Geräusche an?
     musik_au JONA = WOAHR
-    musik_rennt JONA = FOISCH
-    # Welche Achtelnote als nächste drankommt und wann (auf der Uhr der Töne).
-    musik_stö ZOI = 0
-    musik_zeit KOMMAZOI = 0.0
+    gwünscht ZOI = SZENE_KANE
+    gfoah JONA = FOISCH
+    gfoah_seit KOMMAZOI = 0.0
+    # Welches Stück an jedem Ort als nächstes dran ist
+    dran LISTN VON ZOI = [0, 0, 0, 0, 0, 0]
 
     # Ein Ton, der in `wann` Sekunden anfängt.
     FUNKTIAUN piep(wann KOMMAZOI, art KETTN, höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
@@ -62,10 +107,40 @@ KLASSE Klang
         PASST SCHO
     PASST SCHO
 
+    FUNKTIAUN dash()
+        WENN MEI.gräusche DAUN
+            ton_gleitend("säge", 240, 900, 0.14, 0.12 * LAUT_KLANG) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Ein Power-up wurde aufgesammelt.
+    FUNKTIAUN ding()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "eckig", 523, 0.1, 0.13) OIDA
+            MEI.piep(0.07, "eckig", 784, 0.1, 0.13) OIDA
+            MEI.piep(0.14, "eckig", 1047, 0.16, 0.13) OIDA
+        PASST SCHO
+    PASST SCHO
+
     FUNKTIAUN treffa()
         WENN MEI.gräusche DAUN
             MEI.kroch(0, 0.06, 0.2) OIDA
             MEI.piep(0, "eckig", 200, 0.08, 0.15) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN glückstreffa()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "dreieck", 880, 0.06, 0.13) OIDA
+            MEI.piep(0.04, "eckig", 1320, 0.08, 0.12) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN gnadnstoß()
+        WENN MEI.gräusche DAUN
+            MEI.kroch(0, 0.05, 0.18) OIDA
+            MEI.piep(0, "säge", 220, 0.08, 0.16) OIDA
+            MEI.piep(0.03, "dreieck", 140, 0.1, 0.1) OIDA
         PASST SCHO
     PASST SCHO
 
@@ -108,6 +183,45 @@ KLASSE Klang
         PASST SCHO
     PASST SCHO
 
+    FUNKTIAUN wön_gschofft()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "dreieck", 392, 0.09, 0.12) OIDA
+            MEI.piep(0.08, "dreieck", 523, 0.11, 0.13) OIDA
+            MEI.piep(0.16, "eckig", 659, 0.14, 0.14) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Eine Trefferserie hat eine runde Zahl erreicht.
+    FUNKTIAUN combo(wievü ZOI)
+        WENN MEI.gräusche DAUN
+            SOG AU grund = 659.0 OIDA
+            WENN wievü >= 25 DAUN
+                grund = 784.0 OIDA
+            PASST SCHO
+            MEI.piep(0, "eckig", grund, 0.09, 0.14) OIDA
+            MEI.piep(0.06, "eckig", grund * 1.25, 0.1, 0.13) OIDA
+            WENN wievü >= 25 DAUN
+                MEI.piep(0.12, "dreieck", grund * 1.6, 0.12, 0.11) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN boss_tot(endboss JONA)
+        WENN NED MEI.gräusche DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        WENN endboss DAUN
+            MEI.kroch(0, 0.16, 0.24) OIDA
+            MEI.piep(0, "säge", 220, 0.2, 0.16) OIDA
+            MEI.piep(0.1, "eckig", 330, 0.2, 0.14) OIDA
+            MEI.piep(0.22, "dreieck", 659, 0.22, 0.13) OIDA
+        SUNST
+            MEI.kroch(0, 0.1, 0.18) OIDA
+            MEI.piep(0, "säge", 330, 0.14, 0.16) OIDA
+            MEI.piep(0.1, "eckig", 494, 0.13, 0.14) OIDA
+        PASST SCHO
+    PASST SCHO
+
     FUNKTIAUN spü_aus()
         WENN MEI.gräusche DAUN
             SOG AU töne = [440, 370, 311, 220] OIDA
@@ -143,50 +257,171 @@ KLASSE Klang
 
     # ---------------------------------------------------------------- Musik
 
-    FUNKTIAUN musik_start()
-        WENN MEI.musik_rennt DAUN
-            GIB ZRUCK OIDA
-        PASST SCHO
-        MEI.musik_rennt = WOAHR OIDA
-        MEI.musik_stö = 0 OIDA
-        MEI.musik_zeit = ton_zeit() + 0.05 OIDA
+    # Das Spiel sagt, welche Musik es gerade will.
+    FUNKTIAUN musik_gebiet(numma ZOI)
+        MEI.gwünscht = SZENE_GEBIET0 + GRÖSSTA(0, KLANSTA(2, numma)) OIDA
+    PASST SCHO
+
+    FUNKTIAUN musik_boss()
+        MEI.gwünscht = SZENE_BOSS OIDA
     PASST SCHO
 
     FUNKTIAUN musik_stopp()
-        MEI.musik_rennt = FOISCH OIDA
+        MEI.gwünscht = SZENE_KANE OIDA
     PASST SCHO
 
-    # In jedem Bild aufrufen: plant die Noten der nächsten Fünftelsekunde ein.
-    # Die Uhr der Töne sorgt dafür, dass der Takt genau bleibt.
-    FUNKTIAUN musik_weida()
-        WENN NED MEI.musik_rennt ODA NED MEI.musik_au DAUN
+    # Das Stück, das an einem Ort gerade dran ist (oder mit `voraus` 1 das danach).
+    FUNKTIAUN liadl_von(szene ZOI, voraus ZOI) GIBT ZRUCK ZOI
+        SOG AU liste = szenen_liadln(szene) OIDA
+        GIB ZRUCK liste[(MEI.dran[szene] + voraus) % LÄNGN(liste)] OIDA
+    PASST SCHO
+
+    # Lädt ein Stück, wenn es noch nicht da ist. Das Laden läuft nebenher.
+    FUNKTIAUN lod(stö ZOI)
+        SOG AU l = MEI.liadln[stö] OIDA
+        WENN l.numma < 0 DAUN
+            l.numma = musik_lodn(MEI.ordna + l.datei) OIDA
+        PASST SCHO
+        l.frei_ab = -1.0 OIDA
+    PASST SCHO
+
+    FUNKTIAUN pegl(laut KOMMAZOI) GIBT ZRUCK KOMMAZOI
+        GIB ZRUCK laut * LAUT_MUSIK OIDA
+    PASST SCHO
+
+    # Eine Schicht wird in so vielen Sekunden leise und hört auf. Mit `weida`
+    # ist an ihrem Ort beim nächsten Mal das nächste Stück dran.
+    FUNKTIAUN schicht_stopp(sch Schicht, sekundn KOMMAZOI, weida_drahn JONA)
+        WENN sch.liadl < 0 DAUN
             GIB ZRUCK OIDA
         PASST SCHO
-        SOG AU jetzt = ton_zeit() OIDA
-        # War die Musik aus, geht es von hier weiter, ohne etwas nachzuholen.
-        WENN MEI.musik_zeit < jetzt DAUN
-            MEI.musik_zeit = jetzt + 0.05 OIDA
+        SOG AU l = MEI.liadln[sch.liadl] OIDA
+        WENN l.numma >= 0 DAUN
+            musik_stopp(l.numma, sekundn) OIDA
+            # Ein geladenes Stück braucht viel Speicher: Kurz nach dem Ausblenden wird es hergegeben.
+            l.frei_ab = ton_zeit() + sekundn + 1 OIDA
         PASST SCHO
-        SOLONG MEI.musik_zeit < jetzt + 0.2 TUA
-            SOG AU wann = MEI.musik_zeit OIDA
-            SOG AU note = MEI.musik_stö % 8 OIDA
-            SOG AU höhe = MEI.melodie[MEI.musik_stö] OIDA
-            WENN höhe > 0 DAUN
-                ton_um(wann, "eckig", höhe, ACHTL * 0.8, 0.08 * LAUT_MUSIK) OIDA
-            PASST SCHO
-            SOG AU tiaf = MEI.bass[MEI.musik_stö] OIDA
-            WENN tiaf > 0 DAUN
-                ton_um(wann, "dreieck", tiaf, ACHTL * 0.9, 0.1 * LAUT_MUSIK) OIDA
-            PASST SCHO
-            # Die Trommel auf 1 und 5, ein Zischen zwischen jeder zweiten Note
-            WENN note == 0 ODA note == 4 DAUN
-                ton_um(wann, "sinus", 60, 0.08, 0.12 * LAUT_MUSIK) OIDA
-            PASST SCHO
-            WENN note % 2 == 0 DAUN
-                ton_um(wann + ACHTL * 0.5, "rauschn", 0, 0.03, 0.04 * LAUT_MUSIK) OIDA
-            PASST SCHO
-            MEI.musik_zeit += ACHTL OIDA
-            MEI.musik_stö = (MEI.musik_stö + 1) % 64 OIDA
+        WENN weida_drahn DAUN
+            MEI.dran[sch.szene] = MEI.dran[sch.szene] + 1 OIDA
+        PASST SCHO
+        sch.liadl = -1 OIDA
+        sch.szene = SZENE_KANE OIDA
+    PASST SCHO
+
+    # Ein Stück beginnt auf einer Schicht (bei `wann` unter 0: sofort) und löst ab, was dort lief.
+    FUNKTIAUN schicht_spü(sch Schicht, szene ZOI, stö ZOI, laut KOMMAZOI, wann KOMMAZOI, aus_sekundn KOMMAZOI)
+        MEI.schicht_stopp(sch, aus_sekundn, sch.szene != SZENE_KANE UND sch.szene != szene) OIDA
+        MEI.lod(stö) OIDA
+        SOG AU l = MEI.liadln[stö] OIDA
+        musik_schleifn_um(wann, l.numma, MEI.pegl(laut), SCHLEIFN_AB, SCHLEIFN_AB + l.läng) OIDA
+        sch.szene = szene OIDA
+        sch.liadl = stö OIDA
+        sch.laut = laut OIDA
+        sch.anfang = ton_zeit() OIDA
+        WENN wann > sch.anfang DAUN
+            sch.anfang = wann OIDA
+        PASST SCHO
+        # Vom Anfangsbild geht es in einen Lauf: Das erste Stück dafür schon einmal holen.
+        WENN szene == SZENE_MENÜ DAUN
+            MEI.lod(MEI.liadl_von(SZENE_GEBIET0, 0)) OIDA
         PASST SCHO
     PASST SCHO
+
+    FUNKTIAUN schicht_laut(sch Schicht, laut KOMMAZOI)
+        WENN sch.liadl >= 0 UND sch.laut != laut DAUN
+            sch.laut = laut OIDA
+            musik_laut(MEI.liadln[sch.liadl].numma, MEI.pegl(laut), 0.5) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Sorgt dafür, dass das zu hören ist, was Spiel und Einstellungen wollen.
+    FUNKTIAUN obgleich()
+        SOG AU szene = MEI.gwünscht OIDA
+        WENN NED MEI.musik_au DAUN
+            szene = SZENE_KANE OIDA
+        PASST SCHO
+        SOG AU gfoah = MEI.gfoah UND szene >= SZENE_GEBIET0 UND szene <= SZENE_GEBIET2 OIDA
+        SOG AU laut = 1.0 OIDA
+        WENN gfoah DAUN
+            laut = 0.0 OIDA
+        PASST SCHO
+        WENN szene == SZENE_KANE DAUN
+            MEI.schicht_stopp(MEI.grund, 0.25, WOAHR) OIDA
+        SUNST WENN MEI.grund.szene == szene DAUN
+            MEI.schicht_laut(MEI.grund, laut) OIDA
+        SUNST
+            MEI.schicht_spü(MEI.grund, szene, MEI.liadl_von(szene, 0), laut, -1.0, 0.8) OIDA
+        PASST SCHO
+        WENN NED gfoah DAUN
+            MEI.schicht_stopp(MEI.drüba, 0.8, WOAHR) OIDA
+        SUNST WENN MEI.drüba.szene != SZENE_GFOAH DAUN
+            MEI.schicht_spü(MEI.drüba, SZENE_GFOAH, MEI.liadl_von(SZENE_GFOAH, 0), 1.0, -1.0, 0.8) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Ist ein Stück einmal durch, übernimmt das nächste von seinem Ort.
+    FUNKTIAUN obwechsln(sch Schicht)
+        WENN sch.liadl < 0 DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        WENN LÄNGN(szenen_liadln(sch.szene)) < 2 DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        SOG AU schluss = sch.anfang + MEI.liadln[sch.liadl].läng OIDA
+        SOG AU rest = schluss - ton_zeit() OIDA
+        WENN rest > 12 DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        # Die letzten Sekunden: das nächste Stück laden, damit es rechtzeitig da ist.
+        SOG AU nächsts = MEI.liadl_von(sch.szene, 1) OIDA
+        MEI.lod(nächsts) OIDA
+        WENN musik_zuastand(MEI.liadln[nächsts].numma) != 1 DAUN
+            # Nicht da (oder gar nicht ladbar): Das alte dreht noch eine Runde.
+            WENN rest < 0.1 DAUN
+                sch.anfang = schluss OIDA
+            PASST SCHO
+            GIB ZRUCK OIDA
+        PASST SCHO
+        WENN rest < 0.05 DAUN
+            SOG AU szene = sch.szene OIDA
+            MEI.dran[szene] = MEI.dran[szene] + 1 OIDA
+            MEI.schicht_spü(sch, szene, nächsts, sch.laut, schluss, 0.5) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # In jedem Bild: `zustand` ist der vom Spiel, `lebn` der Anteil Leben der
+    # Figur (unter 0, wenn gerade kein Lauf zu sehen ist), `jetzt` die Zeit in Sekunden.
+    FUNKTIAUN weida_um(zustand ZOI, lebn KOMMAZOI, jetzt KOMMAZOI)
+        WENN zustand == ZUSTAND_ANFANG ODA zustand == ZUSTAND_EINSTELLUNGEN DAUN
+            MEI.gwünscht = SZENE_MENÜ OIDA
+        PASST SCHO
+        # Gefahr: beginnt bei wenig Leben und bleibt eine Weile, damit sie nicht flackert.
+        WENN lebn < 0 DAUN
+            MEI.gfoah = FOISCH OIDA
+        SUNST WENN NED MEI.gfoah DAUN
+            WENN lebn <= GFOAH_AB DAUN
+                MEI.gfoah = WOAHR OIDA
+                MEI.gfoah_seit = jetzt OIDA
+            PASST SCHO
+        SUNST WENN lebn >= GFOAH_BIS UND jetzt - MEI.gfoah_seit >= GFOAH_MINDESTNS DAUN
+            MEI.gfoah = FOISCH OIDA
+        PASST SCHO
+        MEI.obgleich() OIDA
+        MEI.obwechsln(MEI.grund) OIDA
+        MEI.obwechsln(MEI.drüba) OIDA
+        # Was nicht mehr läuft, wird hergegeben.
+        SOG AU uhr = ton_zeit() OIDA
+        FIA i VON 0 BIS LÄNGN(MEI.liadln) - 1 TUA
+            SOG AU l = MEI.liadln[i] OIDA
+            WENN l.numma >= 0 UND l.frei_ab > 0 UND uhr > l.frei_ab UND MEI.grund.liadl != i UND MEI.drüba.liadl != i DAUN
+                musik_weg(l.numma) OIDA
+                l.numma = -1 OIDA
+                l.frei_ab = -1.0 OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN neicha_klang(ordna KETTN) GIBT ZRUCK Klang
+    GIB ZRUCK Klang(ordna, olle_liadln(), Schicht(), Schicht()) OIDA
 PASST SCHO

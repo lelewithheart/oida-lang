@@ -103,6 +103,9 @@ FUNKTIAUN durchzogn()
     gstrichlt(0, 0) OIDA
 PASST SCHO
 
+# Linien und Ränder bekommen ab jetzt runde Enden und Ecken (WOAHR) oder wieder eckige (FOISCH).
+FUNKTIAUN linien_rund(jo JONA) VON DRAUSSN "oida_g_linien_rund" OIDA
+
 # --- Freie Formen aus Linien und Kurven: erst bauen, dann füllen und/oder umranden.
 #
 #     form_anfang() OIDA
