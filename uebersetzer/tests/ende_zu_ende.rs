@@ -554,3 +554,111 @@ fn roguewave_spielt_sich() {
     let figur = zaehle(&bild, 380..580, 220..420, |f| f == (51, 204, 255));
     assert!(figur > 300, "von der Spielfigur sind nur {figur} Punkte da");
 }
+
+#[test]
+fn fenster_kann_verlaeufe_leuchten_formen_und_bilder() {
+    // Farbverläufe, additives Mischen, Leuchten, freie Formen, Ausschnitte, Bilder
+    // aus einer Datei und selbst gezeichnete, Textbreite: einzelne Punkte nachgeschaut.
+    let arbeit = arbeitsordner("fenster_mehr");
+    let exe = arbeit.join("mehr.exe");
+    uebersetze(&tests().join("fenster").join("mehr.oida"), &exe, &[]);
+    fs::copy(tests().join("fenster").join("probe.png"), arbeit.join("probe.png")).unwrap();
+    let lauf = befehl(&exe, None)
+        .env("OIDA_FENSTER_BILDER", &arbeit)
+        .env("OIDA_FENSTER_ENDE", "12")
+        // Die Maus nach Drehbuch: hinstellen, zweimal klicken, am Rad drehen (drei Rasten hinunter, eine hinauf).
+        .env("OIDA_FENSTER_TASTEN", "MAUS(100;50)@3,KLICK@4,MAUS(320.5;240)@6-9,KLICK@7-8,RADL_OBE@5-7,RADL_AUFFE@9")
+        .env("OIDA_TEXTE_PRUEFEN", "1")
+        .output()
+        .unwrap();
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert_eq!(
+        text(&lauf.stdout),
+        "64 64 127.0 0.0\nMaus: 2 320.5 240.0 Radl: 2.0\ngladn: 48 48\ngibts_ned.png: De gibt's ned.\nka_büd.png: Des is ka Büd, des i lesn kaun.\n"
+    );
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+
+    let bild = Bild::lies(&arbeit.join("bild_002.bmp"));
+    assert_eq!((bild.breite, bild.hoehe), (640, 480));
+    let grund = (17, 17, 34);
+    bild.pruefe(5, 5, grund, "Hintergrund");
+
+    // Gerader Verlauf: links rot, rechts blau, in der Mitte beides halb
+    let (l, m, r) = (bild.farbe(25, 50), bild.farbe(120, 50), bild.farbe(215, 50));
+    assert!(l.0 > 230 && l.2 < 30, "links im Verlauf: {l:?}");
+    assert!(r.2 > 230 && r.0 < 30, "rechts im Verlauf: {r:?}");
+    assert!((100..160).contains(&m.0) && (100..160).contains(&m.2) && m.1 < 10, "Mitte vom Verlauf: {m:?}");
+    // Runder Verlauf: innen weiß, auf halbem Weg halb durchsichtig, außen nichts mehr
+    let (innen, halb) = (bild.farbe(320, 50), bild.farbe(340, 50));
+    assert!(innen.0 > 235 && innen.1 > 235, "Mitte vom runden Verlauf: {innen:?}");
+    assert!((90..185).contains(&halb.0), "halber Weg im runden Verlauf: {halb:?}");
+    bild.pruefe(365, 50, grund, "außerhalb vom runden Verlauf");
+
+    // Additiv gemischt: Rot und Grün zählen sich in der Mitte zu Gelb zusammen (und zum Hintergrund dazu).
+    bild.pruefe(430, 50, (255, 17, 34), "nur Rot");
+    bild.pruefe(500, 50, (17, 255, 34), "nur Grün");
+    bild.pruefe(465, 50, (255, 255, 34), "Rot und Grün zusammen");
+
+    // Leuchten: Um den weißen Kreis liegt ein bläulicher Schein, der nach außen schwächer wird.
+    bild.pruefe(70, 170, (255, 255, 255), "leuchtender Kreis");
+    let (nah, weit) = (bild.farbe(70, 143), bild.farbe(70, 132));
+    assert!(nah.2 > 60 && nah.2 > nah.0 + 20, "Schein knapp über dem Kreis: {nah:?}");
+    assert!(weit.2 < nah.2 && weit.2 > grund.2, "Schein weiter weg: {weit:?} nach {nah:?}");
+    bild.pruefe(70, 105, grund, "kein Schein mehr");
+
+    // Freie Form (ein Herz aus zwei Kurven), dreifach vergrößert
+    bild.pruefe(360, 172, (255, 68, 102), "im Herz");
+    bild.pruefe(360, 150, grund, "in der Kerbe über dem Herz");
+    bild.pruefe(325, 190, grund, "neben der Spitze vom Herz");
+
+    // Ausschnitte: Das gelbe Quadrat ist nur im Kreis da, das grüne nur im runden Rechteck.
+    bild.pruefe(480, 170, (255, 238, 85), "im Kreis-Ausschnitt");
+    bild.pruefe(445, 135, grund, "Ecke vom Quadrat, außerhalb vom Kreis");
+    bild.pruefe(580, 170, (85, 255, 136), "im runden Ausschnitt");
+    bild.pruefe(541, 141, grund, "runde Ecke vom Ausschnitt");
+    bild.pruefe(533, 170, grund, "links vom Ausschnitt");
+
+    // Das selbst gezeichnete Bild: in eigener Größe, doppelt so groß, und nur ein Stück davon
+    let (rot, blau) = ((255, 68, 102), (51, 204, 255));
+    bild.pruefe(30, 270, rot, "Bild: Quadrat");
+    bild.pruefe(60, 300, blau, "Bild: Kreis");
+    bild.pruefe(75, 265, grund, "Bild: durchsichtige Ecke");
+    bild.pruefe(110, 270, rot, "großes Bild: Quadrat");
+    bild.pruefe(180, 340, blau, "großes Bild: Kreis");
+    bild.pruefe(254, 264, rot, "Stück vom Bild: Quadrat");
+    bild.pruefe(290, 300, blau, "Stück vom Bild: Kreis");
+    // Nur beim richtigen Stück (ab 20, 40 breit, doppelt vergrößert) reicht der Kreis bis hierher.
+    bild.pruefe(326, 300, blau, "Stück vom Bild: rechter Rand vom Kreis");
+
+    // Das Bild aus der Datei, mit seiner halb durchsichtigen Scheibe; daneben vergrößert mit harten Kanten
+    bild.pruefe(365, 265, (255, 0, 0), "PNG: rot");
+    bild.pruefe(390, 265, (0, 255, 0), "PNG: grün");
+    bild.pruefe(365, 290, (0, 0, 255), "PNG: blau");
+    let scheibe = bild.farbe(396, 296);
+    assert!((120..155).contains(&scheibe.0) && (125..160).contains(&scheibe.2), "PNG: halb durchsichtig: {scheibe:?}");
+    bild.pruefe(450, 270, (255, 0, 0), "PNG groß: rot");
+    bild.pruefe(540, 270, (0, 255, 0), "PNG groß: grün");
+    bild.pruefe(450, 360, (0, 0, 255), "PNG groß: blau");
+    // Harte Kanten: Direkt an der Grenze zwischen Rot und Grün gibt es keine Mischfarbe.
+    for x in 500..508 {
+        let f = bild.farbe(x, 270);
+        assert!(f == (255, 0, 0) || f == (0, 255, 0), "PNG groß bei x = {x}: {f:?}");
+    }
+
+    // Der Rahmen ist genau so breit wie der Text (127 Punkte): rechts davon ist nichts mehr.
+    bild.pruefe(20 + 127 + 6, 434, grund, "rechts vom Textrahmen");
+}
+
+#[test]
+fn musik_aus_einer_mp3_datei() {
+    // Laden (nebenher), Länge, abspielen, wiederholen, ausblenden, und was schiefgehen kann.
+    let arbeit = arbeitsordner("musik");
+    let exe = arbeit.join("musik.exe");
+    let quelle = tests().join("fenster").join("musik.oida");
+    uebersetze(&quelle, &exe, &[]);
+    fs::copy(tests().join("fenster").join("ton.mp3"), arbeit.join("ton.mp3")).unwrap();
+    let lauf = befehl(&exe, None).env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert_eq!(text(&lauf.stdout), lies(&quelle.with_extension("erwartet")));
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+}

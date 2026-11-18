@@ -23,11 +23,31 @@
 //! `OIDA_FENSTER_TASTEN=RECHTS@10-50,LAA@20` drückt Tasten nach Drehbuch:
 //! RECHTS in den Bildern 10 bis 50, die Leertaste nur im Bild 20. So lässt
 //! sich ein Spiel im Test spielen, ohne dass jemand an der Tastatur sitzt.
+//! Auch die Maus geht: `MAUS(480;350)@30` stellt sie hin, `KLICK@31` drückt
+//! links (`KLICK2` rechts), `RADL_OBE@40-42` und `RADL_AUFFE@50` drehen am Rad.
 
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+
+/// Steht am Anfang jeder Funktion, die etwas zeichnet: Soll das Gezeichnete
+/// leuchten, ruft sie sich einmal selbst auf und zeichnet dabei in ein
+/// eigenes Bild, aus dem der Schein wird (siehe `pinsel.rs`). Danach geht
+/// es gewöhnlich weiter.
+macro_rules! leuchtend {
+    ($f:ident, $selbst:expr) => {
+        if unsafe { pinsel::leuchten_anfang($f) } {
+            $selbst;
+            unsafe { pinsel::leuchten_ende(zeichnen()) };
+        }
+        let $f = zeichnen();
+    };
+}
+
+mod bilder;
+mod formen;
+mod pinsel;
 
 /// Für `OIDA_FENSTER_PRUEFEN`: Bilder, und wie lang das Programm für sie
 /// gearbeitet hat (Summe und längstes, in Nanosekunden), dazu die Zeit fürs Anzeigen.
@@ -114,7 +134,7 @@ unsafe fn freigeben(objekt: Zeiger) {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
 struct Punkt {
     x: f32,
     y: f32,
@@ -299,6 +319,37 @@ struct Fenster {
     maus: (f32, f32),
     maus_tasten: [bool; 4],
     maus_neu: [bool; 4],
+    /// Das Mausrad: wie weit in diesem Bild gedreht wurde, und was für das nächste gesammelt wird.
+    rad: f32,
+    rad_neu: f32,
+    /// Ein Farbverlauf statt der einen Farbe (siehe `pinsel.rs`).
+    verlauf: Option<pinsel::Verlauf>,
+    /// ID2D1DeviceContext zur Zeichenfläche (für Mischen und Leuchten), oder null.
+    kontext: Zeiger,
+    /// Additiv mischen: Farben werden zusammengezählt statt übereinandergelegt.
+    dazu: bool,
+    leuchten: Option<pinsel::Leuchten>,
+    /// Das Bild, in dem die Form für den Schein entsteht, seine Größe, der Effekt,
+    /// und wohin es zurückgeht, während dort gezeichnet wird.
+    leucht_ziel: Zeiger,
+    leucht_groesse: (i32, i32),
+    leucht_effekt: Zeiger,
+    leucht_haupt: Zeiger,
+    im_leuchten: bool,
+    /// Die freie Form, die gerade gebaut wird, und die offenen Ausschnitte.
+    pfad: formen::Pfad,
+    ausschnitte: Vec<formen::Ausschnitt>,
+    /// So viele Ausschnitte gehören zur Fläche darunter (wenn gerade in ein Bild gezeichnet wird).
+    ausschnitte_unten: usize,
+    /// Die Bilder des Programms; ihre Stelle hier ist ihre Nummer.
+    bilder_liste: Vec<Option<bilder::Bild>>,
+    wic: Zeiger,
+    bild_glatt: bool,
+    /// Wird gerade in ein Bild gezeichnet: welches, und was vom Fenster so lange aufgehoben ist.
+    bild_ziel: Option<usize>,
+    bild_haupt: Zeiger,
+    bild_lage: Lage,
+    bild_gemerkt: Vec<Lage>,
     anfang: Instant,
     letztes: Instant,
     /// Wann `fensta_offn()` zuletzt zum Programm zurückgekehrt ist.
@@ -309,7 +360,7 @@ struct Fenster {
     bilder_ordner: Option<String>,
     bild_jedes: u64,
     /// Tasten nach Drehbuch: Nummer der Taste, erstes und letztes Bild.
-    drehbuch: Vec<(usize, u64, u64)>,
+    drehbuch: Vec<(Eingabe, u64, u64)>,
     dc: Zeiger,
     bild: Zeiger,
     punkte: *mut u8,
@@ -385,6 +436,12 @@ unsafe extern "system" fn fenster_funktion(hwnd: Zeiger, art: u32, w: usize, l: 
                 f.tasten = [false; 256];
                 f.maus_tasten = [false; 4];
             }
+            // WM_MOUSEWHEEL: oben im w steht, wie weit (120 ist eine Raste; nach vorne ist positiv).
+            // Gezählt wird wie im Browser: nach unten rollen ist positiv.
+            0x020A => {
+                f.rad_neu -= ((w >> 16) & 0xffff) as u16 as i16 as f32 / 120.0;
+                return 0;
+            }
             // WM_MOUSEMOVE
             0x0200 => f.maus = (maus_x, maus_y),
             // WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN
@@ -423,10 +480,13 @@ unsafe extern "system" fn fenster_funktion(hwnd: Zeiger, art: u32, w: usize, l: 
 /// Legt die Zeichenfläche und den Pinsel an (am Anfang, und wenn Windows sie verloren hat).
 unsafe fn ziel_anlegen(f: &mut Fenster) {
     unsafe {
-        // Die fertigen Text-Bilder gehören zur alten Zeichenfläche.
+        // Die fertigen Text-Bilder gehören zur alten Zeichenfläche, und alles andere auch.
         for (_, bild) in f.text_bilder.drain() {
             freigeben(bild.bild);
         }
+        pinsel::vergiss(f);
+        formen::vergiss(f);
+        bilder::vergiss(f);
         freigeben(f.pinsel);
         freigeben(f.ziel);
         f.pinsel = std::ptr::null_mut();
@@ -467,6 +527,8 @@ unsafe fn ziel_anlegen(f: &mut Fenster) {
         if ergebnis < 0 || f.pinsel.is_null() {
             stopp(&format!("Windows gibt ma kan Pinsl (Direct2D sogt 0x{:08X}).", ergebnis as u32));
         }
+        f.kontext = pinsel::kontext_von(f.ziel);
+        bilder::neu_anlegen(f);
     }
 }
 
@@ -525,6 +587,27 @@ pub unsafe extern "C" fn oida_g_auf(titel: *const TextKopf, breite: i64, hoehe: 
             maus: (0.0, 0.0),
             maus_tasten: [false; 4],
             maus_neu: [false; 4],
+            rad: 0.0,
+            rad_neu: 0.0,
+            verlauf: None,
+            kontext: std::ptr::null_mut(),
+            dazu: false,
+            leuchten: None,
+            leucht_ziel: std::ptr::null_mut(),
+            leucht_groesse: (0, 0),
+            leucht_effekt: std::ptr::null_mut(),
+            leucht_haupt: std::ptr::null_mut(),
+            im_leuchten: false,
+            pfad: formen::Pfad::default(),
+            ausschnitte: Vec::new(),
+            ausschnitte_unten: 0,
+            bilder_liste: Vec::new(),
+            wic: std::ptr::null_mut(),
+            bild_glatt: true,
+            bild_ziel: None,
+            bild_haupt: std::ptr::null_mut(),
+            bild_lage: Lage::GERADE,
+            bild_gemerkt: Vec::new(),
             anfang: jetzt,
             letztes: jetzt,
             zurueck: jetzt,
@@ -679,6 +762,9 @@ pub extern "C" fn oida_g_offen() -> bool {
     let f = fenster();
     unsafe {
         if f.im_bild {
+            // Was das Programm offen gelassen hat, wird hier zugemacht.
+            bilder::ins_fenster(f);
+            formen::ausschnitte_zu_bis(f, 0);
             // So lang hat das Programm für dieses Bild gerechnet und gezeichnet.
             let eintritt = Instant::now();
             let arbeit = eintritt.duration_since(f.zurueck).as_nanos() as u64;
@@ -707,6 +793,7 @@ pub extern "C" fn oida_g_offen() -> bool {
         // "Neu gedrückt" gilt für genau ein Bild.
         f.tasten_neu = [false; 256];
         f.maus_neu = [false; 4];
+        f.rad = std::mem::take(&mut f.rad_neu);
         if !f.fenster.is_null() {
             let mut nachricht: Nachricht = std::mem::zeroed();
             while (f.hol_nachricht)(&mut nachricht, std::ptr::null_mut(), 0, 0, 1) != 0 {
@@ -717,13 +804,28 @@ pub extern "C" fn oida_g_offen() -> bool {
         // Tasten nach Drehbuch, für das Bild, das jetzt beginnt.
         let bild = f.bilder + 1;
         for i in 0..f.drehbuch.len() {
-            let (taste, von, bis) = f.drehbuch[i];
+            let (eingabe, von, bis) = f.drehbuch[i];
             let unten = (von..=bis).contains(&bild);
-            if unten && !f.tasten[taste] {
-                f.tasten_neu[taste] = true;
-            }
-            if unten || bild == bis + 1 {
-                f.tasten[taste] = unten;
+            match eingabe {
+                Eingabe::Taste(taste) => {
+                    if unten && !f.tasten[taste] {
+                        f.tasten_neu[taste] = true;
+                    }
+                    if unten || bild == bis + 1 {
+                        f.tasten[taste] = unten;
+                    }
+                }
+                Eingabe::Klick(knopf) => {
+                    if unten && !f.maus_tasten[knopf] {
+                        f.maus_neu[knopf] = true;
+                    }
+                    if unten || bild == bis + 1 {
+                        f.maus_tasten[knopf] = unten;
+                    }
+                }
+                Eingabe::Maus(x, y) if unten => f.maus = (x, y),
+                Eingabe::Rad(rasten) if unten => f.rad += rasten,
+                _ => {}
             }
         }
         if f.zu {
@@ -746,6 +848,7 @@ pub extern "C" fn oida_g_offen() -> bool {
         f.gemerkt.clear();
         f.lage = Lage::GERADE;
         lage_setzen(f);
+        pinsel::neues_bild(f);
         f.zurueck = Instant::now();
     }
     true
@@ -784,6 +887,11 @@ pub extern "C" fn oida_g_bild_zeit() -> f64 {
 /// Stellt den Pinsel auf die aktuelle Farbe und gibt ihn zurück.
 unsafe fn pinsel(f: &mut Fenster) -> Zeiger {
     unsafe {
+        if f.verlauf.is_some()
+            && let Some(verlauf) = pinsel::verlauf_pinsel(f)
+        {
+            return verlauf;
+        }
         let farbe = Farbe { a: f.farbe.a * f.deckung, ..f.farbe };
         let setzen: unsafe extern "system" fn(Zeiger, *const Farbe) = methode(f.pinsel, PINSEL_FARBE);
         setzen(f.pinsel, &farbe);
@@ -802,7 +910,9 @@ unsafe fn lage_setzen(f: &mut Fenster) {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_farbe(rot: i64, gruen: i64, blau: i64) {
     let teil = |wert: i64| wert.clamp(0, 255) as f32 / 255.0;
-    fenster().farbe = Farbe { r: teil(rot), g: teil(gruen), b: teil(blau), a: 1.0 };
+    let f = fenster();
+    f.farbe = Farbe { r: teil(rot), g: teil(gruen), b: teil(blau), a: 1.0 };
+    pinsel::farbe_gesetzt(f);
 }
 
 /// `foab_hex("#ff8800")`: wie im Web, auch kurz (`#f80`) und mit Deckung (`#ff880080`).
@@ -812,22 +922,29 @@ pub extern "C" fn oida_g_farbe(rot: i64, gruen: i64, blau: i64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn oida_g_farbe_hex(code: *const TextKopf) {
     let roh = unsafe { bytes(code) };
-    let ziffern = roh.strip_prefix(b"#").unwrap_or(roh);
-    let wert = |z: u8| (z as char).to_digit(16).map(|w| w as u8);
-    let alle: Option<Vec<u8>> = ziffern.iter().map(|z| wert(*z)).collect();
-    let teile: Option<Vec<u8>> = match (alle, ziffern.len()) {
-        (Some(z), 3 | 4) => Some(z.iter().map(|w| w * 17).collect()),
-        (Some(z), 6 | 8) => Some(z.chunks(2).map(|p| p[0] * 16 + p[1]).collect()),
-        _ => None,
-    };
-    let Some(teile) = teile else {
+    let Some(farbe) = farbe_aus_hex(roh) else {
         stopp(&format!(
             "De Foab \"{}\" versteh i ned. So schaut ane aus: \"#ff8800\" oda \"#f80\".",
             String::from_utf8_lossy(roh)
         ));
     };
+    let f = fenster();
+    f.farbe = farbe;
+    pinsel::farbe_gesetzt(f);
+}
+
+/// Liest eine Farbe wie im Web: `#rgb`, `#rgba`, `#rrggbb` oder `#rrggbbaa`.
+fn farbe_aus_hex(roh: &[u8]) -> Option<Farbe> {
+    let ziffern = roh.strip_prefix(b"#").unwrap_or(roh);
+    let wert = |z: u8| (z as char).to_digit(16).map(|w| w as u8);
+    let alle: Option<Vec<u8>> = ziffern.iter().map(|z| wert(*z)).collect();
+    let teile: Vec<u8> = match (alle, ziffern.len()) {
+        (Some(z), 3 | 4) => z.iter().map(|w| w * 17).collect(),
+        (Some(z), 6 | 8) => z.chunks(2).map(|p| p[0] * 16 + p[1]).collect(),
+        _ => return None,
+    };
     let teil = |i: usize| teile.get(i).map_or(1.0, |w| *w as f32 / 255.0);
-    fenster().farbe = Farbe { r: teil(0), g: teil(1), b: teil(2), a: teil(3) };
+    Some(Farbe { r: teil(0), g: teil(1), b: teil(2), a: teil(3) })
 }
 
 /// `deckung(wert)`: 1 ist ganz deckend, 0 unsichtbar. Gilt für alles, was danach gezeichnet wird.
@@ -934,6 +1051,7 @@ pub extern "C" fn oida_g_hintergrund() {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_rechteck(x: f64, y: f64, breite: f64, hoehe: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_rechteck(x, y, breite, hoehe));
     let flaeche = Rechteck { links: x as f32, oben: y as f32, rechts: (x + breite) as f32, unten: (y + hoehe) as f32 };
     unsafe {
         let p = pinsel(f);
@@ -945,6 +1063,7 @@ pub extern "C" fn oida_g_rechteck(x: f64, y: f64, breite: f64, hoehe: f64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_rechteck_rand(x: f64, y: f64, breite: f64, hoehe: f64, dicke: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_rechteck_rand(x, y, breite, hoehe, dicke));
     let flaeche = Rechteck { links: x as f32, oben: y as f32, rechts: (x + breite) as f32, unten: (y + hoehe) as f32 };
     unsafe {
         let p = pinsel(f);
@@ -967,6 +1086,7 @@ struct Rund {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_rechteck_rund_rand(x: f64, y: f64, breite: f64, hoehe: f64, radius: f64, dicke: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_rechteck_rund_rand(x, y, breite, hoehe, radius, dicke));
     let rund = Rund {
         flaeche: Rechteck { links: x as f32, oben: y as f32, rechts: (x + breite) as f32, unten: (y + hoehe) as f32 },
         radius_x: radius as f32,
@@ -985,6 +1105,7 @@ pub extern "C" fn oida_g_rechteck_rund_rand(x: f64, y: f64, breite: f64, hoehe: 
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_rechteck_rund(x: f64, y: f64, breite: f64, hoehe: f64, radius: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_rechteck_rund(x, y, breite, hoehe, radius));
     let rund = Rund {
         flaeche: Rechteck { links: x as f32, oben: y as f32, rechts: (x + breite) as f32, unten: (y + hoehe) as f32 },
         radius_x: radius as f32,
@@ -1008,6 +1129,7 @@ struct Ellipse {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_ellipse(x: f64, y: f64, radius_x: f64, radius_y: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_ellipse(x, y, radius_x, radius_y));
     let form = Ellipse { mitte: Punkt { x: x as f32, y: y as f32 }, radius_x: radius_x as f32, radius_y: radius_y as f32 };
     unsafe {
         let p = pinsel(f);
@@ -1019,6 +1141,7 @@ pub extern "C" fn oida_g_ellipse(x: f64, y: f64, radius_x: f64, radius_y: f64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_kreis_rand(x: f64, y: f64, radius: f64, dicke: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_kreis_rand(x, y, radius, dicke));
     let form = Ellipse { mitte: Punkt { x: x as f32, y: y as f32 }, radius_x: radius as f32, radius_y: radius as f32 };
     unsafe {
         let p = pinsel(f);
@@ -1033,6 +1156,7 @@ pub extern "C" fn oida_g_kreis_rand(x: f64, y: f64, radius: f64, dicke: f64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_linie(x1: f64, y1: f64, x2: f64, y2: f64, dicke: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_linie(x1, y1, x2, y2, dicke));
     unsafe {
         let p = pinsel(f);
         let linie: unsafe extern "system" fn(Zeiger, Punkt, Punkt, Zeiger, f32, Zeiger) = methode(f.ziel, ZIEL_LINIE);
@@ -1106,6 +1230,7 @@ unsafe fn punkte_aus(liste: *const ListenKopf) -> Vec<Punkt> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn oida_g_vieleck(punkte: *const ListenKopf) {
     let f = zeichnen();
+    leuchtend!(f, unsafe { oida_g_vieleck(punkte) });
     unsafe {
         let punkte = punkte_aus(punkte);
         form(f, &punkte, true, true, 0.0);
@@ -1119,6 +1244,7 @@ pub unsafe extern "C" fn oida_g_vieleck(punkte: *const ListenKopf) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn oida_g_linienzug(punkte: *const ListenKopf, dicke: f64, zu: bool) {
     let f = zeichnen();
+    leuchtend!(f, unsafe { oida_g_linienzug(punkte, dicke, zu) });
     unsafe {
         let punkte = punkte_aus(punkte);
         form(f, &punkte, false, zu, dicke as f32);
@@ -1130,6 +1256,7 @@ pub unsafe extern "C" fn oida_g_linienzug(punkte: *const ListenKopf, dicke: f64,
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_bogen(x: f64, y: f64, radius: f64, von: f64, bis: f64, dicke: f64) {
     let f = zeichnen();
+    leuchtend!(f, oida_g_bogen(x, y, radius, von, bis, dicke));
     // Als Linienzug: je größer der Bogen am Bildschirm, desto mehr Stücke.
     let weite = (bis - von).abs();
     let stuecke = ((weite * radius.abs().max(1.0) / 4.0).ceil() as usize).clamp(8, 720);
@@ -1291,6 +1418,7 @@ unsafe fn text_bild_anlegen(f: &mut Fenster, zeichen: &[u16], format: Zeiger, ma
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn oida_g_text(x: f64, y: f64, text: *const TextKopf, ausrichtung: i64) {
     let f = zeichnen();
+    leuchtend!(f, unsafe { oida_g_text(x, y, text, ausrichtung) });
     unsafe {
         let inhalt = String::from_utf8_lossy(bytes(text));
         let zeichen: Vec<u16> = inhalt.encode_utf16().collect();
@@ -1392,19 +1520,50 @@ fn tasten_nummer(name: &[u8]) -> usize {
 }
 
 /// Liest ein Drehbuch wie `RECHTS@10-50,LAA@20`. Was sich nicht lesen lässt, bricht ab.
-fn drehbuch_lesen(text: &str) -> Vec<(usize, u64, u64)> {
+fn drehbuch_lesen(text: &str) -> Vec<(Eingabe, u64, u64)> {
     let mut aus = Vec::new();
     for eintrag in text.split(',').map(str::trim).filter(|e| !e.is_empty()) {
         let gelesen = eintrag.split_once('@').and_then(|(name, bilder)| {
             let (von, bis) = bilder.split_once('-').unwrap_or((bilder, bilder));
-            Some((tasten_nummer(name.as_bytes()), von.parse().ok()?, bis.parse().ok()?))
+            Some((eingabe_aus(name.trim())?, von.parse().ok()?, bis.parse().ok()?))
         });
         match gelesen {
             Some(eintrag) => aus.push(eintrag),
-            None => stopp(&format!("OIDA_FENSTER_TASTEN: \"{eintrag}\" versteh i ned. So geht's: RECHTS@10-50,LAA@20")),
+            None => stopp(&format!(
+                "OIDA_FENSTER_TASTEN: \"{eintrag}\" versteh i ned. So geht's: RECHTS@10-50,LAA@20,MAUS(480;350)@30,KLICK@31"
+            )),
         }
     }
     aus
+}
+
+/// Was das Drehbuch tun kann.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Eingabe {
+    /// Eine Taste (ihre Nummer bei Windows) ist gedrückt.
+    Taste(usize),
+    /// Ein Mausknopf ist gedrückt: 1 links, 2 rechts, 3 Mitte.
+    Klick(usize),
+    /// Die Maus steht an dieser Stelle im Fenster.
+    Maus(f32, f32),
+    /// Das Mausrad dreht sich in jedem Bild um so viele Rasten (nach unten positiv).
+    Rad(f32),
+}
+
+fn eingabe_aus(name: &str) -> Option<Eingabe> {
+    let gross = name.to_uppercase();
+    if let Some(ort) = gross.strip_prefix("MAUS(").and_then(|rest| rest.strip_suffix(')')) {
+        let (x, y) = ort.split_once(';')?;
+        return Some(Eingabe::Maus(x.trim().parse().ok()?, y.trim().parse().ok()?));
+    }
+    Some(match gross.as_str() {
+        "KLICK" | "KLICK1" => Eingabe::Klick(1),
+        "KLICK2" => Eingabe::Klick(2),
+        "KLICK3" => Eingabe::Klick(3),
+        "RADL_OBE" => Eingabe::Rad(1.0),
+        "RADL_AUFFE" => Eingabe::Rad(-1.0),
+        _ => Eingabe::Taste(tasten_nummer(name.as_bytes())),
+    })
 }
 
 /// `taste(name)`: Ist die Taste gerade gedrückt?
@@ -1443,6 +1602,12 @@ fn maus_knopf(knopf: i64) -> usize {
 }
 
 /// `maus_taste(knopf)`: Ist der Knopf gerade gedrückt? 1 links, 2 rechts, 3 Mitte.
+/// `maus_radl()`: wie viele Rasten das Mausrad seit dem letzten Bild gedreht wurde (nach unten positiv).
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_g_maus_rad() -> f64 {
+    fenster().rad as f64
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_maus(knopf: i64) -> bool {
     fenster().maus_tasten[maus_knopf(knopf)]
@@ -1494,7 +1659,15 @@ mod tests {
 
     #[test]
     fn drehbuch() {
-        assert_eq!(drehbuch_lesen("RECHTS@10-50, LAA@20,a@3-3"), vec![(0x27, 10, 50), (0x20, 20, 20), (0x41, 3, 3)]);
+        use Eingabe::*;
+        assert_eq!(
+            drehbuch_lesen("RECHTS@10-50, LAA@20,a@3-3"),
+            vec![(Taste(0x27), 10, 50), (Taste(0x20), 20, 20), (Taste(0x41), 3, 3)]
+        );
+        assert_eq!(
+            drehbuch_lesen("MAUS(480;350.5)@30,klick@31,KLICK2@32-33,RADL_OBE@40-42,RADL_AUFFE@50"),
+            vec![(Maus(480.0, 350.5), 30, 30), (Klick(1), 31, 31), (Klick(2), 32, 33), (Rad(1.0), 40, 42), (Rad(-1.0), 50, 50)]
+        );
         assert!(drehbuch_lesen("").is_empty());
     }
 

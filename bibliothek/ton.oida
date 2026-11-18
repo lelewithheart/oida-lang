@@ -65,3 +65,60 @@ PASST SCHO
 FUNKTIAUN ton_gleitend_um(wann KOMMAZOI, art KETTN, von_höhe KOMMAZOI, bis_höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
     ton_roh_um(wann, art, von_höhe, bis_höhe, dauer, laut) OIDA
 PASST SCHO
+
+# ----------------------------------------------------- Musik aus Dateien (MP3)
+# Ein Musikstück wird geladen und bekommt eine Nummer. Das Laden läuft
+# nebenher; das Programm stockt dabei nicht. Mehrere Stücke können zugleich
+# laufen, jedes mit eigener Lautstärke: So blendet man von einem ins andere.
+#
+#     SOG AU liadl = musik_lodn(programm_ordna() + "musik/liadl.mp3") OIDA
+#     musik_schleifn(liadl, 0.5, 0, 0) OIDA       # das ganze Stück, immer wieder
+#     ...
+#     musik_stopp(liadl, 1.5) OIDA                 # in anderthalb Sekunden ausblenden
+
+# Fängt an, die Datei zu laden, und gibt gleich die Nummer vom Stück zurück.
+FUNKTIAUN musik_lodn(pfad KETTN) GIBT ZRUCK ZOI VON DRAUSSN "oida_musik_laden" OIDA
+# 0: lädt noch. 1: ist da. -1: hat nicht geklappt (musik_fehla sagt, warum).
+FUNKTIAUN musik_zuastand(numma ZOI) GIBT ZRUCK ZOI VON DRAUSSN "oida_musik_zustand" OIDA
+FUNKTIAUN musik_fehla(numma ZOI) GIBT ZRUCK KETTN VON DRAUSSN "oida_musik_fehler" OIDA
+# Wie lang das Stück ist, in Sekunden (0, solange es lädt).
+FUNKTIAUN musik_läng(numma ZOI) GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_musik_laenge" OIDA
+FUNKTIAUN musik_roh_spün(numma ZOI, laut KOMMAZOI, wann KOMMAZOI, ab_stö KOMMAZOI, bis_stö KOMMAZOI) VON DRAUSSN "oida_musik_spielen" OIDA
+
+# Spielt das Stück einmal von vorne. Lädt es noch, fängt es an, sobald es da ist.
+FUNKTIAUN musik_spü(numma ZOI, laut KOMMAZOI)
+    musik_roh_spün(numma, laut, -1, 0, 0) OIDA
+PASST SCHO
+
+# Spielt das Stück von vorne und wiederholt danach ohne Ende den Teil von
+# `ab_stö` bis `bis_stö` (in Sekunden). Mit 0 und 0: das ganze Stück.
+FUNKTIAUN musik_schleifn(numma ZOI, laut KOMMAZOI, ab_stö KOMMAZOI, bis_stö KOMMAZOI)
+    WENN bis_stö <= ab_stö DAUN
+        musik_roh_spün(numma, laut, -1, 0, 100000) OIDA
+    SUNST
+        musik_roh_spün(numma, laut, -1, ab_stö, bis_stö) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Dasselbe, aber der Einsatz ist ein Zeitpunkt auf der Uhr der Töne (ton_zeit).
+FUNKTIAUN musik_spü_um(wann KOMMAZOI, numma ZOI, laut KOMMAZOI)
+    musik_roh_spün(numma, laut, wann, 0, 0) OIDA
+PASST SCHO
+
+FUNKTIAUN musik_schleifn_um(wann KOMMAZOI, numma ZOI, laut KOMMAZOI, ab_stö KOMMAZOI, bis_stö KOMMAZOI)
+    WENN bis_stö <= ab_stö DAUN
+        musik_roh_spün(numma, laut, wann, 0, 100000) OIDA
+    SUNST
+        musik_roh_spün(numma, laut, wann, ab_stö, bis_stö) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Die Lautstärke vom Stück geht in so vielen Sekunden auf den neuen Wert (0: sofort).
+FUNKTIAUN musik_laut(numma ZOI, laut KOMMAZOI, sekundn KOMMAZOI) VON DRAUSSN "oida_musik_laut" OIDA
+# Das Stück wird in so vielen Sekunden leiser und hört dann auf (0: sofort).
+FUNKTIAUN musik_stopp(numma ZOI, sekundn KOMMAZOI) VON DRAUSSN "oida_musik_stopp" OIDA
+FUNKTIAUN musik_rennt(numma ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_musik_laeuft" OIDA
+# Wo im Stück es gerade ist, in Sekunden.
+FUNKTIAUN musik_stö(numma ZOI) GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_musik_stelle" OIDA
+# Gibt das Stück her. Danach darf man die Nummer nicht mehr verwenden.
+FUNKTIAUN musik_weg(numma ZOI) VON DRAUSSN "oida_musik_weg" OIDA

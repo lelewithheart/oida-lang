@@ -100,3 +100,14 @@ pub unsafe extern "C" fn oida_datei_loeschen(pfad: *const TextKopf) -> bool {
 pub extern "C" fn oida_datei_fehler() -> *mut TextKopf {
     LETZTER_FEHLER.with(|f| neuer_text(f.borrow().as_bytes()))
 }
+
+/// `programm_ordna()`: der Ordner, in dem das Programm selbst liegt (mit "/" am Ende),
+/// egal von wo es gestartet wurde. Dort liegt, was zum Programm gehört: Bilder, Musik.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_programm_ordner() -> *mut TextKopf {
+    let ordner = std::env::current_exe()
+        .ok()
+        .and_then(|pfad| pfad.parent().map(|o| o.to_string_lossy().replace('\\', "/")))
+        .unwrap_or_else(|| ".".to_string());
+    neuer_text(format!("{}/", ordner.trim_end_matches('/')).as_bytes())
+}

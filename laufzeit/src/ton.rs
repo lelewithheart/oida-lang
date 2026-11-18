@@ -4,9 +4,11 @@
 //! Lautstärke, die von selbst leiser wird und aufhört. Mehrere Stimmen
 //! laufen gleichzeitig; [`mische`] rechnet sie zusammen.
 //!
-//! Ausgegeben wird über `waveOut` von Windows (winmm.dll). Ein eigener
-//! Faden füllt laufend kleine Stücke nach. Er fasst nur die Liste der
-//! Stimmen an (hinter einer Sperre), sonst nichts von der Laufzeit.
+//! Ausgegeben wird über `waveOut` von Windows (winmm.dll), auf zwei Kanälen.
+//! Ein eigener Faden füllt laufend kleine Stücke nach. Er fasst nur die Liste
+//! der Stimmen und die Musikstücke an (hinter Sperren), sonst nichts von der
+//! Laufzeit. Die erzeugten Töne kommen aus der Mitte (links und rechts
+//! gleich); Musik aus Dateien (`musik.rs`) bringt ihre zwei Kanäle mit.
 //!
 //! Mit der Umgebungsvariable `OIDA_TON_AUS=1` bleibt alles stumm (für Tests).
 //! Mit `OIDA_TON_PRUEFEN=1` meldet das Programm am Ende, wie viele Stücke
@@ -18,6 +20,9 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 use super::{TextKopf, bytes};
+
+mod mp3;
+mod musik;
 
 /// So viele Werte pro Sekunde.
 const RATE: f64 = 44100.0;
@@ -58,13 +63,30 @@ static GESAMT: AtomicU32 = AtomicU32::new(0x3f80_0000); // 1.0
 /// Wie viele Stücke Windows angenommen hat, und wie viele davon nicht still waren.
 pub(crate) static ANGENOMMEN: AtomicU64 = AtomicU64::new(0);
 pub(crate) static MIT_TON: AtomicU64 = AtomicU64::new(0);
-/// Die Uhr der Töne: wie viele Werte schon gemischt sind.
+/// Die Uhr der Töne: wie viele Werte (pro Kanal) schon gemischt sind.
 static GEMISCHT: AtomicU64 = AtomicU64::new(0);
+/// Wer ein Stück mischt oder einen Ton auf die Uhr genau einplant, hält diese
+/// Sperre: Dazwischen bleibt die Uhr stehen, und der Einsatz stimmt auf den Wert.
+static TAKT: Mutex<()> = Mutex::new(());
 
-/// Rechnet alle Stimmen zusammen und schreibt das nächste Stück in `puffer`.
+/// Rechnet alle Stimmen zusammen und schreibt das nächste Stück in `puffer` (ein Kanal).
 /// Stimmen, die zu Ende sind, fallen aus der Liste.
+#[cfg(test)]
 fn mische(stimmen: &mut Vec<Stimme>, puffer: &mut [i16], gesamt: f32) {
     let mut summe = vec![0f32; puffer.len()];
+    stimmen_summe(stimmen, &mut summe);
+    for (ziel, wert) in puffer.iter_mut().zip(summe) {
+        *ziel = begrenzt(wert * gesamt);
+    }
+}
+
+/// Zu laut wird sanft gedeckelt statt hart abgeschnitten.
+fn begrenzt(wert: f32) -> i16 {
+    (wert.tanh() * 32000.0) as i16
+}
+
+/// Zählt die nächsten Werte aller Stimmen zu `summe` dazu. Stimmen, die fertig sind, fallen weg.
+fn stimmen_summe(stimmen: &mut Vec<Stimme>, summe: &mut [f32]) {
     for s in stimmen.iter_mut() {
         for wert in summe.iter_mut() {
             if s.wartet > 0 {
@@ -107,11 +129,6 @@ fn mische(stimmen: &mut Vec<Stimme>, puffer: &mut [i16], gesamt: f32) {
         }
     }
     stimmen.retain(|s| s.stelle < s.dauer);
-    for (ziel, wert) in puffer.iter_mut().zip(summe) {
-        // Zu laut wird sanft gedeckelt statt hart abgeschnitten.
-        let begrenzt = (wert * gesamt).tanh();
-        *ziel = (begrenzt * 32000.0) as i16;
-    }
 }
 
 // --------------------------------------------------------- Ausgabe über Windows
@@ -168,13 +185,13 @@ fn ausgabe() {
         let vorbereiten: unsafe extern "system" fn(Zeiger, *mut TonKopf, u32) -> u32 = std::mem::transmute(vorbereiten);
         let schreiben: unsafe extern "system" fn(Zeiger, *mut TonKopf, u32) -> u32 = std::mem::transmute(schreiben);
 
-        // Ein Kanal, 16 Bit, 44100 Werte pro Sekunde.
+        // Zwei Kanäle, 16 Bit, 44100 Werte pro Sekunde.
         let format = TonFormat {
             art: 1,
-            kanaele: 1,
+            kanaele: 2,
             rate: RATE as u32,
-            bytes_pro_sekunde: RATE as u32 * 2,
-            block: 2,
+            bytes_pro_sekunde: RATE as u32 * 4,
+            block: 4,
             bits: 16,
             extra: 0,
         };
@@ -185,12 +202,14 @@ fn ausgabe() {
         }
 
         // Vier Stücke reihum: Zwei bis drei sind immer bei Windows in der Warteschlange.
-        let mut daten: Vec<Vec<i16>> = (0..4).map(|_| vec![0i16; STUECK]).collect();
+        let mut daten: Vec<Vec<i16>> = (0..4).map(|_| vec![0i16; STUECK * 2]).collect();
+        let mut mitte = vec![0f32; STUECK];
+        let mut beide = vec![0f32; STUECK * 2];
         let mut koepfe: Vec<TonKopf> = daten
             .iter_mut()
             .map(|d| TonKopf {
                 daten: d.as_mut_ptr(),
-                laenge: (STUECK * 2) as u32,
+                laenge: (STUECK * 4) as u32,
                 aufgenommen: 0,
                 eigenes: 0,
                 merker: 0,
@@ -213,9 +232,19 @@ fn ausgabe() {
                     continue;
                 }
                 let gesamt = f32::from_bits(GESAMT.load(Ordering::Relaxed));
-                if let Ok(mut stimmen) = STIMMEN.lock() {
-                    mische(&mut stimmen, &mut daten[i], gesamt);
+                mitte.fill(0.0);
+                beide.fill(0.0);
+                {
+                    let _takt = TAKT.lock();
+                    if let Ok(mut stimmen) = STIMMEN.lock() {
+                        stimmen_summe(&mut stimmen, &mut mitte);
+                    }
+                    musik::dazumischen(&mut beide);
                     GEMISCHT.fetch_add(STUECK as u64, Ordering::Relaxed);
+                }
+                for (j, paar) in daten[i].chunks_exact_mut(2).enumerate() {
+                    paar[0] = begrenzt((mitte[j] + beide[j * 2]) * gesamt);
+                    paar[1] = begrenzt((mitte[j] + beide[j * 2 + 1]) * gesamt);
                 }
                 kopf.merker &= !FERTIG;
                 if schreiben(geraet, kopf, kopf_groesse) == 0 {
@@ -298,6 +327,7 @@ unsafe fn neue_stimme(art: *const TextKopf, von: f64, bis: f64, dauer: f64, laut
         phase: 0.0,
         zufall: 0x9E37_79B9 ^ (dauer as u32).wrapping_mul(2654435761),
     };
+    let _takt = TAKT.lock();
     if let Ok(mut stimmen) = STIMMEN.lock() {
         // Unter der Sperre steht die Uhr still: Der Abstand zum Zeitpunkt stimmt auf den Wert genau.
         if let Some(wann) = wann.filter(|w| w.is_finite()) {
@@ -310,7 +340,12 @@ unsafe fn neue_stimme(art: *const TextKopf, von: f64, bis: f64, dauer: f64, laut
         }
         stimmen.push(stimme);
     }
-    // Beim ersten Ton den Faden starten, der an Windows liefert.
+    drop(_takt);
+    faden_starten();
+}
+
+/// Beim ersten Ton (oder Musikstück) den Faden starten, der an Windows liefert.
+fn faden_starten() {
     if !GESTARTET.swap(true, Ordering::SeqCst) {
         let _ = std::thread::Builder::new().name("oida-ton".to_string()).spawn(ausgabe);
     }

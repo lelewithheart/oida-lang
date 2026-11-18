@@ -34,12 +34,13 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.9.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.10.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
-[Töne](#töne) und [Dateien](#dateien) sind da. Neu: Damit ist ein ganzes Spiel geschrieben,
-[RogueWave](#ein-ganzes-spiel-roguewave), rund 2500 Zeilen OIDA.
+[Töne](#töne) und [Dateien](#dateien) sind da, und damit ist ein ganzes Spiel geschrieben,
+[RogueWave](#ein-ganzes-spiel-roguewave), rund 2500 Zeilen OIDA. Neu: Das Fenster kann
+Farbverläufe, Leuchten, Bilder aus Dateien und freie Formen, und es gibt Musik aus MP3-Dateien.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -135,7 +136,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.9)
+## Die Sprache (v0.10)
 
 ### Typen
 
@@ -825,7 +826,11 @@ PASST SCHO
 | `lösch_datei(pfad)` | löscht die Datei; `NIX ODA FEHLA` |
 | `gibts_datei(pfad)` | `JONA` |
 
+| `programm_ordna()` | der Ordner, in dem das Programm selbst liegt, mit `/` am Ende |
+
 Dateien sind UTF-8. Ein Pfad ohne Ordner meint den Ordner, in dem das Programm gestartet wurde.
+Was zum Programm gehört (Bilder, Musik, Speicherstände), findet man mit `programm_ordna()`, egal
+von wo es gestartet wurde: `lies_datei(programm_ordna() + "stand.txt")`.
 
 ### Ein Fenster: zeichnen, Tasten und Maus
 
@@ -906,6 +911,68 @@ geht auch eine `ZOI`.
 | `gstrichlt(strich, lückn)` | Ränder und Linien sind ab jetzt gestrichelt: so lang der Strich, so lang die Lücke |
 | `durchzogn()` | ... und ab jetzt wieder durchgezogen |
 
+| Farbverläufe, Mischen, Leuchten | |
+|---|---|
+| `valauf_grod(x1, y1, x2, y2)` | statt einer Farbe ein Übergang vom ersten Punkt zum zweiten |
+| `valauf_rund(x, y, innen, außn)` | ... oder von der Mitte nach außen, vom inneren zum äußeren Radius |
+| `valauf_foab(stö, foab, deckung)` | die Farbe an einer Stelle des Wegs (0 ist der Anfang, 1 das Ende) |
+| `mischn_dazua()`, `mischn_normal()` | Farben zusammenzählen statt übereinanderlegen: Wo sich zwei Lichter treffen, wird es heller |
+| `leuchtn(weitn, foab, deckung)`, `leuchtn_aus()` | alles, was danach gezeichnet wird, bekommt einen weichen Schein |
+
+```
+valauf_rund(400, 300, 0, 120) OIDA         # ein Lichtfleck: innen hell, außen nichts
+valauf_foab(0, "#33ccff", 0.8) OIDA
+valauf_foab(1, "#33ccff", 0) OIDA
+kreis(400, 300, 120) OIDA
+
+leuchtn(24, "#33ccff", 1) OIDA             # Schrift mit Neonschein
+foab_hex("#ffffff") OIDA
+text_mittig(400, 300, "ROGUEWAVE") OIDA
+leuchtn_aus() OIDA
+```
+
+Ein Verlauf gilt, bis wieder `foab()` oder `foab_hex()` kommt. Mischen und Leuchten gelten bis zum
+Ende des Bildes oder bis man sie abschaltet.
+
+| Freie Formen und Ausschnitte | |
+|---|---|
+| `form_anfang()` | eine neue Form beginnt |
+| `form_geh(x, y)` | hierhin, ohne zu zeichnen |
+| `form_linie(x, y)` | eine gerade Linie hierher |
+| `form_kurvn(zx, zy, x, y)` | eine Kurve nach (x, y), die sich zu (zx, zy) hin biegt |
+| `form_kurvn3(z1x, z1y, z2x, z2y, x, y)` | eine Kurve mit zwei Punkten, zu denen sie sich biegt |
+| `form_bogn(x, y, radius, von_winkl, bis_winkl)` | ein Stück Kreis |
+| `form_zua()` | zurück zum Anfang dieses Teils |
+| `form_fülln()`, `form_rand(dicke)` | die Form füllen, ihre Linie zeichnen (beides nacheinander geht) |
+| `ausschnitt_rechteck(x, y, breite, höhe)` | ab jetzt wird nur in diesem Rechteck gezeichnet |
+| `ausschnitt_rund(x, y, breite, höhe, radius)`, `ausschnitt_kreis(x, y, radius)` | ... oder nur in dieser Form |
+| `ausschnitt_aus()` | der zuletzt gesetzte Ausschnitt gilt nicht mehr |
+
+| Bilder | |
+|---|---|
+| `lod_büd(pfad)` | liest ein Bild aus einer Datei (PNG, JPG, BMP, GIF): `Büd ODA FEHLA` |
+| `neichs_büd(breite, höhe)` | ein leeres, durchsichtiges Bild zum Hineinzeichnen |
+| `moi_büd(büd, x, y)` | legt das Bild in seiner Größe hin; (x, y) ist die linke obere Ecke |
+| `moi_büd_groß(büd, x, y, breite, höhe)` | ... in das Rechteck gestreckt |
+| `moi_büd_stickl(büd, qx, qy, qb, qh, x, y, breite, höhe)` | nur ein Stück vom Bild |
+| `moi_in(büd)`, `moi_ins_fensta()` | ab jetzt landet alles Gezeichnete im Bild; und wieder im Fenster |
+| `büd_laar(büd)`, `büd_weg(büd)` | das Bild leeren; das Bild hergeben |
+| `büd_glott(jo)` | vergrößerte Bilder weich (`WOAHR`) oder mit sichtbaren Kästchen (`FOISCH`) |
+
+Ein `Büd` hat die Felder `breite` und `höhe`. Geladen wird, wenn das Fenster schon offen ist:
+
+```
+SOG AU figur = lod_büd(programm_ordna() + "figur.png") OIDA    # Büd ODA FEHLA
+PROBIER b = figur
+    moi_büd(b, 100, 100) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+```
+
+Etwas Aufwendiges, das sich nicht ändert (ein Hintergrund), zeichnet man einmal mit `moi_in` in
+ein Bild und legt dann in jedem Bild nur noch das hin.
+
 | Text | |
 |---|---|
 | `schrift(größe)`, `schrift_fett(größe)` | die Schrift für alles, was danach kommt (Höhe in Bildpunkten) |
@@ -915,6 +982,7 @@ geht auch eine `ZOI`.
 | `text_links_mitte(x, y, inhalt)` | der Text fängt bei x an, y ist seine halbe Höhe |
 | `text_rechts_mitte(x, y, inhalt)` | der Text hört bei x auf, y ist seine halbe Höhe |
 | `text_drüba(x, y, inhalt)`, `text_drunta(x, y, inhalt)` | mittig über bzw. unter dem Punkt |
+| `text_breite(inhalt)` | wie breit der Text in der aktuellen Schrift wird |
 
 Die Schrift ist Segoe UI. Bunte Zeichen (Emoji wie 🏆 oder 🔥) gehen im Text und bleiben bunt.
 
@@ -931,6 +999,7 @@ Die Schrift ist Segoe UI. Bunte Zeichen (Emoji wie 🏆 oder 🔥) gehen im Text
 | `taste_neich(name)` | ist sie seit dem letzten Bild neu gedrückt worden? (einmal pro Druck) |
 | `maus_x()`, `maus_y()` | wo die Maus im Fenster ist |
 | `maus_taste(knopf)`, `maus_taste_neich(knopf)` | 1 ist links, 2 rechts, 3 die Mitte |
+| `maus_radl()` | wie viele Rasten das Mausrad seit dem letzten Bild gedreht wurde (nach unten positiv) |
 
 Tasten heißen `"A"` bis `"Z"`, `"0"` bis `"9"`, `"LINKS"`, `"RECHTS"`, `"AUFFE"`, `"OBE"`, `"LAA"`
 (Leertaste), `"ENTER"`, `"ESC"`, `"SHIFT"`, `"STRG"`, `"ALT"`, `"TAB"`, `"ZRUCK"`, `"F1"` bis `"F12"`.
@@ -947,6 +1016,7 @@ davorsitzt. Dafür gibt es Umgebungsvariablen:
 | `OIDA_FENSTER_BILD_JEDES=<n>` | nur jedes n-te Bild speichern |
 | `OIDA_FENSTER_ENDE=<n>` | nach n Bildern von selbst zumachen (auch mit echtem Fenster) |
 | `OIDA_FENSTER_TASTEN=RECHTS@10-50,LAA@20` | Tasten nach Drehbuch: `RECHTS` in den Bildern 10 bis 50, die Leertaste im Bild 20 |
+| `...=MAUS(480;350)@30,KLICK@31,RADL_OBE@40-42` | auch die Maus: hinstellen, klicken (`KLICK2` rechts), am Rad drehen (`RADL_AUFFE` hinauf) |
 | `OIDA_SOMEN=<zahl>` | der Zufall fängt immer gleich an |
 | `OIDA_TON_AUS=1` | kein Ton |
 | `OIDA_FENSTER_PRUEFEN=1` | meldet am Ende, wie lang das Programm für ein Bild gerechnet und gezeichnet hat |
@@ -990,6 +1060,36 @@ wart(0.5) OIDA
 | `ton_um(wann, art, höhe, dauer, laut)` | ein Ton, der anfängt, wenn die Uhr der Töne bei `wann` steht |
 | `ton_gleitend_um(wann, art, von_höhe, bis_höhe, dauer, laut)` | dasselbe für einen gleitenden Ton |
 
+**Musik aus Dateien.** MP3-Dateien spielt `ton` auch ab. Ein Stück wird nebenher geladen (das
+Programm stockt dabei nicht) und bekommt eine Nummer. Mehrere Stücke können zugleich laufen,
+jedes mit eigener Lautstärke; so blendet man von einem ins andere über.
+
+```
+BRAUCH ton OIDA
+BRAUCH dateien OIDA
+
+SOG AU liadl = musik_lodn(programm_ordna() + "musik/liadl.mp3") OIDA
+musik_schleifn(liadl, 0.5, 0, 0) OIDA      # das ganze Stück, immer wieder
+# ... später:
+musik_stopp(liadl, 1.5) OIDA               # in anderthalb Sekunden ausblenden
+```
+
+| Funktion | |
+|---|---|
+| `musik_lodn(pfad)` | fängt an zu laden und gibt gleich die Nummer vom Stück zurück |
+| `musik_zuastand(numma)` | 0: lädt noch, 1: ist da, -1: hat nicht geklappt (`musik_fehla(numma)` sagt, warum) |
+| `musik_läng(numma)` | die Länge in Sekunden (0, solange es lädt) |
+| `musik_spü(numma, laut)` | spielt das Stück einmal; lädt es noch, fängt es an, sobald es da ist |
+| `musik_schleifn(numma, laut, ab_stö, bis_stö)` | spielt von vorne und wiederholt dann den Teil zwischen den zwei Stellen (Sekunden); mit 0 und 0 das ganze Stück |
+| `musik_spü_um(wann, numma, laut)`, `musik_schleifn_um(wann, ...)` | dasselbe, mit dem Einsatz als Zeitpunkt auf der Uhr der Töne |
+| `musik_laut(numma, laut, sekundn)` | die Lautstärke geht in dieser Zeit auf den neuen Wert |
+| `musik_stopp(numma, sekundn)` | wird in dieser Zeit leiser und hört dann auf |
+| `musik_rennt(numma)`, `musik_stö(numma)` | läuft es gerade? wo im Stück ist es (Sekunden)? |
+| `musik_weg(numma)` | gibt das Stück her |
+
+Die Wiederholung ist auf den Wert genau: Was beim Packen einer MP3-Datei vorne und hinten
+dazukommt, wird weggeschnitten (verglichen mit `ffmpeg`, größte Abweichung 1 von 32768).
+
 Mit `ton_um` plant man Musik: In jedem Bild die Noten der nächsten Fünftelsekunde einplanen, und
 der Takt bleibt genau, auch wenn das Programm einmal ruckelt (so macht es
 [`beispiele/roguewave/klang.oida`](beispiele/roguewave/klang.oida)).
@@ -1023,6 +1123,11 @@ führt zu den Einstellungen, `ENTER` startet.
 Das fertige Programm hat 560 KB und braucht keine weiteren Dateien. Im Getümmel einer späten
 Welle (über 60 Gegner, 150 Funken, alle Waffen) rechnet und zeichnet es ein Bild in rund 3
 Millisekunden, das Rechnen allein dauert unter 0,1 Millisekunden.
+
+**Der Stand der Vorlage.** Nachgebaut ist das Spiel, wie es im April 2026 war. Das Original ist
+seither stark gewachsen (Dash, Beute, Boss-Angriffe, MP3-Musik, Skins, rund viermal so viel Code).
+Der Nachbau wird in Etappen nachgezogen: Was Fenster und Ton dafür brauchen, ist da (Verläufe,
+Leuchten, Bilder, Musik aus Dateien); das Spiel selbst kommt als Nächstes.
 
 Was anders ist als im Original: Werbung, Online-Bestenliste und Bedienung am Handy gibt es nicht
 (die hingen am Browser). Treffer werden für jeden Schuss gegen alle Gegner geprüft statt über ein
@@ -1143,7 +1248,9 @@ laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt
                        Fehler beim Laufen
   src/dateien.rs         Dateien lesen und schreiben
   src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus
+  src/fenster/           Farbverläufe, Leuchten, Mischen; freie Formen, Ausschnitte; Bilder
   src/ton.rs             Töne errechnen, mischen und an Windows geben
+  src/ton/               Musik aus Dateien: MP3 entpacken, abspielen, wiederholen, überblenden
 vscode/                Erweiterung für VS Code
 leistung/              Leistungsvergleich mit anderen Sprachen
 ```
@@ -1167,11 +1274,11 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - Strukturen und Listen kann man nicht mit `=` vergleichen.
 - Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
-- Im Fenster fehlen noch: Bilder aus Dateien (PNG), Farbverläufe, getippter Text als Eingabe,
-  Mausrad, Gamepad, Vollbild und mehr als ein Fenster.
+- Im Fenster fehlen noch: getippter Text als Eingabe, Gamepad, Vollbild und mehr als ein Fenster.
+  Leuchten gibt es nur beim Zeichnen ins Fenster, nicht in ein Bild.
 - Tasten heißen nach dem, was auf ihnen steht, nicht nach ihrem Platz: Auf einer französischen
   Tastatur liegt `"W"` woanders.
-- Töne werden nur errechnet; Tondateien abspielen geht nicht.
+- Musik aus Dateien geht nur als MP3 (kein WAV, kein OGG).
 - Dateien gehen nur als ganzer Text (UTF-8); Ordner auflisten oder anlegen geht nicht.
 - Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
 - Bei einem Verzeichnis geht als Schlüssel nur `ZOI` oder `KETTN`.
@@ -1200,7 +1307,10 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 5 | Vorlagen (Generics), Funktionen als Werte, das Verzeichnis (Schlüssel → Wert) | fertig |
 | 6 | Programme aus mehreren Dateien, Bibliothek in OIDA | fertig |
 | 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | fertig |
-| 8 | Das Spiel nachbauen: [RogueWave](#ein-ganzes-spiel-roguewave); dazu feste Werte (`FIX`) | fertig |
+| 8 | Das Spiel nachbauen: [RogueWave](#ein-ganzes-spiel-roguewave); dazu feste Werte (`FIX`) | fertig für den Stand vom April |
+| 8a | Für den heutigen Stand des Spiels: Verläufe, Leuchten, Bilder, freie Formen, MP3-Musik, Mausrad | fertig |
+| 8b | Das Spielen selbst auf den heutigen Stand: Dash, Power-ups, neue Gegner, Ereignisse, Boss-Angriffe | offen |
+| 8c | Alles rundherum: Beute, Truhen, Locker, Prestige, Skins, die neuen Menüs | offen |
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind

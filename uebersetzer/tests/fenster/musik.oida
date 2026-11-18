@@ -1,0 +1,53 @@
+# Musik aus einer MP3-Datei: laden, Länge, abspielen, wiederholen, ausblenden.
+# Die Datei ton.mp3 legt der Test neben das Programm: eine Sekunde, in der
+# Mitte 0,6 Sekunden lang ein Ton.
+
+BRAUCH ton OIDA
+BRAUCH dateien OIDA
+
+# Wartet, bis das Stück geladen ist (oder feststeht, dass es nicht geht).
+FUNKTIAUN wart_auf(numma ZOI) GIBT ZRUCK ZOI
+    FIA i VON 1 BIS 500 TUA
+        WENN musik_zuastand(numma) != 0 DAUN
+            GIB ZRUCK musik_zuastand(numma) OIDA
+        PASST SCHO
+        wart(0.01) OIDA
+    PASST SCHO
+    GIB ZRUCK 0 OIDA
+PASST SCHO
+
+SOG AU ordna = programm_ordna() OIDA
+SCHREIB(gibts_datei(ordna + "ton.mp3"), STICKL(ordna, LÄNGN(ordna) - 1) == "/") OIDA
+
+SOG AU liadl = musik_lodn(ordna + "ton.mp3") OIDA
+SCHREIB("gladn:", wart_auf(liadl), musik_läng(liadl), musik_fehla(liadl) == "") OIDA
+
+# Abspielen: Es läuft (im Test stumm, darum bleibt es an der Stelle 0 stehen).
+SCHREIB("vuaher:", musik_rennt(liadl)) OIDA
+musik_schleifn(liadl, 0.5, 0.2, 0.8) OIDA
+SCHREIB("rennt:", musik_rennt(liadl), musik_stö(liadl)) OIDA
+musik_laut(liadl, 0.2, 0.5) OIDA
+musik_stopp(liadl, 0) OIDA
+SCHREIB("gstoppt:", musik_rennt(liadl)) OIDA
+musik_spü_um(ton_zeit() + 0.1, liadl, 1) OIDA
+SCHREIB("eiplant:", musik_rennt(liadl)) OIDA
+
+# Ein zweites Stück zugleich; die Nummern sind verschieden.
+SOG AU zweits = musik_lodn(ordna + "ton.mp3") OIDA
+SCHREIB("zwa:", zweits != liadl, wart_auf(zweits)) OIDA
+musik_weg(zweits) OIDA
+# Die frei gewordene Nummer bekommt das nächste Stück.
+SOG AU dritts = musik_lodn(ordna + "ton.mp3") OIDA
+SCHREIB("wieda vagebn:", dritts == zweits, wart_auf(dritts)) OIDA
+
+# Was schiefgehen kann: Die Datei gibt es nicht, oder sie ist kein MP3.
+SOG AU fehlt = musik_lodn(ordna + "gibts_ned.mp3") OIDA
+SCHREIB("fehlt:", wart_auf(fehlt), musik_fehla(fehlt), musik_läng(fehlt)) OIDA
+PROBIER schreib_datei(ordna + "ka_musik.mp3", "Des is nur Text, ka Musik.")
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+SOG AU ka_liadl = musik_lodn(ordna + "ka_musik.mp3") OIDA
+SCHREIB("ka MP3:", wart_auf(ka_liadl), musik_fehla(ka_liadl)) OIDA
+# Abspielen von etwas, das nicht geladen ist, tut einfach nichts.
+musik_spü(fehlt, 1) OIDA

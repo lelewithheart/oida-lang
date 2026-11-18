@@ -12,6 +12,11 @@ FUNKTIAUN datei_roh_schreibn(pfad KETTN, inhalt KETTN, dazua JONA) GIBT ZRUCK JO
 FUNKTIAUN datei_roh_löschn(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_datei_loeschen" OIDA
 FUNKTIAUN datei_fehla() GIBT ZRUCK KETTN VON DRAUSSN "oida_datei_fehler" OIDA
 
+# Der Ordner, in dem das Programm selbst liegt, mit "/" am Ende. Was zum
+# Programm gehört (Bilder, Musik, Speicherstände), findet man so, egal von wo
+# es gestartet wurde:  lies_datei(programm_ordna() + "stand.txt")
+FUNKTIAUN programm_ordna() GIBT ZRUCK KETTN VON DRAUSSN "oida_programm_ordner" OIDA
+
 # Gibt es die Datei?
 FUNKTIAUN gibts_datei(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_datei_gibts" OIDA
 

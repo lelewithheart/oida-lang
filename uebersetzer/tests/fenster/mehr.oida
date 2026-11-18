@@ -1,0 +1,140 @@
+# Was das Fenster über einfache Formen hinaus kann: Farbverläufe, Leuchten,
+# additives Mischen, freie Formen mit Kurven, Ausschnitte, Bilder (aus einer
+# Datei und selbst gezeichnet) und die Breite von Text. Der Test schaut
+# danach einzelne Bildpunkte nach. Die Datei probe.png liegt neben dem Programm.
+BRAUCH fensta OIDA
+BRAUCH dateien OIDA
+
+fensta_auf("Mehr", 640, 480) OIDA
+
+# Ein Bild zum Hineinzeichnen: einmal gefüllt, dann immer wieder hingelegt.
+SOG AU kachl = neichs_büd(64, 64) OIDA
+SOG AU kachl_fertig = FOISCH OIDA
+SOG AU gladn = lod_büd(programm_ordna() + "probe.png") OIDA
+# Was Maus und Mausrad über alle Bilder melden (der Test bewegt sie nach Drehbuch).
+SOG AU radl = 0.0 OIDA
+SOG AU klicks = 0 OIDA
+SOG AU klick_x = 0.0 OIDA
+SOG AU klick_y = 0.0 OIDA
+
+SOLONG fensta_offn() TUA
+    radl += maus_radl() OIDA
+    WENN maus_taste_neich(1) DAUN
+        klicks += 1 OIDA
+        klick_x = maus_x() OIDA
+        klick_y = maus_y() OIDA
+    PASST SCHO
+
+    foab_hex("#111122") OIDA
+    hintagrund() OIDA
+
+    WENN NED kachl_fertig DAUN
+        moi_in(kachl) OIDA
+        foab_hex("#ff4466") OIDA
+        rechteck(0, 0, 32, 32) OIDA
+        foab_hex("#33ccff") OIDA
+        kreis(40, 40, 20) OIDA
+        moi_ins_fensta() OIDA
+        kachl_fertig = WOAHR OIDA
+    PASST SCHO
+
+    # 1. Gerader Verlauf von links (rot) nach rechts (blau)
+    valauf_grod(20, 0, 220, 0) OIDA
+    valauf_foab(0, "#ff0000", 1) OIDA
+    valauf_foab(1, "#0000ff", 1) OIDA
+    rechteck(20, 20, 200, 60) OIDA
+
+    # 2. Runder Verlauf: innen weiß, außen durchsichtig
+    valauf_rund(320, 50, 0, 40) OIDA
+    valauf_foab(0, "#ffffff", 1) OIDA
+    valauf_foab(1, "#ffffff", 0) OIDA
+    kreis(320, 50, 40) OIDA
+
+    # 3. Additiv gemischt: Rot und Grün ergeben in der Mitte Gelb
+    mischn_dazua() OIDA
+    foab_hex("#ff0000") OIDA
+    kreis(450, 50, 30) OIDA
+    foab_hex("#00ff00") OIDA
+    kreis(480, 50, 30) OIDA
+    mischn_normal() OIDA
+
+    # 4. Leuchten um einen Kreis und um Text
+    leuchtn(24, "#33ccff", 1) OIDA
+    foab_hex("#ffffff") OIDA
+    kreis(70, 170, 20) OIDA
+    schrift_fett(28) OIDA
+    text_links(120, 150, "LEUCHTN") OIDA
+    leuchtn_aus() OIDA
+
+    # 5. Eine freie Form: ein Herz, gefüllt und umrandet
+    lage_merkn() OIDA
+    schiab(360, 170) OIDA
+    vergrößa(3) OIDA
+    form_anfang() OIDA
+    form_geh(0, 8) OIDA
+    form_kurvn3(-13, -2, -6, -11, 0, -4) OIDA
+    form_kurvn3(6, -11, 13, -2, 0, 8) OIDA
+    foab_hex("#ff4466") OIDA
+    form_fülln() OIDA
+    foab_hex("#ffffff") OIDA
+    form_rand(0.7) OIDA
+    lage_zruck() OIDA
+
+    # 6. Ausschnitte: ein großes Quadrat, das nur im Kreis bzw. im runden Rechteck zu sehen ist
+    ausschnitt_kreis(480, 170, 30) OIDA
+    foab_hex("#ffee55") OIDA
+    rechteck(440, 130, 80, 80) OIDA
+    ausschnitt_aus() OIDA
+    ausschnitt_rund(540, 140, 80, 60, 16) OIDA
+    foab_hex("#55ff88") OIDA
+    rechteck(530, 130, 100, 100) OIDA
+    ausschnitt_aus() OIDA
+
+    # 7. Bilder: das selbst gezeichnete, gestreckt und als Stück; das aus der Datei
+    moi_büd(kachl, 20, 260) OIDA
+    moi_büd_groß(kachl, 100, 260, 128, 128) OIDA
+    moi_büd_stickl(kachl, 20, 20, 40, 40, 250, 260, 80, 80) OIDA
+    PROBIER b = gladn
+        moi_büd(b, 360, 260) OIDA
+        büd_glott(FOISCH) OIDA
+        moi_büd_groß(b, 440, 260, 128, 128) OIDA
+        büd_glott(WOAHR) OIDA
+    WONNS SCHIEFGEHT f
+        foab_hex("#ff0000") OIDA
+        schrift(14) OIDA
+        text_links(360, 260, f.meldung) OIDA
+    PASST SCHO
+
+    # 8. Textbreite: ein Rahmen genau um den Text
+    schrift(20) OIDA
+    SOG AU wort = "genau so breit" OIDA
+    SOG AU b = text_breite(wort) OIDA
+    foab_hex("#33ccff") OIDA
+    rechteck_rand(20, 420, b, 28, 1) OIDA
+    foab_hex("#ffffff") OIDA
+    text_links(20, 420, wort) OIDA
+PASST SCHO
+SCHREIB(kachl.breite, kachl.höhe, RUNDN(text_breite("genau so breit")), text_breite("")) OIDA
+SCHREIB("Maus:", klicks, klick_x, klick_y, "Radl:", radl) OIDA
+
+# Was beim Laden schiefgehen kann
+PROBIER b = gladn
+    SCHREIB("gladn:", b.breite, b.höhe) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER b = lod_büd("gibts_ned.png")
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+PROBIER schreib_datei(programm_ordna() + "ka_büd.png", "Des is nur Text.")
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER b = lod_büd(programm_ordna() + "ka_büd.png")
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(ERSETZ(f.meldung, programm_ordna(), "")) OIDA
+PASST SCHO
+büd_weg(kachl) OIDA

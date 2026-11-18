@@ -4,12 +4,12 @@ version = 4
 
 [[package]]
 name = "oida"
-version = "0.9.0"
+version = "0.10.0"
 
 [[package]]
 name = "oida-laufzeit"
-version = "0.9.0"
+version = "0.10.0"
 
 [[package]]
 name = "oida-messen"
-version = "0.9.0"
+version = "0.10.0"

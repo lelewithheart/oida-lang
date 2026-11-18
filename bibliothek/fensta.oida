@@ -41,6 +41,40 @@ FUNKTIAUN foab_hex(code KETTN) VON DRAUSSN "oida_g_farbe_hex" OIDA
 # 1 ist ganz deckend, 0 unsichtbar. Gilt, bis man es wieder ändert.
 FUNKTIAUN deckung(wert KOMMAZOI) VON DRAUSSN "oida_g_deckung" OIDA
 
+# -------------------------------------------- Farbverläufe, Mischen, Leuchten
+# Statt einer Farbe ein Übergang: zuerst sagen, von wo nach wo, dann die
+# Farben entlang des Wegs (0 ist der Anfang, 1 das Ende). Gilt, bis wieder
+# foab() oder foab_hex() kommt.
+#
+#     valauf_grod(0, 0, 0, 100) OIDA                  # von oben nach unten
+#     valauf_foab(0, "#33ccff", 1) OIDA
+#     valauf_foab(1, "#33ccff", 0) OIDA               # unten durchsichtig
+#     rechteck(0, 0, 200, 100) OIDA
+FUNKTIAUN valauf_grod(x1 KOMMAZOI, y1 KOMMAZOI, x2 KOMMAZOI, y2 KOMMAZOI) VON DRAUSSN "oida_g_verlauf_gerade" OIDA
+# Von der Mitte (x, y) nach außen, vom inneren zum äußeren Radius.
+FUNKTIAUN valauf_rund(x KOMMAZOI, y KOMMAZOI, innen KOMMAZOI, außn KOMMAZOI) VON DRAUSSN "oida_g_verlauf_rund" OIDA
+FUNKTIAUN valauf_foab(stö KOMMAZOI, hex KETTN, deckung KOMMAZOI) VON DRAUSSN "oida_g_verlauf_stufe" OIDA
+
+FUNKTIAUN mischn_roh(hell JONA) VON DRAUSSN "oida_g_mischen" OIDA
+
+# Ab jetzt werden Farben zusammengezählt statt übereinandergelegt: Wo sich
+# zwei Lichter treffen, wird es heller. Gilt bis mischn_normal() oder bis zum nächsten Bild.
+FUNKTIAUN mischn_dazua()
+    mischn_roh(WOAHR) OIDA
+PASST SCHO
+
+FUNKTIAUN mischn_normal()
+    mischn_roh(FOISCH) OIDA
+PASST SCHO
+
+# Alles, was ab jetzt gezeichnet wird, bekommt einen weichen Schein: so weit,
+# in dieser Farbe, so deckend. Gilt bis leuchtn_aus() oder bis zum nächsten Bild.
+FUNKTIAUN leuchtn(weitn KOMMAZOI, hex KETTN, deckung KOMMAZOI) VON DRAUSSN "oida_g_leuchten" OIDA
+
+FUNKTIAUN leuchtn_aus()
+    leuchtn(0, "#000000", 0) OIDA
+PASST SCHO
+
 # ------------------------------------------------------------------- Zeichnen
 
 # Füllt das ganze Fenster mit der aktuellen Farbe.
@@ -68,6 +102,34 @@ FUNKTIAUN gstrichlt(strich KOMMAZOI, lückn KOMMAZOI) VON DRAUSSN "oida_g_strich
 FUNKTIAUN durchzogn()
     gstrichlt(0, 0) OIDA
 PASST SCHO
+
+# --- Freie Formen aus Linien und Kurven: erst bauen, dann füllen und/oder umranden.
+#
+#     form_anfang() OIDA
+#     form_geh(0, 8) OIDA
+#     form_kurvn3(-13, -2, -6, -11, 0, -4) OIDA       # ein Herz
+#     form_kurvn3(6, -11, 13, -2, 0, 8) OIDA
+#     form_fülln() OIDA
+FUNKTIAUN form_anfang() VON DRAUSSN "oida_g_form_anfang" OIDA
+# Hierhin, ohne zu zeichnen: Ein neuer Teil der Form beginnt.
+FUNKTIAUN form_geh(x KOMMAZOI, y KOMMAZOI) VON DRAUSSN "oida_g_form_geh" OIDA
+FUNKTIAUN form_linie(x KOMMAZOI, y KOMMAZOI) VON DRAUSSN "oida_g_form_linie" OIDA
+# Eine Kurve nach (x, y), die sich zum Punkt (zx, zy) hin biegt.
+FUNKTIAUN form_kurvn(zx KOMMAZOI, zy KOMMAZOI, x KOMMAZOI, y KOMMAZOI) VON DRAUSSN "oida_g_form_kurve" OIDA
+# Eine Kurve nach (x, y) mit zwei Punkten, zu denen sie sich biegt.
+FUNKTIAUN form_kurvn3(z1x KOMMAZOI, z1y KOMMAZOI, z2x KOMMAZOI, z2y KOMMAZOI, x KOMMAZOI, y KOMMAZOI) VON DRAUSSN "oida_g_form_kurve3" OIDA
+# Ein Stück Kreis um (x, y) zwischen zwei Winkeln.
+FUNKTIAUN form_bogn(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI, von_winkl KOMMAZOI, bis_winkl KOMMAZOI) VON DRAUSSN "oida_g_form_bogen" OIDA
+# Zurück zum Anfang dieses Teils.
+FUNKTIAUN form_zua() VON DRAUSSN "oida_g_form_zu" OIDA
+FUNKTIAUN form_fülln() VON DRAUSSN "oida_g_form_fuellen" OIDA
+FUNKTIAUN form_rand(dicke KOMMAZOI) VON DRAUSSN "oida_g_form_rand" OIDA
+
+# --- Ausschnitte: Ab jetzt wird nur innerhalb der Form gezeichnet, bis ausschnitt_aus() kommt.
+FUNKTIAUN ausschnitt_rechteck(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI) VON DRAUSSN "oida_g_ausschnitt_rechteck" OIDA
+FUNKTIAUN ausschnitt_rund(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, radius KOMMAZOI) VON DRAUSSN "oida_g_ausschnitt_rund" OIDA
+FUNKTIAUN ausschnitt_kreis(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI) VON DRAUSSN "oida_g_ausschnitt_kreis" OIDA
+FUNKTIAUN ausschnitt_aus() VON DRAUSSN "oida_g_ausschnitt_aus" OIDA
 
 FUNKTIAUN kreis(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI)
     ellipsn(x, y, radius, radius) OIDA
@@ -126,6 +188,82 @@ FUNKTIAUN text_drunta(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
     text_roh(x, y, inhalt, 6) OIDA
 PASST SCHO
 
+# Wie breit der Text in der aktuellen Schrift wird (zum Umbrechen oder für einen Rahmen darum).
+FUNKTIAUN text_breite(inhalt KETTN) GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_g_text_breite" OIDA
+
+# --------------------------------------------------------------------- Bilder
+# Ein Bild aus einer Datei (PNG, JPG, BMP, GIF) oder ein leeres zum Hineinzeichnen.
+STRUKTUR Büd
+    numma ZOI
+    breite ZOI
+    höhe ZOI
+PASST SCHO
+
+FUNKTIAUN büd_roh_lodn(pfad KETTN) GIBT ZRUCK ZOI VON DRAUSSN "oida_g_bild_laden" OIDA
+FUNKTIAUN büd_roh_fehla() GIBT ZRUCK KETTN VON DRAUSSN "oida_g_bild_fehler" OIDA
+FUNKTIAUN büd_roh_neich(breite ZOI, höhe ZOI) GIBT ZRUCK ZOI VON DRAUSSN "oida_g_bild_neu" OIDA
+FUNKTIAUN büd_roh_breite(numma ZOI) GIBT ZRUCK ZOI VON DRAUSSN "oida_g_bild_breite" OIDA
+FUNKTIAUN büd_roh_höhe(numma ZOI) GIBT ZRUCK ZOI VON DRAUSSN "oida_g_bild_hoehe" OIDA
+FUNKTIAUN büd_roh_moi(numma ZOI, x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI) VON DRAUSSN "oida_g_bild" OIDA
+FUNKTIAUN büd_roh_stickl(numma ZOI, qx KOMMAZOI, qy KOMMAZOI, qb KOMMAZOI, qh KOMMAZOI, x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI) VON DRAUSSN "oida_g_bild_teil" OIDA
+FUNKTIAUN büd_roh_ziel(numma ZOI) VON DRAUSSN "oida_g_bild_ziel" OIDA
+FUNKTIAUN büd_roh_laar(numma ZOI) VON DRAUSSN "oida_g_bild_leeren" OIDA
+FUNKTIAUN büd_roh_weg(numma ZOI) VON DRAUSSN "oida_g_bild_weg" OIDA
+
+# Liest ein Bild aus einer Datei. Das Fenster muss dafür schon offen sein.
+FUNKTIAUN lod_büd(pfad KETTN) GIBT ZRUCK Büd ODA FEHLA
+    SOG AU numma = büd_roh_lodn(pfad) OIDA
+    WENN numma < 0 DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + büd_roh_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK Büd(numma, büd_roh_breite(numma), büd_roh_höhe(numma)) OIDA
+PASST SCHO
+
+# Ein leeres, durchsichtiges Bild. Mit moi_in() zeichnet man hinein.
+FUNKTIAUN neichs_büd(breite ZOI, höhe ZOI) GIBT ZRUCK Büd
+    GIB ZRUCK Büd(büd_roh_neich(breite, höhe), breite, höhe) OIDA
+PASST SCHO
+
+# Legt das Bild in seiner eigenen Größe hin; (x, y) ist die linke obere Ecke.
+FUNKTIAUN moi_büd(b Büd, x KOMMAZOI, y KOMMAZOI)
+    büd_roh_moi(b.numma, x, y, b.breite, b.höhe) OIDA
+PASST SCHO
+
+# ... oder in das Rechteck gestreckt.
+FUNKTIAUN moi_büd_groß(b Büd, x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI)
+    büd_roh_moi(b.numma, x, y, breite, höhe) OIDA
+PASST SCHO
+
+# Nur das Stück (qx, qy, qb, qh) vom Bild, in das Rechteck (x, y, breite, höhe) gelegt.
+FUNKTIAUN moi_büd_stickl(b Büd, qx KOMMAZOI, qy KOMMAZOI, qb KOMMAZOI, qh KOMMAZOI, x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI)
+    büd_roh_stickl(b.numma, qx, qy, qb, qh, x, y, breite, höhe) OIDA
+PASST SCHO
+
+# Ab jetzt landet alles Gezeichnete in diesem Bild (einem von neichs_büd)
+# statt im Fenster. Gut für etwas Aufwendiges, das sich nicht ändert: einmal
+# hineinzeichnen, dann in jedem Bild nur noch hinlegen.
+FUNKTIAUN moi_in(b Büd)
+    büd_roh_ziel(b.numma) OIDA
+PASST SCHO
+
+# ... und ab jetzt wieder ins Fenster.
+FUNKTIAUN moi_ins_fensta()
+    büd_roh_ziel(-1) OIDA
+PASST SCHO
+
+# Macht ein Bild zum Hineinzeichnen wieder ganz durchsichtig.
+FUNKTIAUN büd_laar(b Büd)
+    büd_roh_laar(b.numma) OIDA
+PASST SCHO
+
+# Gibt das Bild her. Danach darf man es nicht mehr verwenden.
+FUNKTIAUN büd_weg(b Büd)
+    büd_roh_weg(b.numma) OIDA
+PASST SCHO
+
+# Vergrößerte Bilder weich zeichnen (WOAHR, so fängt es an) oder mit sichtbaren Kästchen (FOISCH).
+FUNKTIAUN büd_glott(jo JONA) VON DRAUSSN "oida_g_bild_glatt" OIDA
+
 # ------------------------------------------- verschieben, drehen, vergrößern
 
 # Alles, was danach gezeichnet wird, ist um (dx, dy) verschoben. So macht man
@@ -152,3 +290,5 @@ FUNKTIAUN maus_y() GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_g_maus_y" OIDA
 # Knopf 1 ist links, 2 rechts, 3 die Mitte.
 FUNKTIAUN maus_taste(knopf ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_g_maus" OIDA
 FUNKTIAUN maus_taste_neich(knopf ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_g_maus_neu" OIDA
+# Wie viele Rasten das Mausrad seit dem letzten Bild gedreht wurde (nach unten positiv, wie im Browser).
+FUNKTIAUN maus_radl() GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_g_maus_rad" OIDA
