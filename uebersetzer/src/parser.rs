@@ -10,6 +10,10 @@
 //!            | name "=" ausdruck OIDA
 //!            | WENN ausdruck DAUN { anweisung } [ SUNST ( wenn | { anweisung } ) ] PASST SCHO [ OIDA ]
 //!            | SOLONG ausdruck TUA { anweisung } PASST SCHO [ OIDA ]
+//!            | FIA name VON ausdruck BIS ausdruck [ SCHRITT ausdruck ] TUA { anweisung } PASST SCHO [ OIDA ]
+//!            | HAU OB OIDA
+//!            | WEIDA OIDA
+//!            | name ( "+=" | "-=" | "*=" | "/=" | "%=" ) ausdruck OIDA
 //!            | GIB ZRUCK [ ausdruck ] OIDA
 //!            | SCHREIB "(" [ ausdruck { "," ausdruck } ] ")" OIDA
 //!            | ausdruck OIDA
@@ -20,7 +24,8 @@
 //! summe      = produkt { ( "+" | "-" ) produkt }
 //! produkt    = unaer { ( "*" | "/" | "%" ) unaer }
 //! unaer      = "-" unaer | primaer
-//! primaer    = zahl | text | WOAHR | FOISCH | name [ "(" argumente ")" ]
+//! primaer    = zahl | text | WOAHR | FOISCH | PI | name [ "(" argumente ")" ]
+//!            | eingebaute_funktion "(" argumente ")"
 //!            | typ "(" ausdruck ")" | "(" ausdruck ")"
 //! ```
 
@@ -97,6 +102,11 @@ impl Parser<'_> {
             TokenArt::Mal => "'*'".to_string(),
             TokenArt::Durch => "'/'".to_string(),
             TokenArt::Prozent => "'%'".to_string(),
+            TokenArt::PlusGleich => "'+='".to_string(),
+            TokenArt::MinusGleich => "'-='".to_string(),
+            TokenArt::MalGleich => "'*='".to_string(),
+            TokenArt::DurchGleich => "'/='".to_string(),
+            TokenArt::ProzentGleich => "'%='".to_string(),
             TokenArt::Gleich => "'='".to_string(),
             TokenArt::GleichGleich => "'=='".to_string(),
             TokenArt::Ungleich => "'!='".to_string(),
@@ -326,6 +336,29 @@ impl Parser<'_> {
                 self.erwarte_end(pos, Schluessel::While)?;
                 AnweisungArt::Solong { bedingung, rumpf }
             }
+            TokenArt::Schluessel(Schluessel::For) => {
+                self.weiter();
+                let (name, _) = self.name("de Zöhvariable")?;
+                self.erwarte_schluessel(Schluessel::From)?;
+                let von = self.ausdruck()?;
+                self.erwarte_schluessel(Schluessel::To)?;
+                let bis = self.ausdruck()?;
+                let schritt = if self.nimm(Schluessel::Step) { Some(self.ausdruck()?) } else { None };
+                self.erwarte_schluessel(Schluessel::Do)?;
+                let rumpf = self.block()?;
+                self.erwarte_end(pos, Schluessel::For)?;
+                AnweisungArt::Fia { name, id: 0, von, bis, schritt, rumpf }
+            }
+            TokenArt::Schluessel(Schluessel::Break) => {
+                self.weiter();
+                self.erwarte_oida()?;
+                AnweisungArt::HauOb
+            }
+            TokenArt::Schluessel(Schluessel::Continue) => {
+                self.weiter();
+                self.erwarte_oida()?;
+                AnweisungArt::Weida
+            }
             TokenArt::Schluessel(Schluessel::Return) => {
                 self.weiter();
                 let wert = if self.kann_ausdruck_anfangen() { Some(self.ausdruck()?) } else { None };
@@ -345,6 +378,16 @@ impl Parser<'_> {
                 let wert = self.ausdruck()?;
                 self.erwarte_oida()?;
                 AnweisungArt::Zuweisung { name, wert, id: 0 }
+            }
+            TokenArt::Name(name) if rechen_zuweisung(self.naechstes()).is_some() => {
+                // x += 1 heißt x = x + 1
+                let op = rechen_zuweisung(self.naechstes()).unwrap();
+                self.weiter();
+                let op_pos = self.weiter().pos;
+                let rechts = self.ausdruck()?;
+                self.erwarte_oida()?;
+                let links = Ausdruck::neu(AusdruckArt::Variable { name: name.clone(), id: 0 }, pos);
+                AnweisungArt::Zuweisung { name, wert: binaer(op, links, rechts, op_pos), id: 0 }
             }
             _ => {
                 // "IF x > 3 THEN": gleich sagen, wie es richtig heißt.
@@ -420,7 +463,9 @@ impl Parser<'_> {
             | TokenArt::KlammerAuf
             | TokenArt::Minus => true,
             TokenArt::Schluessel(s) => {
-                matches!(s, Schluessel::True | Schluessel::False | Schluessel::Not) || self.typ_hier().is_some()
+                matches!(s, Schluessel::True | Schluessel::False | Schluessel::Not | Schluessel::Pi)
+                    || s.ist_funktion()
+                    || self.typ_hier().is_some()
             }
             _ => false,
         }
@@ -546,6 +591,16 @@ impl Parser<'_> {
                 self.weiter();
                 AusdruckArt::Jona(false)
             }
+            TokenArt::Schluessel(Schluessel::Pi) => {
+                self.weiter();
+                AusdruckArt::Kommazoi(std::f64::consts::PI)
+            }
+            TokenArt::Schluessel(s) if eingebaut(s).is_some() => {
+                // Der Lexer lässt so ein Wort nur durch, wenn die Klammer folgt.
+                self.weiter();
+                self.erwarte(TokenArt::KlammerAuf, "a '('")?;
+                AusdruckArt::Eingebaut { funktion: eingebaut(s).unwrap(), argumente: self.argumente()? }
+            }
             TokenArt::Name(name) => {
                 self.weiter();
                 if self.aktuell().art == TokenArt::KlammerAuf {
@@ -576,6 +631,47 @@ impl Parser<'_> {
         };
         Ok(Ausdruck::neu(art, pos))
     }
+}
+
+/// `+=` und Verwandte: welche Rechnung dahintersteckt.
+fn rechen_zuweisung(token: &TokenArt) -> Option<BinaerOp> {
+    Some(match token {
+        TokenArt::PlusGleich => BinaerOp::Plus,
+        TokenArt::MinusGleich => BinaerOp::Minus,
+        TokenArt::MalGleich => BinaerOp::Mal,
+        TokenArt::DurchGleich => BinaerOp::Durch,
+        TokenArt::ProzentGleich => BinaerOp::Rest,
+        _ => return None,
+    })
+}
+
+/// Welche eingebaute Funktion zu einem Wort gehört.
+fn eingebaut(schluessel: Schluessel) -> Option<Eingebaut> {
+    Some(match schluessel {
+        Schluessel::Read => Eingebaut::Lies,
+        Schluessel::Length => Eingebaut::Laenge,
+        Schluessel::Substring => Eingebaut::Stueck,
+        Schluessel::Find => Eingebaut::Suche,
+        Schluessel::Upper => Eingebaut::Gross,
+        Schluessel::Lower => Eingebaut::Klein,
+        Schluessel::Trim => Eingebaut::Stutz,
+        Schluessel::Replace => Eingebaut::Ersetz,
+        Schluessel::Sqrt => Eingebaut::Wurzel,
+        Schluessel::Pow => Eingebaut::Hoch,
+        Schluessel::Abs => Eingebaut::Betrag,
+        Schluessel::Min => Eingebaut::Min,
+        Schluessel::Max => Eingebaut::Max,
+        Schluessel::Sin => Eingebaut::Sinus,
+        Schluessel::Cos => Eingebaut::Kosinus,
+        Schluessel::Atan2 => Eingebaut::Winkel,
+        Schluessel::Exp => Eingebaut::Exp,
+        Schluessel::Floor => Eingebaut::Abrunden,
+        Schluessel::Ceil => Eingebaut::Aufrunden,
+        Schluessel::Round => Eingebaut::Runden,
+        Schluessel::Random => Eingebaut::Zufall,
+        Schluessel::Seed => Eingebaut::Samen,
+        _ => return None,
+    })
 }
 
 fn binaer(op: BinaerOp, links: Ausdruck, rechts: Ausdruck, pos: Position) -> Ausdruck {
@@ -613,6 +709,9 @@ mod tests {
             }
             AusdruckArt::Aufruf { name, argumente } => {
                 format!("{name}({})", argumente.iter().map(klammern).collect::<Vec<_>>().join(", "))
+            }
+            AusdruckArt::Eingebaut { funktion, argumente } => {
+                format!("{funktion:?}({})", argumente.iter().map(klammern).collect::<Vec<_>>().join(", "))
             }
             AusdruckArt::Umwandlung { ziel, innen } => format!("{ziel:?}({})", klammern(innen)),
         }
@@ -671,6 +770,53 @@ mod tests {
         let p = parse("SOLONG i < 10 TUA i = i + 1 OIDA PASST SCHO OIDA");
         let AnweisungArt::Solong { rumpf, .. } = &p.haupt[0].art else { panic!() };
         assert!(matches!(&rumpf[0].art, AnweisungArt::Zuweisung { name, .. } if name == "i"));
+    }
+
+    #[test]
+    fn zaehlschleife() {
+        let p = parse("FIA i VON 1 BIS n - 1 SCHRITT 2 TUA SCHREIB(i) OIDA PASST SCHO");
+        let AnweisungArt::Fia { name, von, bis, schritt, rumpf, .. } = &p.haupt[0].art else { panic!() };
+        assert_eq!(name, "i");
+        assert_eq!(klammern(von), "1");
+        assert_eq!(klammern(bis), "(n - 1)");
+        assert_eq!(klammern(schritt.as_ref().unwrap()), "2");
+        assert_eq!(rumpf.len(), 1);
+
+        let p = parse("FIA i VON 0 BIS 9 TUA PASST SCHO OIDA");
+        assert!(matches!(&p.haupt[0].art, AnweisungArt::Fia { schritt: None, .. }));
+    }
+
+    #[test]
+    fn schleife_verlassen() {
+        let p = parse("SOLONG WOAHR TUA WEIDA OIDA HAU OB OIDA PASST SCHO");
+        let AnweisungArt::Solong { rumpf, .. } = &p.haupt[0].art else { panic!() };
+        assert!(matches!(rumpf[0].art, AnweisungArt::Weida));
+        assert!(matches!(rumpf[1].art, AnweisungArt::HauOb));
+    }
+
+    #[test]
+    fn rechnen_und_zuweisen() {
+        let p = parse("x += 2 * y OIDA x %= 3 OIDA");
+        let AnweisungArt::Zuweisung { name, wert, .. } = &p.haupt[0].art else { panic!() };
+        assert_eq!(name, "x");
+        assert_eq!(klammern(wert), "(x + (2 * y))");
+        let AnweisungArt::Zuweisung { wert, .. } = &p.haupt[1].art else { panic!() };
+        assert_eq!(klammern(wert), "(x % 3)");
+    }
+
+    #[test]
+    fn eingebaute_funktionen() {
+        assert_eq!(ausdruck("LÄNGN(s) + WURZL(2.0)"), "(Laenge(s) + Wurzel(2.0))");
+        assert_eq!(ausdruck("STICKL(LIES(), 0, 3)"), "Stueck(Lies(), 0, 3)");
+        assert_eq!(ausdruck("2 * PI"), format!("(2 * {:?})", std::f64::consts::PI));
+        // Ohne Klammer ist es ein normaler Name.
+        assert_eq!(ausdruck("winkl + hoch"), "(winkl + hoch)");
+    }
+
+    #[test]
+    fn fia_ohne_von() {
+        let f = fehler("FIA i BIS 3 TUA PASST SCHO");
+        assert_eq!(f.meldung, "Do ghört VON her, ned BIS.");
     }
 
     #[test]

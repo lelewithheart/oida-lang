@@ -19,7 +19,9 @@
 #   - Die Wörter links darfst du nicht ändern, nur die rechts.
 #
 #  Was hier als Wort steht, kannst du nicht mehr als Namen für eine Variable
-#  oder Funktion verwenden.
+#  oder Funktion verwenden. Ausnahme: die eingebauten Funktionen (LÄNGN,
+#  WURZL ...) gelten nur, wenn gleich eine Klammer folgt. Eine Variable darf
+#  also "winkl" heißen, obwohl es WINKL(...) gibt.
 #
 #  Welche Datei gilt, zeigt dir:  oida --woerter
 #  Diese Datei als UTF-8 speichern (wegen Ö, Ä, Ü, ß).
@@ -41,13 +43,24 @@ WHILE     = SOLONG
 DO        = TUA, MOCH
 END       = PASST SCHO
 
+# --- Zählschleife:  FIA i VON 1 BIS 10 SCHRITT 2 TUA ... PASST SCHO ----------
+FOR       = FIA
+FROM      = VON
+TO        = BIS
+STEP      = SCHRITT
+
+# --- Schleife verlassen / gleich zum nächsten Durchlauf ---------------------
+BREAK     = HAU OB, VERLOSS
+CONTINUE  = WEIDA
+
 # --- Funktionen -------------------------------------------------------------
 FUNCTION  = FUNKTIAUN
 RETURNS   = GIBT ZRUCK
 RETURN    = GIB ZRUCK
 
-# --- Ausgabe ----------------------------------------------------------------
+# --- Ausgabe und Eingabe ----------------------------------------------------
 PRINT     = SCHREIB
+READ      = LIES
 
 # --- Bedingungen ------------------------------------------------------------
 AND       = UND
@@ -63,3 +76,31 @@ INT       = ZOI
 FLOAT     = KOMMAZOI
 BOOLEAN   = JONA, WOAHRFOISCH
 TEXT      = KETTN, TEXTL
+
+# --- Eingebaute Funktionen für Texte ----------------------------------------
+LENGTH    = LÄNGN
+SUBSTRING = STICKL
+FIND      = SUACH
+UPPER     = SCHREI
+LOWER     = FLÜSTER
+TRIM      = STUTZ
+REPLACE   = ERSETZ, AUSTAUSCH
+
+# --- Eingebaute Funktionen zum Rechnen --------------------------------------
+SQRT      = WURZL
+POW       = HOCH
+ABS       = BETROG
+MIN       = KLANSTA
+MAX       = GRÖSSTA
+SIN       = SINUS
+COS       = KOSINUS
+ATAN2     = WINKL
+EXP       = E_HOCH
+FLOOR     = OBRUNDN
+CEIL      = AUFRUNDN
+ROUND     = RUNDN, PI MOI DAUMEN
+RANDOM    = ZUFOI
+SEED      = SOMEN
+
+# --- Feste Werte ------------------------------------------------------------
+PI        = PI

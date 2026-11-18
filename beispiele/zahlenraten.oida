@@ -1,0 +1,25 @@
+# Zahlenraten: Der Rechner denkt sich eine Zahl, du rätst.
+# Mit einer leeren Eingabe gibst du auf.
+
+SOG AU geheim = ZUFOI(1, 100) OIDA
+SOG AU versuche = 0 OIDA
+SCHREIB("I denk ma a Zoi zwischn 1 und 100.") OIDA
+
+SOLONG WOAHR TUA
+    SOG AU eingabe = STUTZ(LIES("Dei Tipp: ")) OIDA
+    WENN eingabe = "" DAUN
+        SCHREIB("Na guat, daun ned. Es woa", geheim) OIDA
+        HAU OB OIDA
+    PASST SCHO
+
+    SOG AU tipp = ZOI(eingabe) OIDA
+    versuche += 1 OIDA
+    WENN tipp < geheim DAUN
+        SCHREIB("Z'klan!") OIDA
+    SUNST WENN tipp > geheim DAUN
+        SCHREIB("Z'groß!") OIDA
+    SUNST
+        SCHREIB("Richtig! Du host", versuche, "Versuche braucht.") OIDA
+        HAU OB OIDA
+    PASST SCHO
+PASST SCHO

@@ -33,6 +33,8 @@ fn art_von_schluessel(schluessel: Schluessel) -> Art {
         Schluessel::Oida => Art::Endwort,
         Schluessel::Int | Schluessel::Float | Schluessel::Boolean | Schluessel::Text => Art::Typ,
         Schluessel::True | Schluessel::False => Art::Wahrheitswert,
+        Schluessel::Pi => Art::Zahl,
+        s if s.ist_funktion() => Art::Funktion,
         _ => Art::Schluesselwort,
     }
 }
@@ -227,9 +229,13 @@ fn grammatik(wb: &Woerterbuch) -> String {
             Art::Endwort => "keyword.other.endwort.oida",
             Art::Typ => "entity.name.type.oida",
             Art::Wahrheitswert => "constant.language.boolean.oida",
+            Art::Zahl => "constant.numeric.oida",
+            Art::Funktion => "entity.name.function.oida",
             _ => "keyword.control.oida",
         };
-        muster.push((klasse.to_string(), format!("(?i){}", phrasen_muster(&phrase))));
+        // Eine eingebaute Funktion gilt nur, wenn gleich die Klammer folgt.
+        let klammer = if schluessel.ist_funktion() { r"(?=\s*\()" } else { "" };
+        muster.push((klasse.to_string(), format!("(?i){}{klammer}", phrasen_muster(&phrase))));
     }
     muster.push(("entity.name.function.oida".to_string(), r"[\p{L}_][\p{L}\p{N}_]*(?=\s*\()".to_string()));
     muster.push(("variable.other.readwrite.oida".to_string(), r"[\p{L}_][\p{L}\p{N}_]*".to_string()));
@@ -264,6 +270,7 @@ fn sprach_einstellungen(wb: &Woerterbuch) -> String {
     let danach = format!("(?!{WORTZEICHEN})");
     let funktion = auswahl(wb, &[Schluessel::Function]);
     let oeffner = auswahl(wb, &[Schluessel::Then, Schluessel::Do]);
+    // (Auch die Zählschleife hört in der ersten Zeile mit TUA auf.)
     let sunst = auswahl(wb, &[Schluessel::Else]);
     let ende = auswahl(wb, &[Schluessel::End]);
     // Eine Zeile weiter einrücken nach: FUNKTIAUN ..., ... DAUN, ... TUA, SUNST
@@ -324,6 +331,16 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             w(While).to_string(),
             vec![format!("{} ${{1:bedingung}} {}", w(While), w(Do)), "\t$0".into(), w(End).to_string()],
             "Schleife",
+        ),
+        (
+            w(For).to_string(),
+            w(For).to_string(),
+            vec![
+                format!("{} ${{1:i}} {} ${{2:1}} {} ${{3:10}} {}", w(For), w(From), w(To), w(Do)),
+                "\t$0".into(),
+                w(End).to_string(),
+            ],
+            "Zählschleife",
         ),
         (
             w(Function).to_string(),
@@ -456,6 +473,24 @@ mod tests {
         assert!(woerter.contains("{\"wort\":\"SOG AU\",\"fest\":\"DECLARE\",\"art\":0}"), "{woerter}");
         assert!(woerter.contains("{\"wort\":\"KETTN\",\"fest\":\"TEXT\",\"art\":1}"), "{woerter}");
         assert!(woerter.contains("{\"wort\":\"STIMMT NED\",\"fest\":\"FALSE\",\"art\":6}"), "{woerter}");
+    }
+
+    #[test]
+    fn eingebaute_funktionen_sind_funktionen() {
+        // LÄNGN mit Klammer ist eine Funktion (2), PI eine Zahl (4), hoch ohne Klammer eine Variable (3).
+        let json = untersuche("SOG AU hoch = LÄNGN(\"a\") * PI OIDA", &wb());
+        assert_eq!(feld(&json, "tokens"), "[[0,0,6,0],[0,7,4,3],[0,14,5,2],[0,20,3,5],[0,27,2,4],[0,30,4,7]]");
+        let woerter = feld(&json, "woerter");
+        assert!(woerter.contains("{\"wort\":\"LÄNGN\",\"fest\":\"LENGTH\",\"art\":2}"), "{woerter}");
+        assert!(woerter.contains("{\"wort\":\"HAU OB\",\"fest\":\"BREAK\",\"art\":0}"), "{woerter}");
+    }
+
+    #[test]
+    fn grammatik_kennt_funktionen_nur_mit_klammer() {
+        let g = grammatik(&wb());
+        assert!(g.contains(r"WURZL(?![\\p{L}\\p{N}_])(?=\\s*\\()"), "{g}");
+        // FIA ist keine Funktion und braucht keine Klammer.
+        assert!(g.contains(r#"FIA(?![\\p{L}\\p{N}_])" }"#), "{g}");
     }
 
     #[test]

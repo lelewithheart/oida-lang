@@ -1,0 +1,5 @@
+SOG AU weite = 0 OIDA
+SCHREIB("vorher") OIDA
+FIA i VON 1 BIS 3 SCHRITT weite TUA
+    SCHREIB(i) OIDA
+PASST SCHO

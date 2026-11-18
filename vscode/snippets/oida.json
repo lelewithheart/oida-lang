@@ -15,6 +15,11 @@
     "body": ["SOLONG ${1:bedingung} TUA", "\t$0", "PASST SCHO"],
     "description": "Schleife"
   },
+  "FIA": {
+    "prefix": "fia",
+    "body": ["FIA ${1:i} VON ${2:1} BIS ${3:10} TUA", "\t$0", "PASST SCHO"],
+    "description": "Zählschleife"
+  },
   "FUNKTIAUN": {
     "prefix": "funktiaun",
     "body": ["FUNKTIAUN ${1:name}(${2:x} ${3:ZOI}) GIBT ZRUCK ${4:ZOI}", "\tGIB ZRUCK ${0:x} OIDA", "PASST SCHO"],

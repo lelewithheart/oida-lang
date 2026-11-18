@@ -34,6 +34,63 @@ struct Pruefer<'a> {
     naechste_id: usize,
     /// Name und Rückgabetyp der Funktion, in der wir gerade sind.
     funktion: Option<(String, Typ)>,
+    /// In wie vielen Schleifen wir gerade stecken (für HAU OB und WEIDA).
+    schleifen: usize,
+}
+
+/// Das Wort, unter dem eine eingebaute Funktion im Wörterbuch steht.
+fn wort_von(funktion: Eingebaut) -> Schluessel {
+    match funktion {
+        Eingebaut::Lies => Schluessel::Read,
+        Eingebaut::Laenge => Schluessel::Length,
+        Eingebaut::Stueck => Schluessel::Substring,
+        Eingebaut::Suche => Schluessel::Find,
+        Eingebaut::Gross => Schluessel::Upper,
+        Eingebaut::Klein => Schluessel::Lower,
+        Eingebaut::Stutz => Schluessel::Trim,
+        Eingebaut::Ersetz => Schluessel::Replace,
+        Eingebaut::Wurzel => Schluessel::Sqrt,
+        Eingebaut::Hoch => Schluessel::Pow,
+        Eingebaut::Betrag => Schluessel::Abs,
+        Eingebaut::Min => Schluessel::Min,
+        Eingebaut::Max => Schluessel::Max,
+        Eingebaut::Sinus => Schluessel::Sin,
+        Eingebaut::Kosinus => Schluessel::Cos,
+        Eingebaut::Winkel => Schluessel::Atan2,
+        Eingebaut::Exp => Schluessel::Exp,
+        Eingebaut::Abrunden => Schluessel::Floor,
+        Eingebaut::Aufrunden => Schluessel::Ceil,
+        Eingebaut::Runden => Schluessel::Round,
+        Eingebaut::Zufall => Schluessel::Random,
+        Eingebaut::Samen => Schluessel::Seed,
+    }
+}
+
+/// Welche Werte eine eingebaute Funktion nimmt und was sie zurückgibt.
+/// Mehrere Zeilen heißt: Es gibt sie in mehreren Fassungen; die erste, die passt, gilt.
+/// Wo KOMMAZOI verlangt ist, geht auch eine ZOI.
+fn fassungen(funktion: Eingebaut) -> &'static [(&'static [Typ], Typ)] {
+    use Typ::{Kettn as T, Kommazoi as K, Nix, Zoi as Z};
+    match funktion {
+        Eingebaut::Lies => &[(&[], T), (&[T], T)],
+        Eingebaut::Laenge => &[(&[T], Z)],
+        Eingebaut::Stueck => &[(&[T, Z], T), (&[T, Z, Z], T)],
+        Eingebaut::Suche => &[(&[T, T], Z)],
+        Eingebaut::Gross | Eingebaut::Klein | Eingebaut::Stutz => &[(&[T], T)],
+        Eingebaut::Ersetz => &[(&[T, T, T], T)],
+        Eingebaut::Wurzel
+        | Eingebaut::Sinus
+        | Eingebaut::Kosinus
+        | Eingebaut::Exp
+        | Eingebaut::Abrunden
+        | Eingebaut::Aufrunden
+        | Eingebaut::Runden => &[(&[K], K)],
+        Eingebaut::Hoch | Eingebaut::Winkel => &[(&[K, K], K)],
+        Eingebaut::Betrag => &[(&[Z], Z), (&[K], K)],
+        Eingebaut::Min | Eingebaut::Max => &[(&[Z, Z], Z), (&[K, K], K)],
+        Eingebaut::Zufall => &[(&[], K), (&[Z, Z], Z)],
+        Eingebaut::Samen => &[(&[Z], Nix)],
+    }
 }
 
 /// Prüft das Programm und ergänzt den Syntaxbaum um Typen und Variablennummern.
@@ -45,6 +102,7 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         bereiche: Vec::new(),
         naechste_id: 0,
         funktion: None,
+        schleifen: 0,
     };
 
     // Erst alle Funktionen kennenlernen, damit die Reihenfolge egal ist.
@@ -125,6 +183,7 @@ impl Pruefer<'_> {
 
     fn funktion(&mut self, f: &mut Funktion) {
         self.bereiche = vec![HashMap::new()];
+        self.schleifen = 0;
         self.funktion = Some((f.name.clone(), f.rueckgabe));
         for parameter in &mut f.parameter {
             parameter.id = self.neue_variable(&parameter.name, parameter.typ, parameter.pos);
@@ -198,8 +257,31 @@ impl Pruefer<'_> {
             }
             AnweisungArt::Solong { bedingung, rumpf } => {
                 self.bedingung(bedingung, Schluessel::While);
+                self.schleifen += 1;
                 self.block(rumpf);
+                self.schleifen -= 1;
             }
+            AnweisungArt::Fia { name, id, von, bis, schritt, rumpf } => {
+                self.zoi_verlangt(von, Schluessel::From);
+                self.zoi_verlangt(bis, Schluessel::To);
+                if let Some(schritt) = schritt {
+                    self.zoi_verlangt(schritt, Schluessel::Step);
+                    if matches!(schritt.art, AusdruckArt::Zoi(0)) {
+                        let meldung =
+                            format!("Mit {} 0 kummt de Schleifn nie weida.", self.wort(Schluessel::Step));
+                        self.melde(schritt.pos, meldung);
+                    }
+                }
+                // Die Zählvariable gilt nur in der Schleife.
+                self.bereiche.push(HashMap::new());
+                *id = self.neue_variable(name, Typ::Zoi, pos);
+                self.schleifen += 1;
+                self.block(rumpf);
+                self.schleifen -= 1;
+                self.bereiche.pop();
+            }
+            AnweisungArt::HauOb => self.nur_in_schleife(Schluessel::Break, pos),
+            AnweisungArt::Weida => self.nur_in_schleife(Schluessel::Continue, pos),
             AnweisungArt::GibZruck { wert } => {
                 let wert_typ = wert.as_mut().map(|w| self.ausdruck(w));
                 let Some((fname, rueckgabe)) = self.funktion.clone() else {
@@ -257,10 +339,32 @@ impl Pruefer<'_> {
             }
             AnweisungArt::Ausdruck(ausdruck) => {
                 self.ausdruck(ausdruck);
-                if !matches!(ausdruck.art, AusdruckArt::Aufruf { .. }) {
+                if !matches!(ausdruck.art, AusdruckArt::Aufruf { .. } | AusdruckArt::Eingebaut { .. }) {
                     self.melde(ausdruck.pos, "Des rechnet wos aus und schmeißt's glei wieda weg. Wos soll des?");
                 }
             }
+        }
+    }
+
+    /// HAU OB und WEIDA brauchen eine Schleife um sich herum.
+    fn nur_in_schleife(&mut self, wort: Schluessel, pos: Position) {
+        if self.schleifen == 0 {
+            let meldung = format!("{} geht nur in ana Schleifn.", self.wort(wort));
+            self.melde(pos, meldung);
+        }
+    }
+
+    /// VON, BIS und SCHRITT einer Zählschleife müssen ganze Zahlen sein.
+    fn zoi_verlangt(&mut self, ausdruck: &mut Ausdruck, wort: Schluessel) {
+        let typ = self.ausdruck(ausdruck);
+        if typ != Typ::Zoi && typ != Typ::Fehler {
+            let meldung = format!(
+                "Noch {} brauch i {}, des do is oba {}.",
+                self.wort(wort),
+                self.typ_name(Typ::Zoi),
+                self.typ_name(typ)
+            );
+            self.melde(ausdruck.pos, meldung);
         }
     }
 
@@ -346,6 +450,10 @@ impl Pruefer<'_> {
                 let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
                 let name = name.clone();
                 self.aufruf(&name, argumente, &typen, pos)
+            }
+            AusdruckArt::Eingebaut { funktion, argumente } => {
+                let funktion = *funktion;
+                self.eingebaut(funktion, argumente, pos)
             }
             AusdruckArt::Umwandlung { ziel, innen } => {
                 let ziel = *ziel;
@@ -433,6 +541,63 @@ impl Pruefer<'_> {
         }
         self.melde(pos, meldung);
         Typ::Fehler
+    }
+
+    /// Prüft den Aufruf einer eingebauten Funktion und sucht die passende Fassung.
+    fn eingebaut(&mut self, funktion: Eingebaut, argumente: &mut [Ausdruck], pos: Position) -> Typ {
+        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        let alle = fassungen(funktion);
+        if typen.contains(&Typ::Fehler) {
+            return Typ::Fehler;
+        }
+        let name = self.wort(wort_von(funktion)).to_string();
+        let passt = |von: Typ, ziel: Typ| von == ziel || (von == Typ::Zoi && ziel == Typ::Kommazoi);
+
+        let mit_anzahl: Vec<&(&[Typ], Typ)> = alle.iter().filter(|(p, _)| p.len() == typen.len()).collect();
+        if mit_anzahl.is_empty() {
+            // "kan oda an Wert", "2 oda 3 Werte"
+            let mut anzahlen: Vec<usize> = alle.iter().map(|(p, _)| p.len()).collect();
+            anzahlen.dedup();
+            let woerter: Vec<String> = anzahlen
+                .iter()
+                .map(|n| match n {
+                    0 => "kan".to_string(),
+                    1 => "an".to_string(),
+                    n => n.to_string(),
+                })
+                .collect();
+            let einheit = if anzahlen.last() == Some(&1) { "Wert" } else { "Werte" };
+            let meldung = format!(
+                "'{name}' wü {} {einheit} hom, du gibst eam {}.",
+                woerter.join(" oda "),
+                anzahl(typen.len())
+            );
+            self.melde(pos, meldung);
+            return alle[0].1;
+        }
+        let gefunden =
+            mit_anzahl.iter().find(|(parameter, _)| parameter.iter().zip(&typen).all(|(ziel, von)| passt(*von, *ziel)));
+        if let Some((parameter, ergebnis)) = gefunden {
+            for (argument, ziel) in argumente.iter_mut().zip(parameter.iter()) {
+                self.anpassen(argument, *ziel);
+            }
+            return *ergebnis;
+        }
+        // Keine Fassung passt: den ersten falschen Wert melden.
+        let (parameter, ergebnis) = mit_anzahl[0];
+        for (i, (ziel, von)) in parameter.iter().zip(&typen).enumerate() {
+            if !passt(*von, *ziel) {
+                let meldung = format!(
+                    "'{name}' wü ois {}. Wert {}, du gibst eam {}.",
+                    i + 1,
+                    self.typ_name(*ziel),
+                    self.typ_name(*von)
+                );
+                self.melde(argumente[i].pos, meldung);
+                break;
+            }
+        }
+        *ergebnis
     }
 
     fn aufruf(&mut self, name: &str, argumente: &mut [Ausdruck], typen: &[Typ], pos: Position) -> Typ {
@@ -649,6 +814,94 @@ mod tests {
         let fehler = pruefe("SOG AU a = 1 + WOAHR OIDA\nSCHREIB(b) OIDA\nc = 3 OIDA").unwrap_err();
         assert_eq!(fehler.len(), 3, "{fehler:?}");
         assert_eq!(fehler.iter().map(|f| f.pos.zeile).collect::<Vec<_>>(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn zaehlschleife() {
+        let programm = ok("FIA i VON 1 BIS 3 TUA SCHREIB(i) OIDA PASST SCHO");
+        let AnweisungArt::Fia { id, rumpf, .. } = &programm.haupt[0].art else { panic!() };
+        let AnweisungArt::Schreib { argumente } = &rumpf[0].art else { panic!() };
+        assert!(matches!(argumente[0].art, AusdruckArt::Variable { id: innen, .. } if innen == *id));
+        assert_eq!(argumente[0].typ, Typ::Zoi);
+
+        // Die Zählvariable gilt nur in der Schleife.
+        let f = fehler("FIA i VON 1 BIS 3 TUA PASST SCHO\nSCHREIB(i) OIDA");
+        assert!(f.meldung.contains("'i' kenn i ned"), "{}", f.meldung);
+        let f = fehler("FIA i VON 1.5 BIS 3 TUA PASST SCHO");
+        assert_eq!(f.meldung, "Noch VON brauch i a ZOI, des do is oba a KOMMAZOI.");
+        let f = fehler("FIA i VON 1 BIS 3 SCHRITT 0 TUA PASST SCHO");
+        assert_eq!(f.meldung, "Mit SCHRITT 0 kummt de Schleifn nie weida.");
+    }
+
+    #[test]
+    fn hau_ob_nur_in_schleifen() {
+        ok("SOLONG WOAHR TUA WENN WOAHR DAUN HAU OB OIDA PASST SCHO WEIDA OIDA PASST SCHO");
+        ok("FIA i VON 1 BIS 3 TUA HAU OB OIDA PASST SCHO");
+        assert_eq!(fehler("HAU OB OIDA").meldung, "HAU OB geht nur in ana Schleifn.");
+        assert_eq!(fehler("WENN WOAHR DAUN WEIDA OIDA PASST SCHO").meldung, "WEIDA geht nur in ana Schleifn.");
+        // Eine Schleife außen herum gilt nicht für die Funktion darin.
+        let f = fehler("FUNKTIAUN f()\n HAU OB OIDA\nPASST SCHO\nSOLONG WOAHR TUA f() OIDA PASST SCHO");
+        assert_eq!(f.meldung, "HAU OB geht nur in ana Schleifn.");
+    }
+
+    #[test]
+    fn eingebaute_funktionen() {
+        assert_eq!(typ_von("LÄNGN(\"abc\")"), Typ::Zoi);
+        assert_eq!(typ_von("STICKL(\"abc\", 1)"), Typ::Kettn);
+        assert_eq!(typ_von("STICKL(\"abc\", 1, 2)"), Typ::Kettn);
+        assert_eq!(typ_von("SUACH(\"abc\", \"c\")"), Typ::Zoi);
+        assert_eq!(typ_von("SCHREI(FLÜSTER(STUTZ(\" a \")))"), Typ::Kettn);
+        assert_eq!(typ_von("ERSETZ(\"a\", \"a\", \"b\")"), Typ::Kettn);
+        assert_eq!(typ_von("WURZL(2)"), Typ::Kommazoi);
+        assert_eq!(typ_von("HOCH(2, 10)"), Typ::Kommazoi);
+        assert_eq!(typ_von("BETROG(-3)"), Typ::Zoi);
+        assert_eq!(typ_von("BETROG(-3.5)"), Typ::Kommazoi);
+        assert_eq!(typ_von("KLANSTA(1, 2)"), Typ::Zoi);
+        assert_eq!(typ_von("GRÖSSTA(1, 2.5)"), Typ::Kommazoi);
+        assert_eq!(typ_von("SINUS(PI) + KOSINUS(0) + WINKL(1, 1) + E_HOCH(1)"), Typ::Kommazoi);
+        assert_eq!(typ_von("OBRUNDN(2.5) + AUFRUNDN(2.5) + RUNDN(2.5)"), Typ::Kommazoi);
+        assert_eq!(typ_von("ZUFOI()"), Typ::Kommazoi);
+        assert_eq!(typ_von("ZUFOI(1, 6)"), Typ::Zoi);
+        assert_eq!(typ_von("LIES()"), Typ::Kettn);
+        assert_eq!(typ_von("LIES(\"Nom: \")"), Typ::Kettn);
+        ok("SOMEN(42) OIDA\nLIES() OIDA");
+    }
+
+    #[test]
+    fn zoi_wird_in_eingebauten_funktionen_zur_kommazoi() {
+        let programm = ok("SOG AU x = WURZL(16) OIDA");
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[0].art else { panic!() };
+        let AusdruckArt::Eingebaut { argumente, .. } = &wert.art else { panic!() };
+        assert!(matches!(argumente[0].art, AusdruckArt::Umwandlung { ziel: Typ::Kommazoi, .. }));
+    }
+
+    #[test]
+    fn eingebaute_funktionen_falsch_aufgerufen() {
+        assert_eq!(fehler("SOG AU x = LÄNGN(5) OIDA").meldung, "'LÄNGN' wü ois 1. Wert a KETTN, du gibst eam a ZOI.");
+        assert_eq!(fehler("SOG AU x = LÄNGN() OIDA").meldung, "'LÄNGN' wü an Wert hom, du gibst eam kan Wert.");
+        assert_eq!(
+            fehler("SOG AU x = STICKL(\"a\") OIDA").meldung,
+            "'STICKL' wü 2 oda 3 Werte hom, du gibst eam an Wert."
+        );
+        assert_eq!(
+            fehler("SOG AU x = ZUFOI(1) OIDA").meldung,
+            "'ZUFOI' wü kan oda 2 Werte hom, du gibst eam an Wert."
+        );
+        assert_eq!(
+            fehler("SOG AU x = WURZL(\"vier\") OIDA").meldung,
+            "'WURZL' wü ois 1. Wert a KOMMAZOI, du gibst eam a KETTN."
+        );
+        assert_eq!(
+            fehler("SOG AU x = SOMEN(1) OIDA").meldung,
+            "Des gibt nix zruck, des kaunst in ka Variable einetuan."
+        );
+    }
+
+    #[test]
+    fn rechnen_und_zuweisen() {
+        ok("SOG AU x = 1 OIDA x += 2 OIDA x *= 3 OIDA SOG AU s = \"a\" OIDA s += \"b\" OIDA");
+        let f = fehler("SOG AU x = 1 OIDA\nx += 0.5 OIDA");
+        assert_eq!(f.meldung, "'x' is a ZOI, do kaunst ka KOMMAZOI einetuan.");
     }
 
     #[test]

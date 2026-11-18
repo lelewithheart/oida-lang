@@ -34,7 +34,8 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.1, das Grundgerüst.** Was es schon kann und was noch fehlt, steht unten im [Fahrplan](#fahrplan).
+**Stand: v0.2.** Zahlen, Texte, Schleifen, Funktionen, Eingabe und Ausgabe sind da; Listen, Strukturen und
+Klassen fehlen noch. Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
 
@@ -129,7 +130,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.1)
+## Die Sprache (v0.2)
 
 ### Typen
 
@@ -163,6 +164,7 @@ Eine Variable gilt nur in dem Block (`WENN`, `SOLONG`, Funktion), in dem sie ang
 - Verknüpfen: `UND`, `ODA`, `NED`. Die rechte Seite wird nur ausgerechnet, wenn sie gebraucht wird.
 - Umwandeln: `ZOI(...)`, `KOMMAZOI(...)`, `KETTN(...)`, zum Beispiel `"I bin " + KETTN(alter)`
   oder `ZOI("17") + 1`.
+- Rechnen und gleich zuweisen: `x += 1`, ebenso `-=`, `*=`, `/=`, `%=`. Bei Texten hängt `+=` an.
 
 Rangfolge von schwach zu stark: `ODA`, `UND`, `NED`, Vergleiche, `+ -`, `* / %`, Minus als Vorzeichen.
 Klammern gehen immer.
@@ -181,13 +183,45 @@ PASST SCHO
 
 `SUNST` und `SUNST WENN` sind freiwillig. Nach `PASST SCHO` darf ein `OIDA` stehen, muss aber nicht.
 
-### Schleife
+### Schleifen
+
+Solange eine Bedingung gilt:
 
 ```
 SOG AU i = 1 OIDA
 SOLONG i <= 10 TUA
     SCHREIB(i) OIDA
-    i = i + 1 OIDA
+    i += 1 OIDA
+PASST SCHO
+```
+
+Zählen von einer Zahl bis zu einer anderen (beide gehören dazu):
+
+```
+FIA i VON 1 BIS 10 TUA
+    SCHREIB(i) OIDA
+PASST SCHO
+
+FIA i VON 10 BIS 0 SCHRITT -2 TUA      # 10, 8, 6, 4, 2, 0
+    SCHREIB(i) OIDA
+PASST SCHO
+```
+
+Die Zählvariable gilt nur in der Schleife. `VON`, `BIS` und `SCHRITT` werden einmal am Anfang
+ausgerechnet und müssen ganze Zahlen sein.
+
+Mit `HAU OB` verlässt man die innerste Schleife, mit `WEIDA` geht es gleich zum nächsten Durchlauf:
+
+```
+SOLONG WOAHR TUA
+    SOG AU eingabe = LIES("Zoi (leer zum Aufhören): ") OIDA
+    WENN eingabe = "" DAUN
+        HAU OB OIDA
+    PASST SCHO
+    WENN ZOI(eingabe) < 0 DAUN
+        WEIDA OIDA
+    PASST SCHO
+    SCHREIB(WURZL(ZOI(eingabe))) OIDA
 PASST SCHO
 ```
 
@@ -218,6 +252,55 @@ SCHREIB("Summe:", 5050, 3.5, WOAHR) OIDA    # Summe: 5050 3.5 WOAHR
 ```
 
 `SCHREIB` nimmt beliebig viele Werte, schreibt sie mit Leerzeichen dazwischen und macht eine neue Zeile.
+
+### Eingabe
+
+```
+SOG AU name = LIES("Wia haaßt du? ") OIDA    # zeigt die Frage und wartet auf eine Zeile
+SOG AU zeile = LIES() OIDA                   # ohne Frage
+```
+
+`LIES` gibt immer einen Text zurück, ohne den Zeilenumbruch. Für eine Zahl: `ZOI(LIES("Oida, wia oid? "))`.
+Ist die Eingabe zu Ende, kommt ein leerer Text.
+
+### Eingebaute Funktionen
+
+Für Texte (gezählt wird ab 0, in Zeichen):
+
+| Funktion                       | Ergebnis                                              | Beispiel                              |
+|--------------------------------|-------------------------------------------------------|---------------------------------------|
+| `LÄNGN(text)`                  | Anzahl der Zeichen                                    | `LÄNGN("Grüß di")` ist `7`            |
+| `STICKL(text, von)`            | das Stück ab der Stelle `von` bis zum Ende            | `STICKL("Servas", 3)` ist `"vas"`     |
+| `STICKL(text, von, anzahl)`    | `anzahl` Zeichen ab der Stelle `von`                  | `STICKL("Servas", 0, 3)` ist `"Ser"`  |
+| `SUACH(text, gesucht)`         | Stelle des ersten Treffers, oder `-1`                 | `SUACH("Servas", "v")` ist `3`        |
+| `SCHREI(text)`                 | in Großbuchstaben                                     | `SCHREI("oida")` ist `"OIDA"`         |
+| `FLÜSTER(text)`                | in Kleinbuchstaben                                    | `FLÜSTER("OIDA")` ist `"oida"`        |
+| `STUTZ(text)`                  | ohne Leerraum am Anfang und am Ende                   | `STUTZ("  jo  ")` ist `"jo"`          |
+| `ERSETZ(text, alt, neu)`       | jedes `alt` durch `neu` ersetzt                       | `ERSETZ("aba", "a", "o")` ist `"obo"` |
+
+Zum Rechnen (wo eine `KOMMAZOI` verlangt ist, geht auch eine `ZOI`):
+
+| Funktion                         | Ergebnis                                                  |
+|----------------------------------|-----------------------------------------------------------|
+| `WURZL(x)`                       | Wurzel, als `KOMMAZOI`                                    |
+| `HOCH(x, y)`                     | x hoch y, als `KOMMAZOI`                                  |
+| `BETROG(x)`                      | Betrag (ohne Vorzeichen), Typ wie `x`                     |
+| `KLANSTA(a, b)`, `GRÖSSTA(a, b)` | die kleinere bzw. größere von zwei Zahlen                 |
+| `OBRUNDN(x)`, `AUFRUNDN(x)`      | ab- bzw. aufgerundet, als `KOMMAZOI`                      |
+| `RUNDN(x)`                       | gerundet (ab ,5 weg von der Null), als `KOMMAZOI`         |
+| `SINUS(x)`, `KOSINUS(x)`         | Winkel im Bogenmaß                                        |
+| `WINKL(y, x)`                    | der Winkel zum Punkt (x, y), im Bogenmaß                  |
+| `E_HOCH(x)`                      | e hoch x                                                  |
+| `PI`                             | die Kreiszahl (ohne Klammern)                             |
+| `ZUFOI()`                        | zufällige `KOMMAZOI` von 0 bis unter 1                    |
+| `ZUFOI(a, b)`                    | zufällige `ZOI` von `a` bis `b` (beide möglich)           |
+| `SOMEN(n)`                       | Startwert für den Zufall: danach kommt immer dieselbe Folge |
+
+Die gerundeten Werte sind Kommazahlen; für eine ganze Zahl nimmt man `ZOI(RUNDN(x))`.
+
+Die Namen dieser Funktionen gelten nur mit Klammer. Eine Variable darf also `winkl` oder `hoch` heißen.
+
+Greift man bei `STICKL` über den Text hinaus, bricht das Programm mit einer Meldung ab.
 
 ### Kommentare
 
@@ -302,7 +385,7 @@ Programmen gegen C, Rust, C#, Java, JavaScript und Python:
 
 ![Laufzeit je Programm und Sprache](leistung/ergebnis.svg)
 
-Die Programme kommen mit dem aus, was OIDA v0.1 kann; was der Vergleich zeigt und was nicht,
+Die Programme kommen mit dem aus, was OIDA schon kann; was der Vergleich zeigt und was nicht,
 steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
 
 
@@ -333,10 +416,11 @@ Der Compiler schreibt LLVM-IR als Text und lässt `clang` den Rest machen (Optim
 Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 
 
-## Was v0.1 noch nicht kann
+## Was OIDA noch nicht kann
 
-- Keine Eingabe von der Tastatur, keine Dateien.
-- Schleifen kann man nicht vorzeitig verlassen (außer mit `GIB ZRUCK` in einer Funktion).
+- Keine Listen, Strukturen und Klassen; nur einzelne Werte.
+- Keine Dateien, kein Fenster, keine Grafik.
+- Fehler beim Laufen (etwa `ZOI("abc")`) brechen das Programm ab; abfangen kann man sie noch nicht.
 - Ganze Zahlen laufen bei mehr als 64 Bit still über.
 - Die Meldungen beim Laufen (`Durch nix kaun ma ned teilen`) richten sich nicht nach dem Wörterbuch.
 - Nur Windows, 64 Bit.
@@ -344,16 +428,24 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 
 ## Fahrplan
 
-Noch nicht drin, in ungefähr dieser Reihenfolge geplant:
+Das Ziel: ein ganzes Programm in OIDA schreiben können. Der Maßstab dafür ist ein Spiel mit
+eigenem Fenster (ein Survivor-Roguelite, das es bisher als Browserspiel in JavaScript gibt),
+nachgebaut als natives OIDA-Programm. OIDA soll dabei so etwas wie ein besseres C# werden:
+Klassen, Generics und Funktionen als Werte, aber ohne Abstürze durch `null`, mit Strukturen als
+direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, die sofort startet.
 
-1. **Strukturen**: eigene Datentypen mit Feldern (Strukturen und Funktionen statt Klassen)
-2. **Listen**
-3. **Referenzzählung** auch für Listen und Strukturen. Für Texte gibt es sie schon: Ein Text
-   wird freigegeben, sobald ihn niemand mehr braucht.
-4. **Der `oidasql(...)`-Block**: OIDA-SQL direkt in der Sprache, nicht als Text in Anführungszeichen,
-   samt Anbindung an MySQL, etwa
-   `oidasql( GIB MA name VON schuela WO schnitt < 2 )`
-5. **Mehr Editor-Unterstützung**: Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon
-   (Ordner `vscode`). Offen sind Springen zur Definition, Umbenennen und ein Debugger.
+| Schritt | Was dazukommt | Stand |
+|---|---|---|
+| 0 | Grundgerüst: Typen, Variablen, `WENN`, `SOLONG`, Funktionen, `SCHREIB`; Texte werden freigegeben | fertig |
+| 1 | Zählschleife, `HAU OB`, `WEIDA`, `+=`, Eingabe, Text- und Rechenfunktionen, Zufall | fertig |
+| 2 | Strukturen als direkte Werte und Listen, `FIA JEDE` | offen |
+| 3 | Klassen mit Feldern, Methoden und Vererbung | offen |
+| 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | offen |
+| 5 | Generics für eigene Typen, Funktionen als Werte, ein Wörterbuch-Typ | offen |
+| 6 | Programme aus mehreren Dateien, Standardbibliothek in OIDA | offen |
+| 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | offen |
+| 8 | Das Spiel nachbauen | offen |
+| 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
 
-Dazu Kleineres: Schleifen verlassen, `FIA JEDE`, Eingabe, mehrere Dateien.
+Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind
+dort Springen zur Definition, Umbenennen und ein Debugger.

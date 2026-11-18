@@ -75,6 +75,45 @@ impl BinaerOp {
     }
 }
 
+/// Die eingebauten Funktionen. Ihre Namen kommen wie alle Wörter aus dem Wörterbuch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Eingebaut {
+    /// `LIES()` oder `LIES("Frage: ")`: eine Zeile von der Tastatur
+    Lies,
+    /// `LÄNGN(text)`: Anzahl der Zeichen
+    Laenge,
+    /// `STICKL(text, von)` oder `STICKL(text, von, anzahl)`: ein Stück vom Text, gezählt ab 0
+    Stueck,
+    /// `SUACH(text, gesucht)`: Stelle des ersten Treffers ab 0, oder -1
+    Suche,
+    /// `SCHREI(text)`: in Großbuchstaben
+    Gross,
+    /// `FLÜSTER(text)`: in Kleinbuchstaben
+    Klein,
+    /// `STUTZ(text)`: ohne Leerraum am Anfang und Ende
+    Stutz,
+    /// `ERSETZ(text, alt, neu)`
+    Ersetz,
+    Wurzel,
+    Hoch,
+    Betrag,
+    Min,
+    Max,
+    Sinus,
+    Kosinus,
+    /// `WINKL(y, x)`: der Winkel zum Punkt (x, y), wie atan2
+    Winkel,
+    /// `E_HOCH(x)`
+    Exp,
+    Abrunden,
+    Aufrunden,
+    Runden,
+    /// `ZUFOI()`: Kommazahl von 0 bis unter 1. `ZUFOI(a, b)`: ganze Zahl von a bis b.
+    Zufall,
+    /// `SOMEN(n)`: Startwert für den Zufall festlegen (dann kommt immer dieselbe Folge)
+    Samen,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ausdruck {
     pub art: AusdruckArt,
@@ -100,6 +139,8 @@ pub enum AusdruckArt {
     Unaer { op: UnaerOp, innen: Box<Ausdruck> },
     Binaer { op: BinaerOp, links: Box<Ausdruck>, rechts: Box<Ausdruck> },
     Aufruf { name: String, argumente: Vec<Ausdruck> },
+    /// Aufruf einer eingebauten Funktion: `LÄNGN(text)`, `WURZL(2)` ...
+    Eingebaut { funktion: Eingebaut, argumente: Vec<Ausdruck> },
     /// `ZOI(x)`, `KETTN(x)` ... oder von der Typprüfung eingefügt (ZOI -> KOMMAZOI).
     Umwandlung { ziel: Typ, innen: Box<Ausdruck> },
 }
@@ -120,6 +161,13 @@ pub enum AnweisungArt {
     Wenn { bedingung: Ausdruck, dann: Vec<Anweisung>, sunst: Vec<Anweisung> },
     /// `SOLONG bedingung TUA ... PASST SCHO`
     Solong { bedingung: Ausdruck, rumpf: Vec<Anweisung> },
+    /// `FIA name VON von BIS bis [SCHRITT schritt] TUA ... PASST SCHO`
+    /// Zählt von `von` bis einschließlich `bis`. `id` ist die Nummer der Zählvariable.
+    Fia { name: String, id: usize, von: Ausdruck, bis: Ausdruck, schritt: Option<Ausdruck>, rumpf: Vec<Anweisung> },
+    /// `HAU OB OIDA`: die innerste Schleife verlassen
+    HauOb,
+    /// `WEIDA OIDA`: gleich zum nächsten Durchlauf der innersten Schleife
+    Weida,
     /// `GIB ZRUCK [wert] OIDA`
     GibZruck { wert: Option<Ausdruck> },
     /// `SCHREIB(a, b, ...) OIDA`

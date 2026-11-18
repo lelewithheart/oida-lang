@@ -1,0 +1,94 @@
+# Zählschleife, HAU OB, WEIDA und "rechnen und zuweisen" in allen Lagen.
+
+FIA i VON 1 BIS 5 TUA
+    SCHREIB(i) OIDA
+PASST SCHO
+
+# Abwärts mit festem Schritt
+SOG AU zeile = "" OIDA
+FIA i VON 10 BIS 0 SCHRITT -3 TUA
+    zeile += KETTN(i) + ";" OIDA
+PASST SCHO
+SCHREIB(zeile) OIDA
+
+# Der Schritt steht erst beim Laufen fest
+FUNKTIAUN reihe(a ZOI, b ZOI, s ZOI) GIBT ZRUCK KETTN
+    SOG AU aus = "" OIDA
+    FIA i VON a BIS b SCHRITT s TUA
+        aus += KETTN(i) + ";" OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+SCHREIB(reihe(1, 4, 1), reihe(4, 1, -1), reihe(0, 10, 4), "[" + reihe(5, 1, 1) + "]", reihe(3, 3, 7)) OIDA
+
+# Schleife verlassen und Durchlauf überspringen
+SOG AU n = 0 OIDA
+SOLONG WOAHR TUA
+    n += 1 OIDA
+    WENN n % 2 = 0 DAUN
+        WEIDA OIDA
+    PASST SCHO
+    WENN n > 7 DAUN
+        HAU OB OIDA
+    PASST SCHO
+    SCHREIB("ungerade:", n) OIDA
+PASST SCHO
+SCHREIB("fertig bei", n) OIDA
+
+# Verschachtelt, mit Texten in jedem Block: HAU OB und WEIDA gelten für die
+# innere Schleife und müssen die Texte der verlassenen Blöcke freigeben.
+FIA i VON 1 BIS 3 TUA
+    SOG AU kopf = "Reihe " + KETTN(i) + ":" OIDA
+    FIA j VON 1 BIS 5 TUA
+        SOG AU stueck = KETTN(i * j) OIDA
+        WENN j = 2 DAUN
+            SOG AU weg = stueck + "!" OIDA
+            WEIDA OIDA
+        PASST SCHO
+        WENN j = 4 DAUN
+            SOG AU weg = stueck + "?" OIDA
+            HAU OB OIDA
+        PASST SCHO
+        kopf += " " + stueck OIDA
+    PASST SCHO
+    SCHREIB(kopf) OIDA
+PASST SCHO
+
+# WEIDA in der Zählschleife zählt trotzdem weiter
+FIA i VON 1 BIS 10 TUA
+    WENN i < 9 DAUN
+        WEIDA OIDA
+    PASST SCHO
+    SCHREIB("spät:", i) OIDA
+PASST SCHO
+
+# Bis zur größten Zahl zählen hört auf, statt überzulaufen
+SOG AU letzte = 0 OIDA
+FIA i VON 9223372036854775805 BIS 9223372036854775807 TUA
+    letzte = i OIDA
+PASST SCHO
+SCHREIB(letzte) OIDA
+
+# GIB ZRUCK mitten aus der Zählschleife
+FUNKTIAUN erste_ueber(grenze ZOI) GIBT ZRUCK KETTN
+    FIA i VON 1 BIS 100 TUA
+        SOG AU t = "Zoi " + KETTN(i * i) OIDA
+        WENN i * i > grenze DAUN
+            GIB ZRUCK t OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK "kane" OIDA
+PASST SCHO
+SCHREIB(erste_ueber(50), erste_ueber(20000)) OIDA
+
+# Rechnen und zuweisen
+SOG AU x = 10 OIDA
+x += 5 OIDA
+x -= 3 OIDA
+x *= 4 OIDA
+x /= 5 OIDA
+x %= 7 OIDA
+SOG AU k = 1.5 OIDA
+k *= 2 OIDA
+k += 0.25 OIDA
+SCHREIB(x, k) OIDA

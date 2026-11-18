@@ -1,0 +1,36 @@
+# Die eingebauten Funktionen für Texte, zum Rechnen und für den Zufall.
+
+SOG AU s = "  Grüß di, Wöd!  " OIDA
+SOG AU t = STUTZ(s) OIDA
+SCHREIB(LÄNGN(s), LÄNGN(t), LÄNGN("")) OIDA
+SCHREIB(SCHREI(t), FLÜSTER(t)) OIDA
+SCHREIB(STICKL(t, 0, 4), STICKL(t, 5), "[" + STICKL(t, 13) + "]", STICKL(t, 5, 2) + "!") OIDA
+SCHREIB(SUACH(t, "Wöd"), SUACH(t, "ü"), SUACH(t, "x"), SUACH(t, "")) OIDA
+SCHREIB(ERSETZ(t, "Wöd", "Oida"), ERSETZ("aaa", "a", "bb"), AUSTAUSCH("abc", "x", "y")) OIDA
+
+# Namen wie die Funktionen, aber ohne Klammer: ganz normale Variablen
+SOG AU hoch = 3 OIDA
+SOG AU winkl = WINKL(1, 1) OIDA
+SCHREIB(hoch, RUNDN(winkl * 4 / PI * 1000) / 1000) OIDA
+
+SCHREIB(WURZL(16), WURZL(2) * WURZL(2) > 1.99, HOCH(2, 10)) OIDA
+SCHREIB(BETROG(-5), BETROG(5), BETROG(-2.5), KLANSTA(3, 7), GRÖSSTA(3, 7), KLANSTA(2.5, 1), GRÖSSTA(-1, -1.5)) OIDA
+SCHREIB(OBRUNDN(2.7), AUFRUNDN(2.2), RUNDN(2.5), RUNDN(-2.5), OBRUNDN(-2.2), PI MOI DAUMEN(3.4)) OIDA
+SCHREIB(SINUS(0), KOSINUS(0), E_HOCH(0), ZOI(RUNDN(SINUS(PI / 2) * 100)), ZOI(RUNDN(KOSINUS(PI) * 100))) OIDA
+SCHREIB(ZOI(PI * 1000000)) OIDA
+
+# Zufall: mit demselben Startwert kommt dieselbe Folge
+SOMEN(7) OIDA
+SOG AU a = ZUFOI(1, 6) OIDA
+SOG AU b = ZUFOI() OIDA
+SOMEN(7) OIDA
+SCHREIB(a = ZUFOI(1, 6), b = ZUFOI(), a >= 1 UND a <= 6, b >= 0 UND b < 1) OIDA
+
+SOG AU daneben = 0 OIDA
+FIA i VON 1 BIS 1000 TUA
+    SOG AU w = ZUFOI(-2, 2) OIDA
+    WENN w < -2 ODA w > 2 DAUN
+        daneben += 1 OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(daneben) OIDA

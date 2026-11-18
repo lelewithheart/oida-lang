@@ -1,0 +1,7 @@
+HAU OB OIDA
+FIA i VON 1.5 BIS "zehn" TUA
+    SOG AU laenge = LÄNGN(i) OIDA
+    SOG AU stueck = STICKL("abc") OIDA
+PASST SCHO
+SCHREIB(i) OIDA
+max(1, 2) OIDA

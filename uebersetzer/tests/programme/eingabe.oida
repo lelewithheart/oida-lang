@@ -1,0 +1,19 @@
+# Eingabe von der Tastatur. Im Test kommt sie aus der Datei eingabe.eingabe.
+
+SOG AU name = LIES("Wia haaßt du? ") OIDA
+SCHREIB("Servas " + name + "!") OIDA
+
+SOG AU alter = ZOI(LIES("Wia oid bist? ")) OIDA
+SCHREIB("Nächstes Joahr bist", alter + 1) OIDA
+
+# Zahlen einlesen, bis eine leere Zeile kommt (oder die Eingabe zu Ende ist)
+SOG AU summe = 0 OIDA
+SOLONG WOAHR TUA
+    SOG AU zeile = STUTZ(LIES()) OIDA
+    WENN zeile = "" DAUN
+        HAU OB OIDA
+    PASST SCHO
+    summe += ZOI(zeile) OIDA
+PASST SCHO
+SCHREIB("Summe:", summe) OIDA
+SCHREIB("Am End kummt nix mehr: [" + LIES() + "]") OIDA

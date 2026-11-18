@@ -30,11 +30,43 @@ pub enum Schluessel {
     Float,
     Boolean,
     Text,
+    // Schleifen
+    For,
+    From,
+    To,
+    Step,
+    Break,
+    Continue,
+    // Eingebaute Funktionen (siehe [`Schluessel::ist_funktion`])
+    Read,
+    Length,
+    Substring,
+    Find,
+    Upper,
+    Lower,
+    Trim,
+    Replace,
+    Sqrt,
+    Pow,
+    Abs,
+    Min,
+    Max,
+    Sin,
+    Cos,
+    Atan2,
+    Exp,
+    Floor,
+    Ceil,
+    Round,
+    Random,
+    Seed,
+    // Feste Werte
+    Pi,
 }
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 21] = [
+    pub const ALLE: [(Schluessel, &'static str); 50] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -56,7 +88,69 @@ impl Schluessel {
         (Schluessel::Float, "FLOAT"),
         (Schluessel::Boolean, "BOOLEAN"),
         (Schluessel::Text, "TEXT"),
+        (Schluessel::For, "FOR"),
+        (Schluessel::From, "FROM"),
+        (Schluessel::To, "TO"),
+        (Schluessel::Step, "STEP"),
+        (Schluessel::Break, "BREAK"),
+        (Schluessel::Continue, "CONTINUE"),
+        (Schluessel::Read, "READ"),
+        (Schluessel::Length, "LENGTH"),
+        (Schluessel::Substring, "SUBSTRING"),
+        (Schluessel::Find, "FIND"),
+        (Schluessel::Upper, "UPPER"),
+        (Schluessel::Lower, "LOWER"),
+        (Schluessel::Trim, "TRIM"),
+        (Schluessel::Replace, "REPLACE"),
+        (Schluessel::Sqrt, "SQRT"),
+        (Schluessel::Pow, "POW"),
+        (Schluessel::Abs, "ABS"),
+        (Schluessel::Min, "MIN"),
+        (Schluessel::Max, "MAX"),
+        (Schluessel::Sin, "SIN"),
+        (Schluessel::Cos, "COS"),
+        (Schluessel::Atan2, "ATAN2"),
+        (Schluessel::Exp, "EXP"),
+        (Schluessel::Floor, "FLOOR"),
+        (Schluessel::Ceil, "CEIL"),
+        (Schluessel::Round, "ROUND"),
+        (Schluessel::Random, "RANDOM"),
+        (Schluessel::Seed, "SEED"),
+        (Schluessel::Pi, "PI"),
     ];
+
+    /// Ist das der Name einer eingebauten Funktion (LÄNGN, WURZL ...)?
+    ///
+    /// Solche Wörter gelten nur als Wort der Sprache, wenn gleich eine
+    /// Klammer folgt. Ohne Klammer bleiben sie normale Namen, damit man eine
+    /// Variable ruhig `winkl` oder `hoch` nennen kann.
+    pub fn ist_funktion(self) -> bool {
+        use Schluessel::*;
+        matches!(
+            self,
+            Read | Length
+                | Substring
+                | Find
+                | Upper
+                | Lower
+                | Trim
+                | Replace
+                | Sqrt
+                | Pow
+                | Abs
+                | Min
+                | Max
+                | Sin
+                | Cos
+                | Atan2
+                | Exp
+                | Floor
+                | Ceil
+                | Round
+                | Random
+                | Seed
+        )
+    }
 
     /// Das feste Wort (linke Seite im Wörterbuch).
     pub fn fest(self) -> &'static str {
@@ -260,6 +354,20 @@ mod tests {
         assert_eq!(wb.finde(&folge("GIBT ZRUCK ZOI")), Some((Schluessel::Returns, 2)));
         // GIB allein ist kein Schlüsselwort.
         assert_eq!(wb.finde(&folge("GIB")), None);
+    }
+
+    #[test]
+    fn neue_woerter_von_schritt_1() {
+        let wb = Woerterbuch::eingebaut();
+        assert_eq!(wb.finde(&folge("HAU OB")), Some((Schluessel::Break, 2)));
+        assert_eq!(wb.finde(&folge("fia i von")), Some((Schluessel::For, 1)));
+        assert_eq!(wb.finde(&folge("LÄNGN")), Some((Schluessel::Length, 1)));
+        // PI MOI DAUMEN ist RUNDN, PI allein die Zahl.
+        assert_eq!(wb.finde(&folge("PI MOI DAUMEN")), Some((Schluessel::Round, 3)));
+        assert_eq!(wb.finde(&folge("PI")), Some((Schluessel::Pi, 1)));
+        assert!(Schluessel::Round.ist_funktion());
+        assert!(!Schluessel::Pi.ist_funktion());
+        assert!(!Schluessel::For.ist_funktion());
     }
 
     #[test]

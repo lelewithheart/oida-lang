@@ -22,6 +22,12 @@ pub enum TokenArt {
     Mal,
     Durch,
     Prozent,
+    /// `+=`, `-=`, `*=`, `/=`, `%=`: rechnen und gleich wieder zuweisen
+    PlusGleich,
+    MinusGleich,
+    MalGleich,
+    DurchGleich,
+    ProzentGleich,
     /// `=` (Zuweisung, in Bedingungen auch Vergleich)
     Gleich,
     /// `==`
@@ -238,6 +244,11 @@ impl Leser<'_> {
             ('<', Some('>')) => Some(TokenArt::Ungleich),
             ('<', Some('=')) => Some(TokenArt::KleinerGleich),
             ('>', Some('=')) => Some(TokenArt::GroesserGleich),
+            ('+', Some('=')) => Some(TokenArt::PlusGleich),
+            ('-', Some('=')) => Some(TokenArt::MinusGleich),
+            ('*', Some('=')) => Some(TokenArt::MalGleich),
+            ('/', Some('=')) => Some(TokenArt::DurchGleich),
+            ('%', Some('=')) => Some(TokenArt::ProzentGleich),
             _ => None,
         };
         if let Some(art) = zwei {
@@ -299,7 +310,18 @@ pub fn zerlegen_nachsichtig(quelltext: &str, wb: &Woerterbuch) -> (Vec<Token>, V
                 folge.push(norm(naechstes));
                 j += 1;
             }
-            if let Some((schluessel, anzahl)) = wb.finde(&folge) {
+            // Der längste Treffer gewinnt. Der Name einer eingebauten Funktion
+            // zählt aber nur, wenn gleich eine Klammer folgt; sonst wird der
+            // nächstkürzere Treffer versucht (PI MOI DAUMEN ohne Klammer ist PI).
+            let mut treffer = wb.finde(&folge);
+            while let Some((schluessel, anzahl)) = treffer {
+                let klammer_folgt = roh.get(i + anzahl).is_some_and(|r| r.token.art == TokenArt::KlammerAuf);
+                if !schluessel.ist_funktion() || klammer_folgt {
+                    break;
+                }
+                treffer = if anzahl > 1 { wb.finde(&folge[..anzahl - 1]) } else { None };
+            }
+            if let Some((schluessel, anzahl)) = treffer {
                 tokens.push(Token {
                     art: TokenArt::Schluessel(schluessel),
                     pos: roh[i].token.pos,
@@ -402,6 +424,40 @@ mod tests {
                 DateiEnde
             ]
         );
+    }
+
+    #[test]
+    fn rechnen_und_zuweisen() {
+        assert_eq!(
+            arten("x += 1 -= *= /= %= + ="),
+            vec![name("x"), PlusGleich, Zoi(1), MinusGleich, MalGleich, DurchGleich, ProzentGleich, Plus, Gleich, DateiEnde]
+        );
+    }
+
+    #[test]
+    fn eingebaute_funktion_nur_mit_klammer() {
+        // Mit Klammer ist WINKL die Funktion, ohne ein ganz normaler Name.
+        assert_eq!(
+            arten("winkl = WINKL (y, x)"),
+            vec![
+                name("winkl"),
+                Gleich,
+                Schluessel(S::Atan2),
+                KlammerAuf,
+                name("y"),
+                Komma,
+                name("x"),
+                KlammerZu,
+                DateiEnde
+            ]
+        );
+        // PI MOI DAUMEN ist RUNDN, aber nur mit Klammer; sonst bleibt PI die Zahl.
+        assert_eq!(
+            arten("PI MOI DAUMEN(PI) PI moi"),
+            vec![Schluessel(S::Round), KlammerAuf, Schluessel(S::Pi), KlammerZu, Schluessel(S::Pi), name("moi"), DateiEnde]
+        );
+        // Wörter, die keine Funktionen sind, gelten immer.
+        assert_eq!(arten("HAU OB fia"), vec![Schluessel(S::Break), Schluessel(S::For), DateiEnde]);
     }
 
     #[test]

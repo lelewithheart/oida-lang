@@ -8,10 +8,14 @@
 //!   der `.erwartet`-Datei muss in der Fehlermeldung vorkommen.
 //! - `tests/laufzeitfehler/*.oida`: lassen sich übersetzen, brechen aber beim
 //!   Laufen ab; `.erwartet` ist die Ausgabe davor, `.fehler` die Meldung.
+//!
+//! Liegt neben einem Programm eine `.eingabe`-Datei, bekommt es deren Inhalt
+//! als Eingabe (für `LIES`). Der Zufall startet in allen Tests mit demselben
+//! Wert (`OIDA_SOMEN`), damit immer dasselbe herauskommt.
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 fn oida() -> Command {
     Command::new(env!("CARGO_BIN_EXE_oida"))
@@ -70,8 +74,20 @@ fn uebersetze(quelle: &Path, exe: &Path, optionen: &[&str]) {
     assert!(exe.is_file(), "{} wurde nicht erzeugt", exe.display());
 }
 
+/// Der Befehl, um ein übersetztes Programm zu starten. `quelle` ist die
+/// `.oida`-Datei dazu; liegt daneben eine `.eingabe`-Datei, ist das die Eingabe.
+fn befehl(exe: &Path, quelle: Option<&Path>) -> Command {
+    let mut befehl = Command::new(exe);
+    befehl.env("OIDA_SOMEN", "1");
+    match quelle.map(|q| q.with_extension("eingabe")).filter(|e| e.is_file()) {
+        Some(eingabe) => befehl.stdin(fs::File::open(eingabe).unwrap()),
+        None => befehl.stdin(Stdio::null()),
+    };
+    befehl
+}
+
 fn starte(exe: &Path) -> Output {
-    Command::new(exe).output().unwrap_or_else(|e| panic!("{}: {e}", exe.display()))
+    befehl(exe, None).output().unwrap_or_else(|e| panic!("{}: {e}", exe.display()))
 }
 
 /// Übersetzt alle Programme in einem Ordner (mit und ohne Optimierung)
@@ -85,7 +101,7 @@ fn pruefe_programme(ordner: &Path, arbeitsname: &str) {
         for (art, optionen) in [("optimiert", &[][..]), ("ohne-optimierung", &["--ohne-optimierung"][..])] {
             let exe = arbeit.join(format!("{}-{art}.exe", name(&quelle)));
             uebersetze(&quelle, &exe, optionen);
-            let lauf = starte(&exe);
+            let lauf = befehl(&exe, Some(&quelle)).output().unwrap();
             assert!(lauf.status.success(), "{} ({art}) ist abgestürzt:\n{}", quelle.display(), text(&lauf.stderr));
             assert_eq!(text(&lauf.stdout), erwartet, "falsche Ausgabe von {} ({art})", quelle.display());
             assert_eq!(text(&lauf.stderr), "", "{} ({art}) schreibt Fehler", quelle.display());
@@ -117,7 +133,7 @@ fn texte_werden_alle_freigegeben() {
         for (art, optionen) in [("optimiert", &[][..]), ("ohne-optimierung", &["--ohne-optimierung"][..])] {
             let exe = arbeit.join(format!("{}-{art}.exe", name(&quelle)));
             uebersetze(&quelle, &exe, optionen);
-            let lauf = Command::new(&exe).env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
+            let lauf = befehl(&exe, Some(&quelle)).env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
             assert!(lauf.status.success(), "{} ({art}):\n{}", quelle.display(), text(&lauf.stderr));
             assert_eq!(text(&lauf.stdout), erwartet, "{} ({art})", quelle.display());
             assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte übrig\n", "{} ({art})", quelle.display());
@@ -159,7 +175,7 @@ fn fehler_beim_laufen_werden_gemeldet() {
         for (art, optionen) in [("optimiert", &[][..]), ("ohne-optimierung", &["--ohne-optimierung"][..])] {
             let exe = arbeit.join(format!("{}-{art}.exe", name(&quelle)));
             uebersetze(&quelle, &exe, optionen);
-            let lauf = starte(&exe);
+            let lauf = befehl(&exe, Some(&quelle)).output().unwrap();
             assert_eq!(lauf.status.code(), Some(1), "{} ({art})", quelle.display());
             // Was vor dem Fehler geschrieben wurde, darf nicht verloren gehen.
             assert_eq!(text(&lauf.stdout), lies(&quelle.with_extension("erwartet")), "{} ({art})", quelle.display());

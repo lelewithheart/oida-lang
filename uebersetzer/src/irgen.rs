@@ -52,7 +52,39 @@ declare ptr @oida_kommazoi_zu_text(double)
 declare i64 @oida_text_zu_zoi(ptr, i64)
 declare double @oida_text_zu_kommazoi(ptr, i64)
 declare void @oida_fehler_durch_null(i64) noreturn
+declare void @oida_fehler_schritt_null(i64) noreturn
 declare i64 @llvm.fptosi.sat.i64.f64(double)
+
+; Eingebaute Funktionen: Eingabe, Texte, Zufall
+declare ptr @oida_lies(ptr)
+declare i64 @oida_text_laenge(ptr)
+declare ptr @oida_text_stueck(ptr, i64, i64, i64)
+declare i64 @oida_text_suche(ptr, ptr)
+declare ptr @oida_text_gross(ptr)
+declare ptr @oida_text_klein(ptr)
+declare ptr @oida_text_gestutzt(ptr)
+declare ptr @oida_text_ersetzt(ptr, ptr, ptr, i64)
+declare double @oida_zufall()
+declare i64 @oida_zufall_zoi(i64, i64, i64)
+declare void @oida_zufall_samen(i64)
+
+; Eingebaute Funktionen: Rechnen (das meiste kann der Prozessor oder LLVM selbst)
+declare double @llvm.sqrt.f64(double)
+declare double @llvm.pow.f64(double, double)
+declare double @llvm.sin.f64(double)
+declare double @llvm.cos.f64(double)
+declare double @llvm.exp.f64(double)
+declare double @llvm.floor.f64(double)
+declare double @llvm.ceil.f64(double)
+declare double @llvm.round.f64(double)
+declare double @llvm.fabs.f64(double)
+declare double @llvm.minnum.f64(double, double)
+declare double @llvm.maxnum.f64(double, double)
+declare i64 @llvm.abs.i64(i64, i1)
+declare i64 @llvm.smin.i64(i64, i64)
+declare i64 @llvm.smax.i64(i64, i64)
+declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
+declare double @atan2(double, double)
 
 ; Teilen von ganzen Zahlen: durch 0 gibt eine Meldung statt Unsinn,
 ; und "kleinste Zahl / -1" läuft nicht über.
@@ -187,6 +219,32 @@ struct FunktionsBau<'m> {
     /// Die Text-Variablen (ihre Nummern) je offenem Block, der innerste hinten.
     /// Am Ende eines Blocks und bei GIB ZRUCK werden ihre Texte losgelassen.
     text_variablen: Vec<Vec<usize>>,
+    /// Die Schleifen, in denen wir gerade stecken, die innerste hinten.
+    schleifen: Vec<Schleife>,
+}
+
+/// Was HAU OB und WEIDA über ihre Schleife wissen müssen.
+#[derive(Clone)]
+struct Schleife {
+    /// Hierhin springt WEIDA.
+    weiter: String,
+    /// Hierhin springt HAU OB.
+    ende: String,
+    /// Wie viele Blöcke offen waren, als der Rumpf begonnen hat. Die Texte
+    /// aus allen Blöcken darüber werden beim Hinausspringen losgelassen.
+    bloecke: usize,
+}
+
+/// Der Wert, wenn der Ausdruck eine feste ganze Zahl ist (auch mit Minus davor).
+fn feste_zoi(ausdruck: &Ausdruck) -> Option<i64> {
+    match &ausdruck.art {
+        AusdruckArt::Zoi(n) => Some(*n),
+        AusdruckArt::Unaer { op: UnaerOp::Minus, innen } => match innen.art {
+            AusdruckArt::Zoi(n) => Some(n.wrapping_neg()),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 impl<'m> FunktionsBau<'m> {
@@ -198,6 +256,7 @@ impl<'m> FunktionsBau<'m> {
             naechste_nummer: 0,
             block: "start".to_string(),
             text_variablen: vec![Vec::new()],
+            schleifen: Vec::new(),
         }
     }
 
@@ -316,9 +375,97 @@ impl<'m> FunktionsBau<'m> {
                 let b = self.ausdruck(bedingung);
                 self.zeile(&format!("br i1 {b}, label %{m_rumpf}, label %{m_ende}"));
                 self.beginne_block(&m_rumpf);
+                self.schleifen.push(Schleife {
+                    weiter: m_kopf.clone(),
+                    ende: m_ende.clone(),
+                    bloecke: self.text_variablen.len(),
+                });
                 self.block(rumpf);
+                self.schleifen.pop();
                 self.zeile(&format!("br label %{m_kopf}"));
                 self.beginne_block(&m_ende);
+            }
+            AnweisungArt::Fia { id, von, bis, schritt, rumpf, .. } => {
+                let zeile = anweisung.pos.zeile;
+                // Anfang, Ende und Schritt werden einmal vor der Schleife ausgerechnet.
+                let anfang = self.ausdruck(von);
+                self.platz(*id, Typ::Zoi);
+                self.zeile(&format!("store i64 {anfang}, ptr %v{id}"));
+                let ende = self.ausdruck(bis);
+                let fest = match schritt {
+                    None => Some(1),
+                    Some(schritt) => feste_zoi(schritt).filter(|n| *n != 0),
+                };
+                let weite = match schritt {
+                    None => "1".to_string(),
+                    Some(schritt) => self.ausdruck(schritt),
+                };
+                if fest.is_none() {
+                    // Der Schritt steht erst beim Laufen fest: 0 wäre eine Schleife ohne Ende.
+                    let null = self.temp();
+                    let m_null = self.marke("schritt_null");
+                    let m_ok = self.marke("schritt_ok");
+                    self.zeile(&format!("{null} = icmp eq i64 {weite}, 0"));
+                    self.zeile(&format!("br i1 {null}, label %{m_null}, label %{m_ok}"));
+                    self.beginne_block(&m_null);
+                    self.zeile(&format!("call void @oida_fehler_schritt_null(i64 {zeile})"));
+                    self.zeile("unreachable");
+                    self.beginne_block(&m_ok);
+                }
+
+                let m_kopf = self.marke("fia");
+                let m_rumpf = self.marke("tua");
+                let m_weiter = self.marke("fia_weida");
+                let m_ende = self.marke("fia_ende");
+                self.zeile(&format!("br label %{m_kopf}"));
+                self.beginne_block(&m_kopf);
+                let i = self.temp();
+                self.zeile(&format!("{i} = load i64, ptr %v{id}"));
+                let weiter = self.temp();
+                match fest {
+                    Some(n) if n > 0 => self.zeile(&format!("{weiter} = icmp sle i64 {i}, {ende}")),
+                    Some(_) => self.zeile(&format!("{weiter} = icmp sge i64 {i}, {ende}")),
+                    None => {
+                        // Aufwärts zählen heißt "bis höchstens", abwärts "bis mindestens".
+                        let (aufwaerts, hoechstens, mindestens) = (self.temp(), self.temp(), self.temp());
+                        self.zeile(&format!("{aufwaerts} = icmp sgt i64 {weite}, 0"));
+                        self.zeile(&format!("{hoechstens} = icmp sle i64 {i}, {ende}"));
+                        self.zeile(&format!("{mindestens} = icmp sge i64 {i}, {ende}"));
+                        self.zeile(&format!("{weiter} = select i1 {aufwaerts}, i1 {hoechstens}, i1 {mindestens}"));
+                    }
+                }
+                self.zeile(&format!("br i1 {weiter}, label %{m_rumpf}, label %{m_ende}"));
+
+                self.beginne_block(&m_rumpf);
+                self.schleifen.push(Schleife {
+                    weiter: m_weiter.clone(),
+                    ende: m_ende.clone(),
+                    bloecke: self.text_variablen.len(),
+                });
+                self.block(rumpf);
+                self.schleifen.pop();
+                self.zeile(&format!("br label %{m_weiter}"));
+
+                // Weiterzählen. Läuft die Zahl dabei über, ist die Schleife zu Ende.
+                self.beginne_block(&m_weiter);
+                let (alt, paar, neu, ueber) = (self.temp(), self.temp(), self.temp(), self.temp());
+                self.zeile(&format!("{alt} = load i64, ptr %v{id}"));
+                self.zeile(&format!("{paar} = call {{ i64, i1 }} @llvm.sadd.with.overflow.i64(i64 {alt}, i64 {weite})"));
+                self.zeile(&format!("{neu} = extractvalue {{ i64, i1 }} {paar}, 0"));
+                self.zeile(&format!("{ueber} = extractvalue {{ i64, i1 }} {paar}, 1"));
+                self.zeile(&format!("store i64 {neu}, ptr %v{id}"));
+                self.zeile(&format!("br i1 {ueber}, label %{m_ende}, label %{m_kopf}"));
+                self.beginne_block(&m_ende);
+            }
+            AnweisungArt::HauOb | AnweisungArt::Weida => {
+                let schleife = self.schleifen.last().expect("die Typprüfung lässt das nur in Schleifen zu").clone();
+                // Die Texte aus allen Blöcken, die dabei verlassen werden.
+                self.lass_variablen(self.text_variablen.len() - schleife.bloecke);
+                let ziel = if matches!(anweisung.art, AnweisungArt::HauOb) { schleife.ende } else { schleife.weiter };
+                self.zeile(&format!("br label %{ziel}"));
+                // Was danach noch kommt, wird nie erreicht, braucht aber einen eigenen Block.
+                let m = self.marke("nach_sprung");
+                self.beginne_block(&m);
             }
             AnweisungArt::GibZruck { wert } => {
                 // Erst den Wert ausrechnen (er gehört dann dem Aufrufer),
@@ -459,6 +606,9 @@ impl<'m> FunktionsBau<'m> {
                     t
                 }
             }
+            AusdruckArt::Eingebaut { funktion, argumente } => {
+                self.eingebaut(*funktion, argumente, ausdruck.typ, ausdruck.pos.zeile)
+            }
             AusdruckArt::Umwandlung { ziel, innen } => {
                 if innen.typ == *ziel {
                     return self.ausdruck(innen);
@@ -470,6 +620,67 @@ impl<'m> FunktionsBau<'m> {
                 t
             }
         }
+    }
+
+    /// Aufruf einer eingebauten Funktion. Texte werden dabei nur gelesen;
+    /// kommt ein Text heraus, ist er neu und gehört dem Empfänger.
+    fn eingebaut(&mut self, funktion: Eingebaut, argumente: &[Ausdruck], ergebnis: Typ, zeile: u32) -> String {
+        let werte: Vec<(String, bool)> = argumente.iter().map(|a| self.geliehen(a)).collect();
+        let w = |i: usize| werte[i].0.as_str();
+        // Viele Rechenfunktionen gibt es als fertigen LLVM-Befehl für Kommazahlen.
+        let rechnen = |name: &str| format!("call double @llvm.{name}.f64(double {})", w(0));
+        let ganz = ergebnis == Typ::Zoi;
+        let befehl = match funktion {
+            Eingebaut::Lies if werte.is_empty() => "call ptr @oida_lies(ptr null)".to_string(),
+            Eingebaut::Lies => format!("call ptr @oida_lies(ptr {})", w(0)),
+            Eingebaut::Laenge => format!("call i64 @oida_text_laenge(ptr {})", w(0)),
+            // Ohne Anzahl: bis zum Ende (-1).
+            Eingebaut::Stueck if werte.len() == 2 => {
+                format!("call ptr @oida_text_stueck(ptr {}, i64 {}, i64 -1, i64 {zeile})", w(0), w(1))
+            }
+            Eingebaut::Stueck => {
+                format!("call ptr @oida_text_stueck(ptr {}, i64 {}, i64 {}, i64 {zeile})", w(0), w(1), w(2))
+            }
+            Eingebaut::Suche => format!("call i64 @oida_text_suche(ptr {}, ptr {})", w(0), w(1)),
+            Eingebaut::Gross => format!("call ptr @oida_text_gross(ptr {})", w(0)),
+            Eingebaut::Klein => format!("call ptr @oida_text_klein(ptr {})", w(0)),
+            Eingebaut::Stutz => format!("call ptr @oida_text_gestutzt(ptr {})", w(0)),
+            Eingebaut::Ersetz => {
+                format!("call ptr @oida_text_ersetzt(ptr {}, ptr {}, ptr {}, i64 {zeile})", w(0), w(1), w(2))
+            }
+            Eingebaut::Wurzel => rechnen("sqrt"),
+            Eingebaut::Sinus => rechnen("sin"),
+            Eingebaut::Kosinus => rechnen("cos"),
+            Eingebaut::Exp => rechnen("exp"),
+            Eingebaut::Abrunden => rechnen("floor"),
+            Eingebaut::Aufrunden => rechnen("ceil"),
+            Eingebaut::Runden => rechnen("round"),
+            Eingebaut::Hoch => format!("call double @llvm.pow.f64(double {}, double {})", w(0), w(1)),
+            Eingebaut::Winkel => format!("call double @atan2(double {}, double {})", w(0), w(1)),
+            Eingebaut::Betrag if ganz => format!("call i64 @llvm.abs.i64(i64 {}, i1 false)", w(0)),
+            Eingebaut::Betrag => rechnen("fabs"),
+            Eingebaut::Min if ganz => format!("call i64 @llvm.smin.i64(i64 {}, i64 {})", w(0), w(1)),
+            Eingebaut::Min => format!("call double @llvm.minnum.f64(double {}, double {})", w(0), w(1)),
+            Eingebaut::Max if ganz => format!("call i64 @llvm.smax.i64(i64 {}, i64 {})", w(0), w(1)),
+            Eingebaut::Max => format!("call double @llvm.maxnum.f64(double {}, double {})", w(0), w(1)),
+            Eingebaut::Zufall if werte.is_empty() => "call double @oida_zufall()".to_string(),
+            Eingebaut::Zufall => format!("call i64 @oida_zufall_zoi(i64 {}, i64 {}, i64 {zeile})", w(0), w(1)),
+            Eingebaut::Samen => format!("call void @oida_zufall_samen(i64 {})", w(0)),
+        };
+        let t = if ergebnis == Typ::Nix {
+            self.zeile(&befehl);
+            String::new()
+        } else {
+            let t = self.temp();
+            self.zeile(&format!("{t} = {befehl}"));
+            t
+        };
+        for (argument, (wert, eigen)) in argumente.iter().zip(&werte) {
+            if argument.typ == Typ::Kettn {
+                self.lass_wenn_eigen(wert, *eigen);
+            }
+        }
+        t
     }
 
     /// Texte zusammenhängen. Eine ganze Kette `a + b + c` wird in einem
