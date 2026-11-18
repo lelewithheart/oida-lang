@@ -103,6 +103,28 @@ fn testprogramme_geben_das_richtige_aus() {
     pruefe_programme(&tests().join("programme"), "programme");
 }
 
+/// Im Prüfmodus der Laufzeit (`OIDA_TEXTE_PRUEFEN`) wird am Ende gemeldet,
+/// wie viele Texte nicht freigegeben wurden, und das Programm bricht ab,
+/// wenn ein Text nach dem Freigeben noch verwendet wird. So prüft sich die
+/// Referenzzählung des Compilers an allen Programmen selbst.
+#[test]
+fn texte_werden_alle_freigegeben() {
+    let arbeit = arbeitsordner("texte-pruefen");
+    let mut quellen = oida_dateien(&wurzel().join("beispiele"));
+    quellen.extend(oida_dateien(&tests().join("programme")));
+    for quelle in quellen {
+        let erwartet = lies(&quelle.with_extension("erwartet"));
+        for (art, optionen) in [("optimiert", &[][..]), ("ohne-optimierung", &["--ohne-optimierung"][..])] {
+            let exe = arbeit.join(format!("{}-{art}.exe", name(&quelle)));
+            uebersetze(&quelle, &exe, optionen);
+            let lauf = Command::new(&exe).env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
+            assert!(lauf.status.success(), "{} ({art}):\n{}", quelle.display(), text(&lauf.stderr));
+            assert_eq!(text(&lauf.stdout), erwartet, "{} ({art})", quelle.display());
+            assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte übrig\n", "{} ({art})", quelle.display());
+        }
+    }
+}
+
 #[test]
 fn fehler_im_programm_werden_gemeldet() {
     let arbeit = arbeitsordner("fehler");

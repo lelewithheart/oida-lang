@@ -6,6 +6,23 @@
 //!
 //! Die Funktionen mit `oida_` am Anfang kommen aus der Laufzeitbibliothek
 //! (`laufzeit/src/lib.rs`) und müssen zu den Deklarationen in [`KOPF`] passen.
+//!
+//! # Texte und Referenzzählung
+//!
+//! Texte liegen am Heap und tragen einen Zähler: wie viele Stellen den Text
+//! gerade brauchen. Fällt er auf 0, wird der Text freigegeben. Die Regeln:
+//!
+//!  - Ein Ausdruck liefert einen Text, der dem Empfänger **gehört** (Zähler
+//!    schon mitgezählt): [`FunktionsBau::ausdruck`].
+//!  - Wer einen Text nur liest (vergleichen, zusammenhängen, ausgeben), kann
+//!    ihn **leihen**: [`FunktionsBau::geliehen`]. Eine Variable oder ein fester
+//!    Text wird dann gar nicht gezählt, das spart die meiste Arbeit.
+//!  - Eine Variable besitzt ihren Text. Beim Zuweisen wird der alte
+//!    losgelassen, am Ende des Blocks der letzte.
+//!  - Eine Funktion besitzt ihre Parameter und lässt sie am Ende los. Was sie
+//!    zurückgibt, gehört dem Aufrufer.
+//!
+//! Feste Texte aus dem Programm haben den Zähler -1 und werden nie gezählt.
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -27,7 +44,9 @@ declare void @oida_schreib_text(ptr)
 declare void @oida_schreib_leer()
 declare void @oida_schreib_zeilenende()
 declare ptr @oida_text_verbinden(ptr, ptr)
+declare ptr @oida_text_verbinden_viele(ptr, i64)
 declare i32 @oida_text_vergleich(ptr, ptr)
+declare void @oida_text_frei(ptr)
 declare ptr @oida_zoi_zu_text(i64)
 declare ptr @oida_kommazoi_zu_text(double)
 declare i64 @oida_text_zu_zoi(ptr, i64)
@@ -70,6 +89,38 @@ negativ:
 normal:
   %r = srem i64 %a, %b
   ret i64 %r
+}
+
+; Referenzzählung für Texte. Der Zähler steht ganz vorne im Text.
+; Negativ heißt: fester Text aus dem Programm, nicht zählen.
+define internal void @oida.behalt(ptr %text) alwaysinline {
+start:
+  %z = load i64, ptr %text
+  %fest = icmp slt i64 %z, 0
+  br i1 %fest, label %ende, label %zaehlen
+zaehlen:
+  %mehr = add i64 %z, 1
+  store i64 %mehr, ptr %text
+  br label %ende
+ende:
+  ret void
+}
+
+define internal void @oida.lass(ptr %text) alwaysinline {
+start:
+  %z = load i64, ptr %text
+  %fest = icmp slt i64 %z, 0
+  br i1 %fest, label %ende, label %zaehlen
+zaehlen:
+  %weniger = sub i64 %z, 1
+  store i64 %weniger, ptr %text
+  %keiner = icmp eq i64 %weniger, 0
+  br i1 %keiner, label %frei, label %ende
+frei:
+  call void @oida_text_frei(ptr %text)
+  br label %ende
+ende:
+  ret void
 }
 
 "#;
@@ -133,9 +184,23 @@ struct FunktionsBau<'m> {
     naechste_nummer: usize,
     /// Der Block, in den gerade geschrieben wird (für `phi`).
     block: String,
+    /// Die Text-Variablen (ihre Nummern) je offenem Block, der innerste hinten.
+    /// Am Ende eines Blocks und bei GIB ZRUCK werden ihre Texte losgelassen.
+    text_variablen: Vec<Vec<usize>>,
 }
 
-impl FunktionsBau<'_> {
+impl<'m> FunktionsBau<'m> {
+    fn neu(modul: &'m mut Modul) -> FunktionsBau<'m> {
+        FunktionsBau {
+            modul,
+            plaetze: String::new(),
+            code: String::new(),
+            naechste_nummer: 0,
+            block: "start".to_string(),
+            text_variablen: vec![Vec::new()],
+        }
+    }
+
     fn zeile(&mut self, text: &str) {
         self.code.push_str("  ");
         self.code.push_str(text);
@@ -157,16 +222,53 @@ impl FunktionsBau<'_> {
         self.block = marke.to_string();
     }
 
+    /// Legt den Platz für eine Variable an. Text-Variablen werden gemerkt,
+    /// damit ihr Text am Ende des Blocks losgelassen wird.
     fn platz(&mut self, id: usize, typ: Typ) {
         let _ = writeln!(self.plaetze, "  %v{id} = alloca {}", ir_typ(typ));
+        if typ == Typ::Kettn {
+            self.text_variablen.last_mut().expect("es gibt immer einen Block").push(id);
+        }
+    }
+
+    // ----------------------------------------------------- Texte loslassen
+
+    /// Der Text wird hier nicht mehr gebraucht.
+    fn lass(&mut self, text: &str) {
+        self.zeile(&format!("call void @oida.lass(ptr {text})"));
+    }
+
+    /// Lässt den Text los, wenn er uns gehört (siehe [`Self::geliehen`]).
+    fn lass_wenn_eigen(&mut self, text: &str, eigen: bool) {
+        if eigen {
+            self.lass(text);
+        }
+    }
+
+    /// Lässt die Texte der Variablen los, die in den innersten `bloecke`
+    /// Blöcken angesagt wurden.
+    fn lass_variablen(&mut self, bloecke: usize) {
+        let anfang = self.text_variablen.len() - bloecke;
+        let nummern: Vec<usize> = self.text_variablen[anfang..].iter().flatten().copied().collect();
+        // In umgekehrter Reihenfolge, wie beim Aufräumen üblich.
+        for id in nummern.into_iter().rev() {
+            let t = self.temp();
+            self.zeile(&format!("{t} = load ptr, ptr %v{id}"));
+            self.lass(&t);
+        }
     }
 
     // ------------------------------------------------------- Anweisungen
 
-    fn anweisungen(&mut self, anweisungen: &[Anweisung]) {
+    /// Die Anweisungen eines eigenen Blocks (WENN, SOLONG): Variablen, die
+    /// darin angesagt werden, gelten nur bis zu seinem Ende.
+    fn block(&mut self, anweisungen: &[Anweisung]) {
+        self.text_variablen.push(Vec::new());
         for a in anweisungen {
             self.anweisung(a);
         }
+        self.lass_variablen(1);
+        self.text_variablen.pop();
     }
 
     fn anweisung(&mut self, anweisung: &Anweisung) {
@@ -178,7 +280,16 @@ impl FunktionsBau<'_> {
             }
             AnweisungArt::Zuweisung { wert, id, .. } => {
                 let w = self.ausdruck(wert);
-                self.zeile(&format!("store {} {w}, ptr %v{id}", ir_typ(wert.typ)));
+                if wert.typ == Typ::Kettn {
+                    // Der alte Text wird nicht mehr gebraucht. Erst nach dem
+                    // Speichern loslassen, falls es derselbe ist (s = s).
+                    let alt = self.temp();
+                    self.zeile(&format!("{alt} = load ptr, ptr %v{id}"));
+                    self.zeile(&format!("store ptr {w}, ptr %v{id}"));
+                    self.lass(&alt);
+                } else {
+                    self.zeile(&format!("store {} {w}, ptr %v{id}", ir_typ(wert.typ)));
+                }
             }
             AnweisungArt::Wenn { bedingung, dann, sunst } => {
                 let b = self.ausdruck(bedingung);
@@ -187,11 +298,11 @@ impl FunktionsBau<'_> {
                 let m_sunst = if sunst.is_empty() { m_ende.clone() } else { self.marke("sunst") };
                 self.zeile(&format!("br i1 {b}, label %{m_dann}, label %{m_sunst}"));
                 self.beginne_block(&m_dann);
-                self.anweisungen(dann);
+                self.block(dann);
                 self.zeile(&format!("br label %{m_ende}"));
                 if !sunst.is_empty() {
                     self.beginne_block(&m_sunst);
-                    self.anweisungen(sunst);
+                    self.block(sunst);
                     self.zeile(&format!("br label %{m_ende}"));
                 }
                 self.beginne_block(&m_ende);
@@ -205,16 +316,17 @@ impl FunktionsBau<'_> {
                 let b = self.ausdruck(bedingung);
                 self.zeile(&format!("br i1 {b}, label %{m_rumpf}, label %{m_ende}"));
                 self.beginne_block(&m_rumpf);
-                self.anweisungen(rumpf);
+                self.block(rumpf);
                 self.zeile(&format!("br label %{m_kopf}"));
                 self.beginne_block(&m_ende);
             }
             AnweisungArt::GibZruck { wert } => {
-                match wert {
-                    Some(wert) => {
-                        let w = self.ausdruck(wert);
-                        self.zeile(&format!("ret {} {w}", ir_typ(wert.typ)));
-                    }
+                // Erst den Wert ausrechnen (er gehört dann dem Aufrufer),
+                // dann alle Text-Variablen der Funktion loslassen.
+                let w = wert.as_ref().map(|wert| (self.ausdruck(wert), wert.typ));
+                self.lass_variablen(self.text_variablen.len());
+                match w {
+                    Some((w, typ)) => self.zeile(&format!("ret {} {w}", ir_typ(typ))),
                     None => self.zeile("ret void"),
                 }
                 // Was danach noch kommt, wird nie erreicht, braucht aber einen eigenen Block.
@@ -223,14 +335,17 @@ impl FunktionsBau<'_> {
             }
             AnweisungArt::Schreib { argumente } => {
                 for (i, argument) in argumente.iter().enumerate() {
-                    let w = self.ausdruck(argument);
+                    let (w, eigen) = self.geliehen(argument);
                     if i > 0 {
                         self.zeile("call void @oida_schreib_leer()");
                     }
                     match argument.typ {
                         Typ::Zoi => self.zeile(&format!("call void @oida_schreib_zoi(i64 {w})")),
                         Typ::Kommazoi => self.zeile(&format!("call void @oida_schreib_kommazoi(double {w})")),
-                        Typ::Kettn => self.zeile(&format!("call void @oida_schreib_text(ptr {w})")),
+                        Typ::Kettn => {
+                            self.zeile(&format!("call void @oida_schreib_text(ptr {w})"));
+                            self.lass_wenn_eigen(&w, eigen);
+                        }
                         Typ::Jona => {
                             let text = self.jona_als_text(&w);
                             self.zeile(&format!("call void @oida_schreib_text(ptr {text})"));
@@ -241,13 +356,18 @@ impl FunktionsBau<'_> {
                 self.zeile("call void @oida_schreib_zeilenende()");
             }
             AnweisungArt::Ausdruck(ausdruck) => {
-                self.ausdruck(ausdruck);
+                let w = self.ausdruck(ausdruck);
+                if ausdruck.typ == Typ::Kettn {
+                    // Das Ergebnis will niemand haben.
+                    self.lass(&w);
+                }
             }
         }
     }
 
     // --------------------------------------------------------- Ausdrücke
 
+    /// WOAHR oder FOISCH als Text. Das sind feste Texte, die niemand zählt.
     fn jona_als_text(&mut self, wert: &str) -> String {
         let woahr = self.modul.woahr.clone();
         let foisch = self.modul.foisch.clone();
@@ -257,8 +377,28 @@ impl FunktionsBau<'_> {
         t
     }
 
+    /// Wie [`Self::ausdruck`], aber für Stellen, die einen Text nur lesen.
+    /// Gibt dazu zurück, ob der Text uns gehört und nach dem Lesen
+    /// losgelassen werden muss. Eine Variable und ein fester Text werden nur
+    /// geliehen: Solange gelesen wird, kann sie niemand ändern.
+    fn geliehen(&mut self, ausdruck: &Ausdruck) -> (String, bool) {
+        if ausdruck.typ != Typ::Kettn {
+            return (self.ausdruck(ausdruck), false);
+        }
+        match &ausdruck.art {
+            AusdruckArt::Text(inhalt) => (self.modul.text(inhalt), false),
+            AusdruckArt::Variable { id, .. } => {
+                let t = self.temp();
+                self.zeile(&format!("{t} = load ptr, ptr %v{id}"));
+                (t, false)
+            }
+            _ => (self.ausdruck(ausdruck), true),
+        }
+    }
+
     /// Erzeugt den Code für einen Ausdruck und gibt zurück, wo der Wert steht
     /// (ein Register wie `%t3` oder gleich eine Konstante).
+    /// Ein Text gehört danach dem Empfänger.
     fn ausdruck(&mut self, ausdruck: &Ausdruck) -> String {
         match &ausdruck.art {
             AusdruckArt::Zoi(wert) => wert.to_string(),
@@ -269,6 +409,10 @@ impl FunktionsBau<'_> {
             AusdruckArt::Variable { id, .. } => {
                 let t = self.temp();
                 self.zeile(&format!("{t} = load {}, ptr %v{id}", ir_typ(ausdruck.typ)));
+                if ausdruck.typ == Typ::Kettn {
+                    // Jetzt braucht ihn außer der Variable noch jemand.
+                    self.zeile(&format!("call void @oida.behalt(ptr {t})"));
+                }
                 t
             }
             AusdruckArt::Unaer { op, innen } => {
@@ -284,12 +428,20 @@ impl FunktionsBau<'_> {
             AusdruckArt::Binaer { op: op @ (BinaerOp::Und | BinaerOp::Oda), links, rechts } => {
                 self.und_oda(*op == BinaerOp::Und, links, rechts)
             }
+            AusdruckArt::Binaer { op: BinaerOp::Plus, .. } if ausdruck.typ == Typ::Kettn => {
+                self.verbinden(ausdruck)
+            }
             AusdruckArt::Binaer { op, links, rechts } => {
-                let l = self.ausdruck(links);
-                let r = self.ausdruck(rechts);
-                self.binaer(*op, links.typ, &l, &r, ausdruck.pos.zeile)
+                // Beim Vergleichen werden Texte nur gelesen.
+                let (l, l_eigen) = self.geliehen(links);
+                let (r, r_eigen) = self.geliehen(rechts);
+                let t = self.binaer(*op, links.typ, &l, &r, ausdruck.pos.zeile);
+                self.lass_wenn_eigen(&l, l_eigen);
+                self.lass_wenn_eigen(&r, r_eigen);
+                t
             }
             AusdruckArt::Aufruf { name, argumente } => {
+                // Die Argumente gehören danach der aufgerufenen Funktion.
                 let werte: Vec<String> = argumente
                     .iter()
                     .map(|a| {
@@ -308,10 +460,53 @@ impl FunktionsBau<'_> {
                 }
             }
             AusdruckArt::Umwandlung { ziel, innen } => {
-                let w = self.ausdruck(innen);
-                self.umwandlung(innen.typ, *ziel, w, ausdruck.pos.zeile)
+                if innen.typ == *ziel {
+                    return self.ausdruck(innen);
+                }
+                // Aus einem Text wird beim Umwandeln nur gelesen.
+                let (w, eigen) = self.geliehen(innen);
+                let t = self.umwandlung(innen.typ, *ziel, &w, ausdruck.pos.zeile);
+                self.lass_wenn_eigen(&w, eigen);
+                t
             }
         }
+    }
+
+    /// Texte zusammenhängen. Eine ganze Kette `a + b + c` wird in einem
+    /// Schritt gebaut statt mit einem Zwischentext je Plus.
+    fn verbinden(&mut self, ausdruck: &Ausdruck) -> String {
+        fn sammeln<'a>(a: &'a Ausdruck, teile: &mut Vec<&'a Ausdruck>) {
+            match &a.art {
+                AusdruckArt::Binaer { op: BinaerOp::Plus, links, rechts } if a.typ == Typ::Kettn => {
+                    sammeln(links, teile);
+                    sammeln(rechts, teile);
+                }
+                _ => teile.push(a),
+            }
+        }
+        let mut teile = Vec::new();
+        sammeln(ausdruck, &mut teile);
+
+        let werte: Vec<(String, bool)> = teile.iter().map(|teil| self.geliehen(teil)).collect();
+        let t = self.temp();
+        if let [(a, _), (b, _)] = &werte[..] {
+            self.zeile(&format!("{t} = call ptr @oida_text_verbinden(ptr {a}, ptr {b})"));
+        } else {
+            // Die Teile kommen in eine kleine Liste am Stack.
+            let n = werte.len();
+            let liste = self.temp();
+            let _ = writeln!(self.plaetze, "  {liste} = alloca [{n} x ptr]");
+            for (i, (wert, _)) in werte.iter().enumerate() {
+                let platz = self.temp();
+                self.zeile(&format!("{platz} = getelementptr inbounds [{n} x ptr], ptr {liste}, i64 0, i64 {i}"));
+                self.zeile(&format!("store ptr {wert}, ptr {platz}"));
+            }
+            self.zeile(&format!("{t} = call ptr @oida_text_verbinden_viele(ptr {liste}, i64 {n})"));
+        }
+        for (wert, eigen) in &werte {
+            self.lass_wenn_eigen(wert, *eigen);
+        }
+        t
     }
 
     /// UND und ODA rechnen die rechte Seite nur aus, wenn es nötig ist.
@@ -336,7 +531,8 @@ impl FunktionsBau<'_> {
         t
     }
 
-    /// `typ` ist der Typ der beiden Seiten (nach der Typprüfung sind sie gleich).
+    /// Rechnen und Vergleichen. `typ` ist der Typ der beiden Seiten (nach der
+    /// Typprüfung sind sie gleich). Texte zusammenhängen macht [`Self::verbinden`].
     fn binaer(&mut self, op: BinaerOp, typ: Typ, l: &str, r: &str, zeile: u32) -> String {
         let t = self.temp();
         let befehl = match (typ, op) {
@@ -350,7 +546,6 @@ impl FunktionsBau<'_> {
             (Typ::Kommazoi, BinaerOp::Mal) => format!("fmul double {l}, {r}"),
             (Typ::Kommazoi, BinaerOp::Durch) => format!("fdiv double {l}, {r}"),
             (Typ::Kommazoi, BinaerOp::Rest) => format!("frem double {l}, {r}"),
-            (Typ::Kettn, BinaerOp::Plus) => format!("call ptr @oida_text_verbinden(ptr {l}, ptr {r})"),
             (Typ::Zoi, _) => format!("icmp {} i64 {l}, {r}", vergleich_ganz(op)),
             (Typ::Jona, _) => format!("icmp {} i1 {l}, {r}", vergleich_ganz(op)),
             (Typ::Kommazoi, _) => format!("fcmp {} double {l}, {r}", vergleich_komma(op)),
@@ -365,12 +560,10 @@ impl FunktionsBau<'_> {
         t
     }
 
-    fn umwandlung(&mut self, von: Typ, ziel: Typ, w: String, zeile: u32) -> String {
-        if von == ziel {
-            return w;
-        }
+    /// Wandelt `w` vom Typ `von` in den Typ `ziel` um (die beiden sind verschieden).
+    fn umwandlung(&mut self, von: Typ, ziel: Typ, w: &str, zeile: u32) -> String {
         if (von, ziel) == (Typ::Jona, Typ::Kettn) {
-            return self.jona_als_text(&w);
+            return self.jona_als_text(w);
         }
         let t = self.temp();
         let befehl = match (von, ziel) {
@@ -413,7 +606,7 @@ fn vergleich_komma(op: BinaerOp) -> &'static str {
     }
 }
 
-/// Ein fester Text als IR-Konstante: Zähler (-1 = nie freigeben), Länge, Bytes.
+/// Ein fester Text als IR-Konstante: Zähler (-1 = nie zählen), Länge, Bytes.
 fn text_konstante(nummer: usize, inhalt: &str) -> String {
     let mut bytes = String::new();
     for b in inhalt.bytes() {
@@ -440,22 +633,24 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     let mut funktionen = String::new();
 
     for f in &programm.funktionen {
-        let mut bau = FunktionsBau {
-            modul: &mut modul,
-            plaetze: String::new(),
-            code: String::new(),
-            naechste_nummer: 0,
-            block: "start".to_string(),
-        };
+        let mut bau = FunktionsBau::neu(&mut modul);
         let mut kopf = Vec::new();
         for (i, p) in f.parameter.iter().enumerate() {
             kopf.push(format!("{} %p{i}", ir_typ(p.typ)));
+            // Die Funktion besitzt ihre Parameter wie eigene Variablen.
             bau.platz(p.id, p.typ);
             bau.zeile(&format!("store {} %p{i}, ptr %v{}", ir_typ(p.typ), p.id));
         }
-        bau.anweisungen(&f.rumpf);
-        // Die Typprüfung stellt sicher, dass man hier nur ankommt, wenn nichts zurückzugeben ist.
-        bau.zeile(if f.rueckgabe == Typ::Nix { "ret void" } else { "unreachable" });
+        for a in &f.rumpf {
+            bau.anweisung(a);
+        }
+        if f.rueckgabe == Typ::Nix {
+            bau.lass_variablen(1);
+            bau.zeile("ret void");
+        } else {
+            // Die Typprüfung stellt sicher, dass jeder Weg mit GIB ZRUCK aufhört.
+            bau.zeile("unreachable");
+        }
         let _ = write!(
             funktionen,
             "define internal {} {}({}) {{\nstart:\n{}{}}}\n\n",
@@ -467,15 +662,12 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         );
     }
 
-    let mut bau = FunktionsBau {
-        modul: &mut modul,
-        plaetze: String::new(),
-        code: String::new(),
-        naechste_nummer: 0,
-        block: "start".to_string(),
-    };
+    let mut bau = FunktionsBau::neu(&mut modul);
     bau.zeile("call void @oida_start()");
-    bau.anweisungen(&programm.haupt);
+    for a in &programm.haupt {
+        bau.anweisung(a);
+    }
+    bau.lass_variablen(1);
     bau.zeile("call void @oida_ende()");
     bau.zeile("ret i32 0");
     let _ = write!(funktionen, "define i32 @main() {{\nstart:\n{}{}}}\n", bau.plaetze, bau.code);

@@ -6,16 +6,21 @@
 //! cargo run --release -p oida-messen                  alles messen
 //! cargo run --release -p oida-messen -- fib collatz   nur diese Programme
 //! cargo run --release -p oida-messen -- --ohne python diese Sprache auslassen
+//! cargo run --release -p oida-messen -- --nur-grafik  nicht messen, nur die Grafik neu zeichnen
 //! ```
 //!
 //! Die Programme liegen in `leistung/programme/<name>/`, je eines pro Sprache.
 //! Gemessen wird:
-//!  - Zeit: vom Starten bis zum Ende des Programms, die schnellste von mehreren Runden
+//!  - Zeit: vom Starten bis zum Ende des Programms, der mittlere Wert (Median) von mehreren Runden
 //!  - Speicher: der höchste Arbeitsspeicher, den das Programm gebraucht hat
 //!  - Bauen: wie lange das Übersetzen dauert, und wie groß das Ergebnis ist
 //!
 //! Jede Sprache muss dieselbe Ausgabe liefern, sonst zählt die Messung nicht.
-//! Das Ergebnis steht am Ende in `leistung/ERGEBNIS.md`.
+//! Das Ergebnis steht am Ende in `leistung/ERGEBNIS.md`, die Grafiken dazu in
+//! `leistung/ergebnis.svg` (Zeit) und `leistung/speicher.svg` (Speicher), die
+//! rohen Messwerte in `leistung/ergebnis.csv`.
+
+mod grafik;
 
 use std::ffi::c_void;
 use std::fmt::Write as _;
@@ -62,13 +67,21 @@ enum Sprache {
     Oida,
     C,
     Rust,
+    CSharp,
     Java,
     JavaScript,
     Python,
 }
 
-const SPRACHEN: [Sprache; 6] =
-    [Sprache::Oida, Sprache::C, Sprache::Rust, Sprache::Java, Sprache::JavaScript, Sprache::Python];
+const SPRACHEN: [Sprache; 7] = [
+    Sprache::Oida,
+    Sprache::C,
+    Sprache::Rust,
+    Sprache::CSharp,
+    Sprache::Java,
+    Sprache::JavaScript,
+    Sprache::Python,
+];
 
 impl Sprache {
     fn name(self) -> &'static str {
@@ -76,6 +89,7 @@ impl Sprache {
             Sprache::Oida => "OIDA",
             Sprache::C => "C",
             Sprache::Rust => "Rust",
+            Sprache::CSharp => "C#",
             Sprache::Java => "Java",
             Sprache::JavaScript => "JavaScript",
             Sprache::Python => "Python",
@@ -88,6 +102,7 @@ impl Sprache {
             Sprache::Oida => "übersetzt (LLVM)",
             Sprache::C => "übersetzt (LLVM, clang -O2)",
             Sprache::Rust => "übersetzt (LLVM, opt-level 3)",
+            Sprache::CSharp => "Bytecode + JIT (.NET)",
             Sprache::Java => "Bytecode + JIT",
             Sprache::JavaScript => "JIT (Node)",
             Sprache::Python => "Interpreter",
@@ -99,6 +114,7 @@ impl Sprache {
             Sprache::Oida => format!("{programm}.oida"),
             Sprache::C => format!("{programm}.c"),
             Sprache::Rust => format!("{programm}.rs"),
+            Sprache::CSharp => format!("{programm}.cs"),
             Sprache::Java => format!("{}.java", gross(programm)),
             Sprache::JavaScript => format!("{programm}.js"),
             Sprache::Python => format!("{programm}.py"),
@@ -122,6 +138,11 @@ struct Werkzeuge {
     /// Der Linker für Rust (aus llvm-mingw).
     mingw_clang: Option<PathBuf>,
     rustc: Option<PathBuf>,
+    /// C#: das Programm `dotnet`, der Compiler aus dem SDK und der Ordner mit
+    /// den Bibliotheken, gegen die übersetzt wird.
+    dotnet: Option<PathBuf>,
+    csc: Option<PathBuf>,
+    dotnet_bibliotheken: Option<PathBuf>,
     javac: Option<PathBuf>,
     java: Option<PathBuf>,
     node: Option<PathBuf>,
@@ -139,6 +160,15 @@ fn falls_da(datei: PathBuf) -> Option<PathBuf> {
 
 fn umgebung(name: &str) -> Option<PathBuf> {
     std::env::var_os(name).filter(|w| !w.is_empty()).map(PathBuf::from)
+}
+
+/// Der Unterordner mit der höchsten Versionsnummer (10.0.2 kommt nach 9.0.11).
+fn neuester_unterordner(ordner: &Path) -> Option<PathBuf> {
+    let nummer = |pfad: &PathBuf| -> Vec<u32> {
+        let name = pfad.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        name.split(|c: char| !c.is_ascii_digit()).filter_map(|teil| teil.parse().ok()).collect()
+    };
+    fs::read_dir(ordner).ok()?.flatten().map(|e| e.path()).filter(|p| p.is_dir()).max_by_key(nummer)
 }
 
 /// Java: im PATH, über JAVA_HOME oder das, was DataGrip mitbringt.
@@ -159,7 +189,23 @@ impl Werkzeuge {
     fn suchen(wurzel: &Path) -> Werkzeuge {
         let mingw = umgebung("LOCALAPPDATA").map(|l| l.join("Programs").join("llvm-mingw").join("bin"));
         let aus_mingw = |name: &str| mingw.as_ref().and_then(|m| falls_da(m.join(name)));
+        // C#: Der Compiler wird direkt aufgerufen (ohne "dotnet build"), das
+        // braucht kein Projekt und kein Netz.
+        let dotnet = im_pfad("dotnet.exe")
+            .or_else(|| umgebung("ProgramFiles").and_then(|p| falls_da(p.join("dotnet").join("dotnet.exe"))));
+        let dotnet_ordner = dotnet.as_ref().and_then(|d| d.parent().map(Path::to_path_buf));
+        let csc = dotnet_ordner
+            .as_ref()
+            .and_then(|o| neuester_unterordner(&o.join("sdk")))
+            .and_then(|sdk| falls_da(sdk.join("Roslyn").join("bincore").join("csc.dll")));
+        let dotnet_bibliotheken = dotnet_ordner
+            .as_ref()
+            .and_then(|o| neuester_unterordner(&o.join("packs").join("Microsoft.NETCore.App.Ref")))
+            .and_then(|version| neuester_unterordner(&version.join("ref")));
         Werkzeuge {
+            dotnet,
+            csc,
+            dotnet_bibliotheken,
             oida: falls_da(wurzel.join("target").join("release").join("oida.exe")),
             clang: aus_mingw("clang.exe").or_else(|| im_pfad("clang.exe")),
             mingw_clang: aus_mingw("x86_64-w64-mingw32-clang.exe")
@@ -178,6 +224,7 @@ impl Werkzeuge {
             Sprache::Oida => self.oida.is_some(),
             Sprache::C => self.clang.is_some(),
             Sprache::Rust => self.rustc.is_some() && self.mingw_clang.is_some(),
+            Sprache::CSharp => self.dotnet.is_some() && self.csc.is_some() && self.dotnet_bibliotheken.is_some(),
             Sprache::Java => self.javac.is_some() && self.java.is_some(),
             Sprache::JavaScript => self.node.is_some(),
             Sprache::Python => self.python.is_some(),
@@ -190,6 +237,7 @@ impl Werkzeuge {
             Sprache::Oida => (&self.oida, "--version"),
             Sprache::C => (&self.clang, "--version"),
             Sprache::Rust => (&self.rustc, "--version"),
+            Sprache::CSharp => (&self.dotnet, "--version"),
             Sprache::Java => (&self.java, "-version"),
             Sprache::JavaScript => (&self.node, "--version"),
             Sprache::Python => (&self.python, "--version"),
@@ -200,7 +248,9 @@ impl Werkzeuge {
         let text = if ergebnis.stdout.is_empty() { ergebnis.stderr } else { ergebnis.stdout };
         let zeile = String::from_utf8_lossy(&text).lines().next().unwrap_or("").trim().to_string();
         // clang hängt die Adresse des Quellcodes an; die braucht im Bericht niemand.
-        zeile.split(" (http").next().unwrap_or("").to_string()
+        let zeile = zeile.split(" (http").next().unwrap_or("").to_string();
+        // dotnet nennt nur die Nummer.
+        if sprache == Sprache::CSharp { format!(".NET SDK {zeile}") } else { zeile }
     }
 }
 
@@ -234,7 +284,7 @@ struct Gebaut {
     programm: PathBuf,
     argumente: Vec<String>,
     bau_sekunden: Option<f64>,
-    /// Größe dessen, was beim Bauen entsteht (exe oder .class-Dateien).
+    /// Größe dessen, was beim Bauen entsteht (exe, .dll oder .class-Dateien).
     groesse: Option<u64>,
 }
 
@@ -261,6 +311,57 @@ fn bauen(sprache: Sprache, quelle: &Path, name: &str, ordner: &Path, w: &Werkzeu
                 .arg("-o")
                 .arg(&exe);
             b
+        }
+        Sprache::CSharp => {
+            let aus = ordner.join(format!("{name}-csharp"));
+            let _ = fs::remove_dir_all(&aus);
+            fs::create_dir_all(&aus).map_err(|e| e.to_string())?;
+            let dotnet = w.dotnet.as_ref().unwrap();
+            let bibliotheken = w.dotnet_bibliotheken.as_ref().unwrap();
+            // Der Ordner heißt wie die .NET-Version, zum Beispiel net10.0.
+            let tfm = bibliotheken.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let version = format!("{}.0", tfm.trim_start_matches("net"));
+
+            // Alle Bibliotheken von .NET, gegen die übersetzt werden darf.
+            let mut liste = String::new();
+            for datei in fs::read_dir(bibliotheken).map_err(|e| e.to_string())?.flatten() {
+                if datei.path().extension().is_some_and(|e| e == "dll") {
+                    let _ = writeln!(liste, "-r:\"{}\"", datei.path().display());
+                }
+            }
+            let listen_datei = aus.join("bibliotheken.rsp");
+            fs::write(&listen_datei, liste).map_err(|e| e.to_string())?;
+            // Sagt dotnet, mit welcher Laufzeit das Programm läuft.
+            fs::write(
+                aus.join(format!("{name}.runtimeconfig.json")),
+                format!(
+                    r#"{{"runtimeOptions":{{"tfm":"{tfm}","framework":{{"name":"Microsoft.NETCore.App","version":"{version}"}}}}}}"#
+                ),
+            )
+            .map_err(|e| e.to_string())?;
+
+            let dll = aus.join(format!("{name}.dll"));
+            let mut b = Command::new(dotnet);
+            b.arg(w.csc.as_ref().unwrap())
+                .args(["-nologo", "-optimize+", "-target:exe"])
+                .arg(format!("-out:{}", dll.display()))
+                .arg(format!("@{}", listen_datei.display()))
+                .arg(quelle);
+            let anfang = Instant::now();
+            let ergebnis = b.output().map_err(|e| format!("dotnet lässt sich nicht starten: {e}"))?;
+            if !ergebnis.status.success() {
+                return Err(format!(
+                    "csc: {}{}",
+                    String::from_utf8_lossy(&ergebnis.stdout),
+                    String::from_utf8_lossy(&ergebnis.stderr)
+                ));
+            }
+            return Ok(Gebaut {
+                programm: dotnet.clone(),
+                argumente: vec![dll.display().to_string()],
+                bau_sekunden: Some(anfang.elapsed().as_secs_f64()),
+                groesse: fs::metadata(&dll).map(|m| m.len()).ok(),
+            });
         }
         Sprache::Java => {
             let klassen = ordner.join(format!("{name}-java"));
@@ -332,16 +433,18 @@ fn messen(sprache: Sprache, quelle: &Path, name: &str, ordner: &Path, w: &Werkze
         s if s < 20.0 => 3,
         _ => 1,
     };
-    let mut sekunden = erster.sekunden;
+    let mut zeiten = vec![erster.sekunden];
     let mut speicher = erster.speicher;
     for _ in 1..runden {
         let lauf = starte()?;
         if !lauf.erfolg || lauf.ausgabe != erster.ausgabe {
             return Err("liefert nicht jedes Mal dasselbe".to_string());
         }
-        sekunden = sekunden.min(lauf.sekunden);
+        zeiten.push(lauf.sekunden);
         speicher = speicher.max(lauf.speicher);
     }
+    // Der mittlere Wert: Ein einzelner Ausreißer nach oben oder unten zählt so nicht.
+    let sekunden = median(&mut zeiten);
     Ok(Messung {
         sprache,
         sekunden,
@@ -351,6 +454,13 @@ fn messen(sprache: Sprache, quelle: &Path, name: &str, ordner: &Path, w: &Werkze
         groesse: gebaut.groesse,
         ausgabe: ohne_wagenruecklauf(&erster.ausgabe),
     })
+}
+
+/// Der mittlere Wert einer Reihe (bei gerader Anzahl der Schnitt der beiden mittleren).
+fn median(werte: &mut [f64]) -> f64 {
+    werte.sort_by(f64::total_cmp);
+    let mitte = werte.len() / 2;
+    if werte.len() % 2 == 1 { werte[mitte] } else { (werte[mitte - 1] + werte[mitte]) / 2.0 }
 }
 
 /// Manche Sprachen schreiben unter Windows \r\n, manche \n.
@@ -418,18 +528,242 @@ impl Ergebnis {
     }
 }
 
-fn bericht(ergebnisse: &[Ergebnis], sprachen: &[Sprache], w: &Werkzeuge) -> String {
+/// Prozessor, Arbeitsspeicher und Windows-Version, durch Beistriche getrennt.
+fn rechner() -> String {
+    format!(
+        "{}, {} GB Arbeitsspeicher, {}",
+        powershell("(Get-CimInstance Win32_Processor).Name"),
+        powershell("[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)"),
+        powershell("(Get-CimInstance Win32_OperatingSystem).Caption")
+    )
+}
+
+/// Wie lange jede Sprache im Mittel braucht, wenn OIDA 1 ist (geometrisches
+/// Mittel über alle Programme, bei denen es für beide eine Messung gibt).
+fn mittel(ergebnisse: &[Ergebnis], sprachen: &[Sprache]) -> Vec<Option<f64>> {
+    sprachen
+        .iter()
+        .map(|s| {
+            let verhaeltnisse: Vec<f64> = ergebnisse
+                .iter()
+                .filter_map(|e| Some(e.von(*s)?.sekunden / e.von(Sprache::Oida)?.sekunden))
+                .collect();
+            let anzahl = verhaeltnisse.len() as f64;
+            (anzahl > 0.0).then(|| (verhaeltnisse.iter().map(|v| v.ln()).sum::<f64>() / anzahl).exp())
+        })
+        .collect()
+}
+
+/// Ab dem Wievielfachen des kürzesten Balkens ein Zeit-Balken abgeschnitten wird.
+const ABSCHNEIDEN_AB: f64 = 10.0;
+
+/// Der beste Wert zuerst. Bei Gleichstand bleibt die Reihenfolge der Sprachen.
+fn rangfolge(mut balken: Vec<grafik::Balken>) -> Vec<grafik::Balken> {
+    balken.sort_by(|a, b| a.wert.total_cmp(&b.wert));
+    balken
+}
+
+/// 2026-11-18 -> 18.11.2026
+fn datum_deutsch(datum: &str) -> String {
+    datum.split('-').rev().collect::<Vec<_>>().join(".")
+}
+
+/// Die Grafik zum Speicher (`leistung/speicher.svg`): was eine Sprache
+/// üblicherweise braucht und was im schlimmsten Fall.
+fn speicher_grafik_bauen(ergebnisse: &[Ergebnis], sprachen: &[Sprache], rechner: &str, datum: &str) -> String {
+    let mut ueblich = Vec::new();
+    let mut hoechstens = Vec::new();
+    for s in sprachen {
+        let mut werte: Vec<(f64, &str)> =
+            ergebnisse.iter().filter_map(|e| Some((e.von(*s)?.speicher as f64, e.name.as_str()))).collect();
+        if werte.is_empty() {
+            continue;
+        }
+        werte.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mitte = median(&mut werte.iter().map(|w| w.0).collect::<Vec<_>>());
+        let (groesster, wo) = *werte.last().unwrap();
+        let hervor = *s == Sprache::Oida;
+        ueblich.push(grafik::Balken {
+            name: s.name().to_string(),
+            wert: mitte,
+            text: groesse(mitte as u64),
+            zusatz: String::new(),
+            hervor,
+        });
+        hoechstens.push(grafik::Balken {
+            name: s.name().to_string(),
+            wert: groesster,
+            text: groesse(groesster as u64),
+            zusatz: format!("bei {wo}"),
+            hervor,
+        });
+    }
+    let prozessor = rechner.split(',').next().unwrap_or("").trim();
+    grafik::zeichnen(
+        "OIDA im Vergleich: Arbeitsspeicher",
+        "Weniger ist besser, die sparsamste Sprache steht oben. Höchster Arbeitsspeicher, den ein Programm beim Laufen braucht.",
+        &[
+            format!(
+                "Üblich: der mittlere Wert (Median) über alle {} Programme. Höchstwert: das Programm, das am meisten braucht.",
+                ergebnisse.len()
+            ),
+            format!("Gemessen am {} auf: {prozessor}.", datum_deutsch(datum)),
+        ],
+        &[
+            grafik::Feld {
+                titel: "Üblich".to_string(),
+                unter: "So viel braucht ein Programm in dieser Sprache normalerweise.".to_string(),
+                balken: rangfolge(ueblich),
+                abschneiden_ab: None,
+            },
+            grafik::Feld {
+                titel: "Höchstwert".to_string(),
+                unter: "Das hungrigste der gemessenen Programme.".to_string(),
+                balken: rangfolge(hoechstens),
+                abschneiden_ab: None,
+            },
+        ],
+    )
+}
+
+/// Die Grafik zur Zeit (`leistung/ergebnis.svg`).
+fn grafik_bauen(ergebnisse: &[Ergebnis], sprachen: &[Sprache], rechner: &str, datum: &str) -> String {
+    let mut felder: Vec<grafik::Feld> = ergebnisse
+        .iter()
+        .map(|e| {
+            let oida = e.von(Sprache::Oida).map(|m| m.sekunden);
+            grafik::Feld {
+                titel: e.name.clone(),
+                // Der erste Satz der Beschreibung.
+                unter: e.was.split_inclusive(". ").next().unwrap_or("").trim().to_string(),
+                balken: rangfolge(
+                    e.messungen
+                        .iter()
+                        .map(|m| grafik::Balken {
+                            name: m.sprache.name().to_string(),
+                            wert: m.sekunden,
+                            text: zeit(m.sekunden),
+                            zusatz: match oida {
+                                Some(o) if m.sprache != Sprache::Oida => faktor(m.sekunden / o),
+                                _ => String::new(),
+                            },
+                            hervor: m.sprache == Sprache::Oida,
+                        })
+                        .collect(),
+                ),
+                abschneiden_ab: Some(ABSCHNEIDEN_AB),
+            }
+        })
+        .collect();
+    felder.push(grafik::Feld {
+        titel: "Mittel über alle Programme".to_string(),
+        unter: "Zeit im Verhältnis zu OIDA (geometrisches Mittel).".to_string(),
+        balken: rangfolge(
+            sprachen
+                .iter()
+                .zip(mittel(ergebnisse, sprachen))
+                .filter_map(|(s, wert)| {
+                    let wert = wert?;
+                    Some(grafik::Balken {
+                        name: s.name().to_string(),
+                        wert,
+                        text: faktor(wert),
+                        zusatz: String::new(),
+                        hervor: *s == Sprache::Oida,
+                    })
+                })
+                .collect(),
+        ),
+        abschneiden_ab: Some(ABSCHNEIDEN_AB),
+    });
+    let prozessor = rechner.split(',').next().unwrap_or("").trim();
+    let datum = datum_deutsch(datum);
+    grafik::zeichnen(
+        "OIDA im Vergleich: Laufzeit je Programm",
+        "Kürzer ist besser, die schnellste Sprache steht oben. Mittlerer Wert von mehreren Runden, samt Starten des Programms.",
+        &[
+            "Hinter dem Punkt steht die Zeit im Verhältnis zu OIDA: 2× heißt doppelt so lang. Jedes Feld hat seinen eigenen Maßstab.".to_string(),
+            "Balken mit Bruchstelle sind abgeschnitten: Sie wären mehr als 10-mal so lang wie der kürzeste im Feld.".to_string(),
+            format!("Gemessen am {datum} auf: {prozessor}."),
+        ],
+        &felder,
+    )
+}
+
+// ------------------------------------------------- Messwerte aufbewahren
+
+/// Schreibt die Messwerte als Tabelle (`leistung/ergebnis.csv`), damit man
+/// die Grafik neu zeichnen kann, ohne neu zu messen.
+fn csv_schreiben(ergebnisse: &[Ergebnis], rechner: &str, datum: &str) -> String {
+    let mut aus = format!("# rechner;{rechner}\n# datum;{datum}\n");
+    aus.push_str("programm;sprache;sekunden;runden;speicher_bytes;bau_sekunden;groesse_bytes\n");
+    for e in ergebnisse {
+        for m in &e.messungen {
+            let _ = writeln!(
+                aus,
+                "{};{};{:.6};{};{};{};{}",
+                e.name,
+                m.sprache.name(),
+                m.sekunden,
+                m.runden,
+                m.speicher,
+                m.bau_sekunden.map(|s| format!("{s:.6}")).unwrap_or_default(),
+                m.groesse.map(|g| g.to_string()).unwrap_or_default(),
+            );
+        }
+    }
+    aus
+}
+
+/// Liest `ergebnis.csv` wieder ein: Messungen, Rechner und Datum.
+fn csv_lesen(inhalt: &str, programme_ordner: &Path) -> Result<(Vec<Ergebnis>, String, String), String> {
+    let mut ergebnisse: Vec<Ergebnis> = Vec::new();
+    let (mut rechner, mut datum) = (String::new(), String::new());
+    for (nr, zeile) in inhalt.lines().enumerate() {
+        let fehler = || format!("ergebnis.csv, Zeile {}: kann ich nicht lesen: {zeile}", nr + 1);
+        if let Some(rest) = zeile.strip_prefix("# rechner;") {
+            rechner = rest.to_string();
+        } else if let Some(rest) = zeile.strip_prefix("# datum;") {
+            datum = rest.to_string();
+        }
+        if zeile.is_empty() || zeile.starts_with('#') || zeile.starts_with("programm;") {
+            continue;
+        }
+        let teile: Vec<&str> = zeile.split(';').collect();
+        let [name, sprache, sekunden, runden, speicher, bau, groesse] = teile[..] else { return Err(fehler()) };
+        let sprache = SPRACHEN.into_iter().find(|s| s.name() == sprache).ok_or_else(fehler)?;
+        let messung = Messung {
+            sprache,
+            sekunden: sekunden.parse().map_err(|_| fehler())?,
+            runden: runden.parse().map_err(|_| fehler())?,
+            speicher: speicher.parse().map_err(|_| fehler())?,
+            bau_sekunden: bau.parse().ok(),
+            groesse: groesse.parse().ok(),
+            ausgabe: Vec::new(),
+        };
+        if ergebnisse.last().is_none_or(|e| e.name != name) {
+            let was = fs::read_to_string(programme_ordner.join(name).join("was.txt")).unwrap_or_default();
+            ergebnisse.push(Ergebnis {
+                name: name.to_string(),
+                was: was.trim().to_string(),
+                messungen: Vec::new(),
+                ausfaelle: Vec::new(),
+            });
+        }
+        ergebnisse.last_mut().unwrap().messungen.push(messung);
+    }
+    Ok((ergebnisse, rechner, datum))
+}
+
+fn bericht(ergebnisse: &[Ergebnis], sprachen: &[Sprache], w: &Werkzeuge, rechner: &str, datum: &str) -> String {
     let mut aus = String::new();
     let _ = writeln!(aus, "# Leistungsvergleich\n");
     let _ = writeln!(
         aus,
-        "Erzeugt mit `cargo run --release -p oida-messen` am {}. Nicht von Hand ändern.\n",
-        heute()
+        "Erzeugt mit `cargo run --release -p oida-messen` am {datum}. Nicht von Hand ändern.\n"
     );
-    let _ = writeln!(aus, "Rechner: {}, {}\n", powershell("(Get-CimInstance Win32_Processor).Name"), {
-        let ram = powershell("[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)");
-        format!("{ram} GB Arbeitsspeicher, {}", powershell("(Get-CimInstance Win32_OperatingSystem).Caption"))
-    });
+    let _ = writeln!(aus, "![Laufzeit je Programm und Sprache](ergebnis.svg)\n");
+    let _ = writeln!(aus, "Rechner: {rechner}\n");
     let _ = writeln!(aus, "| Sprache | Art | Version |\n|---|---|---|");
     for s in sprachen {
         let _ = writeln!(aus, "| {} | {} | {} |", s.name(), s.art(), w.version(*s));
@@ -437,7 +771,7 @@ fn bericht(ergebnisse: &[Ergebnis], sprachen: &[Sprache], w: &Werkzeuge) -> Stri
 
     // Überblick: Zeit je Programm und Sprache.
     let _ = writeln!(aus, "\n## Überblick: Zeit\n");
-    let _ = writeln!(aus, "Kleiner ist besser. Die schnellste von mehreren Runden, samt Starten des Programms.\n");
+    let _ = writeln!(aus, "Kleiner ist besser. Der mittlere Wert (Median) von mehreren Runden, samt Starten des Programms.\n");
     let _ = write!(aus, "| Programm |");
     for s in sprachen {
         let _ = write!(aus, " {} |", s.name());
@@ -503,6 +837,7 @@ fn bericht(ergebnisse: &[Ergebnis], sprachen: &[Sprache], w: &Werkzeuge) -> Stri
     // Speicher.
     let _ = writeln!(aus, "\n## Überblick: Speicher\n");
     let _ = writeln!(aus, "Der höchste Arbeitsspeicher, den das Programm gebraucht hat. Kleiner ist besser.\n");
+    let _ = writeln!(aus, "![Arbeitsspeicher je Sprache](speicher.svg)\n");
     let _ = write!(aus, "| Programm |");
     for s in sprachen {
         let _ = write!(aus, " {} |", s.name());
@@ -556,16 +891,47 @@ fn main() -> std::process::ExitCode {
     let arbeit = wurzel.join("target").join("leistung");
     fs::create_dir_all(&arbeit).expect("Arbeitsordner lässt sich nicht anlegen");
 
-    // Argumente: Namen von Programmen, und --ohne <sprache>.
+    // Argumente: Namen von Programmen, --ohne <sprache> und --nur-grafik.
     let mut nur: Vec<String> = Vec::new();
     let mut ohne: Vec<String> = Vec::new();
+    let mut nur_grafik = false;
     let mut argumente = std::env::args().skip(1);
     while let Some(argument) = argumente.next() {
         if argument == "--ohne" {
             ohne.push(argumente.next().unwrap_or_default().to_lowercase());
+        } else if argument == "--nur-grafik" {
+            nur_grafik = true;
         } else {
             nur.push(argument);
         }
+    }
+
+    let csv_datei = wurzel.join("leistung").join("ergebnis.csv");
+    let svg_datei = wurzel.join("leistung").join("ergebnis.svg");
+    let speicher_datei = wurzel.join("leistung").join("speicher.svg");
+    if nur_grafik {
+        // Nicht messen, nur die Grafik aus den aufbewahrten Messwerten neu zeichnen.
+        let gelesen = fs::read_to_string(&csv_datei)
+            .map_err(|e| format!("{}: {e}. Zerst amoi gaunz messn.", csv_datei.display()))
+            .and_then(|inhalt| csv_lesen(&inhalt, &programme_ordner));
+        return match gelesen {
+            Ok((ergebnisse, rechner, datum)) => {
+                let sprachen: Vec<Sprache> = SPRACHEN
+                    .into_iter()
+                    .filter(|s| ergebnisse.iter().any(|e| e.von(*s).is_some()))
+                    .collect();
+                fs::write(&svg_datei, grafik_bauen(&ergebnisse, &sprachen, &rechner, &datum))
+                    .expect("ergebnis.svg lässt sich nicht schreiben");
+                fs::write(&speicher_datei, speicher_grafik_bauen(&ergebnisse, &sprachen, &rechner, &datum))
+                    .expect("speicher.svg lässt sich nicht schreiben");
+                eprintln!("Geschrieben: {} und speicher.svg", svg_datei.display());
+                std::process::ExitCode::SUCCESS
+            }
+            Err(grund) => {
+                eprintln!("Heast! {grund}");
+                std::process::ExitCode::from(2)
+            }
+        };
     }
 
     let w = Werkzeuge::suchen(&wurzel);
@@ -633,11 +999,18 @@ fn main() -> std::process::ExitCode {
         ergebnisse.push(ergebnis);
     }
 
-    let text = bericht(&ergebnisse, &sprachen, &w);
+    let (rechner, datum) = (rechner(), heute());
+    let text = bericht(&ergebnisse, &sprachen, &w, &rechner, &datum);
     if nur.is_empty() && ohne.is_empty() {
         let datei = wurzel.join("leistung").join("ERGEBNIS.md");
         fs::write(&datei, &text).expect("ERGEBNIS.md lässt sich nicht schreiben");
-        eprintln!("\nGeschrieben: {}", datei.display());
+        fs::write(&csv_datei, csv_schreiben(&ergebnisse, &rechner, &datum))
+            .expect("ergebnis.csv lässt sich nicht schreiben");
+        fs::write(&svg_datei, grafik_bauen(&ergebnisse, &sprachen, &rechner, &datum))
+            .expect("ergebnis.svg lässt sich nicht schreiben");
+        fs::write(&speicher_datei, speicher_grafik_bauen(&ergebnisse, &sprachen, &rechner, &datum))
+            .expect("speicher.svg lässt sich nicht schreiben");
+        eprintln!("\nGeschrieben: {}, ergebnis.csv, ergebnis.svg, speicher.svg", datei.display());
     } else {
         // Nur ein Teil gemessen: den Bericht zeigen, aber die Datei nicht überschreiben.
         println!("{text}");

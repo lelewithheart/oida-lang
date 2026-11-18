@@ -1,0 +1,88 @@
+# Texte entstehen und vergehen auf allen Wegen, die es gibt.
+# Der Test lässt das Programm im Prüfmodus laufen: Am Ende darf kein Text
+# übrig sein, und keiner darf nach dem Freigeben noch verwendet werden.
+
+FUNKTIAUN doppelt(s KETTN) GIBT ZRUCK KETTN
+    GIB ZRUCK s + s OIDA
+PASST SCHO
+
+FUNKTIAUN gleich_zruck(s KETTN) GIBT ZRUCK KETTN
+    GIB ZRUCK s OIDA
+PASST SCHO
+
+FUNKTIAUN wegwerfen(s KETTN)
+    SOG AU kopie = s OIDA
+    kopie = kopie + "!" OIDA
+PASST SCHO
+
+# GIB ZRUCK mitten aus Schleife und Verzweigung, mit Texten in jedem Block
+FUNKTIAUN frueh_raus(n ZOI) GIBT ZRUCK KETTN
+    SOG AU aus = "" OIDA
+    SOG AU i = 0 OIDA
+    SOLONG WOAHR TUA
+        SOG AU stueck = KETTN(i) + "," OIDA
+        aus = aus + stueck OIDA
+        WENN i >= n DAUN
+            SOG AU ende = aus + "fertig" OIDA
+            GIB ZRUCK ende OIDA
+        PASST SCHO
+        i = i + 1 OIDA
+    PASST SCHO
+    GIB ZRUCK "nie" OIDA
+PASST SCHO
+
+FUNKTIAUN laenger(a KETTN, b KETTN) GIBT ZRUCK KETTN
+    WENN a < b DAUN
+        GIB ZRUCK b OIDA
+    PASST SCHO
+    GIB ZRUCK a OIDA
+PASST SCHO
+
+FUNKTIAUN rekursiv(n ZOI, bisher KETTN) GIBT ZRUCK KETTN
+    WENN n = 0 DAUN
+        GIB ZRUCK bisher OIDA
+    PASST SCHO
+    GIB ZRUCK rekursiv(n - 1, bisher + KETTN(n)) OIDA
+PASST SCHO
+
+# Zwei Variablen teilen sich einen Text, dann wird zugewiesen
+SOG AU a = "fest" OIDA
+SOG AU b = a OIDA
+SOG AU c = KETTN(12) + "x" OIDA
+SOG AU d = c OIDA
+c = c OIDA
+c = d + c OIDA
+d = "neu" OIDA
+SCHREIB(a, b, c, d) OIDA
+
+# Texte in Funktionen hinein und wieder heraus
+SCHREIB(doppelt("ab"), doppelt(c), doppelt(doppelt(KETTN(7)))) OIDA
+SCHREIB(gleich_zruck(c), gleich_zruck("fest"), gleich_zruck(KETTN(1.5))) OIDA
+wegwerfen(c) OIDA
+wegwerfen("fest") OIDA
+wegwerfen(KETTN(3)) OIDA
+doppelt(c) OIDA
+gleich_zruck(KETTN(99)) OIDA
+SCHREIB(frueh_raus(3)) OIDA
+SCHREIB(laenger("a", KETTN(5)), laenger(c, c), laenger(KETTN(1), KETTN(2))) OIDA
+SCHREIB(rekursiv(5, "")) OIDA
+
+# Texte in Schleifen und Blöcken
+SOG AU i = 0 OIDA
+SOG AU summe = "" OIDA
+SOLONG i < 5 TUA
+    SOG AU teil = KETTN(i) OIDA
+    WENN i % 2 = 0 DAUN
+        SOG AU teil = teil + "g" OIDA       # verdeckt das äußere teil
+        summe = summe + teil OIDA
+    SUNST
+        summe = summe + teil + KETTN(i * 10) + "u" OIDA
+    PASST SCHO
+    i = i + 1 OIDA
+PASST SCHO
+SCHREIB(summe) OIDA
+
+# Texte, die nur kurz zum Vergleichen, Umwandeln oder Ausgeben leben
+SCHREIB(KETTN(1) + KETTN(2) = "12", KETTN(5) < KETTN(10), KETTN(WOAHR) + KETTN(1.5) + KETTN(KETTN(3))) OIDA
+SCHREIB(ZOI(KETTN(4) + KETTN(2)) + 1, KOMMAZOI(KETTN(2.5)) * 2) OIDA
+SCHREIB("a" + "b" + "c" + c + KETTN(0) + d) OIDA

@@ -297,9 +297,13 @@ Heast! Zeile 3: Durch nix kaun ma ned teilen.
 
 ## Wie schnell ist das?
 
-Beim Rechnen so schnell wie C und Rust, bei Texten noch deutlich langsamer. Gemessen an sieben
-Programmen gegen C, Rust, Java, JavaScript und Python; Zahlen und Messweise stehen in
-[`leistung/`](leistung/README.md).
+So schnell wie C und Rust, und ein Programm braucht zum Laufen rund 5 MB. Gemessen an sieben
+Programmen gegen C, Rust, C#, Java, JavaScript und Python:
+
+![Laufzeit je Programm und Sprache](leistung/ergebnis.svg)
+
+Die Programme kommen mit dem aus, was OIDA v0.1 kann; was der Vergleich zeigt und was nicht,
+steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
 
 
 ## Aufbau
@@ -320,7 +324,7 @@ uebersetzer/           der Compiler (Rust), ergibt oida.exe
   build.rs               baut die Laufzeit und packt sie in die oida.exe
   tests/                 Tests von Anfang bis Ende (.oida -> .exe -> Ausgabe)
 laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt:
-                       Ausgabe, Texte, Umwandlungen, Fehler beim Laufen
+                       Ausgabe, Texte samt Freigeben, Umwandlungen, Fehler beim Laufen
 vscode/                Erweiterung für VS Code
 leistung/              Leistungsvergleich mit anderen Sprachen
 ```
@@ -331,9 +335,6 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 
 ## Was v0.1 noch nicht kann
 
-- Texte werden nie freigegeben. Jedes `+` auf Texten und jedes `KETTN(...)` braucht Speicher,
-  der erst am Programmende zurückgegeben wird. Für kurze Programme egal, für eine Schleife mit
-  Millionen Durchläufen nicht. Das löst die Referenzzählung (siehe Fahrplan).
 - Keine Eingabe von der Tastatur, keine Dateien.
 - Schleifen kann man nicht vorzeitig verlassen (außer mit `GIB ZRUCK` in einer Funktion).
 - Ganze Zahlen laufen bei mehr als 64 Bit still über.
@@ -347,7 +348,8 @@ Noch nicht drin, in ungefähr dieser Reihenfolge geplant:
 
 1. **Strukturen**: eigene Datentypen mit Feldern (Strukturen und Funktionen statt Klassen)
 2. **Listen**
-3. **Referenzzählung** für alles, was am Heap liegt (Texte, Listen, Strukturen)
+3. **Referenzzählung** auch für Listen und Strukturen. Für Texte gibt es sie schon: Ein Text
+   wird freigegeben, sobald ihn niemand mehr braucht.
 4. **Der `oidasql(...)`-Block**: OIDA-SQL direkt in der Sprache, nicht als Text in Anführungszeichen,
    samt Anbindung an MySQL, etwa
    `oidasql( GIB MA name VON schuela WO schnitt < 2 )`
