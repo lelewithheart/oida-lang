@@ -1,0 +1,18 @@
+:3:19: De FUNKTIAUN 'teil' gibt a ZOI ODA FEHLA zruck, ned a KETTN.
+:8:15: De FUNKTIAUN 'speicher' gibt a NIX ODA FEHLA zruck, ned a ZOI.
+:11:16: PROBIER gibt an FEHLA weida. Des geht nur in ana FUNKTIAUN, de söwa an FEHLA zruckgebn kaun (GIBT ZRUCK ... ODA FEHLA). Sunst fang eam auf: PROBIER ... WONNS SCHIEFGEHT ... PASST SCHO
+:15:24: PROBIER braucht wos, des schiefgehn kaun (a FUNKTIAUN mit ... ODA FEHLA), des do is oba a ZOI.
+:16:13: PROBIER muass gaunz vuan stehn, zum Beispü: SOG AU x = PROBIER f() OIDA
+:17:26: A ZOI ODA FEHLA + a ZOI? Des geht si ned aus. Do kunnt a FEHLA drin sei: Nimm z'erst PROBIER oda ODA HOID.
+:19:1: Do kaun wos schiefgehn, des derfst ned afoch wegschmeißn. Schreib PROBIER davua (daun geht da FEHLA weida) oda fang eam mit PROBIER ... WONNS SCHIEFGEHT auf.
+:21:11: A ZOI ODA FEHLA + a ZOI? Des geht si ned aus. Do kunnt a FEHLA drin sei: Nimm z'erst PROBIER oda ODA HOID.
+:22:16: PROBIER gibt an FEHLA weida. Des geht nur in ana FUNKTIAUN, de söwa an FEHLA zruckgebn kaun (GIBT ZRUCK ... ODA FEHLA). Sunst fang eam auf: PROBIER ... WONNS SCHIEFGEHT ... PASST SCHO
+:23:1: Do kummt ka Wert zruck. Loss 'x =' weg.
+:25:15: A FEHLA hot nur des Föd 'meldung', a Föd 'code' gibt's do ned.
+:27:13: Noch PROBIER brauch i wos, des schiefgehn kaun (a FUNKTIAUN mit ... ODA FEHLA), des do is oba a ZOI.
+:30:9: Do kummt ka Wert zruck, fia den ma an Ersotz bräucht. Nimm PROBIER ... WONNS SCHIEFGEHT.
+:31:16: FEHLA ODA FEHLA? Wos ka Wert hot, gibt NIX ODA FEHLA zruck.
+:32:18: 'f' soll a FEHLA sei, oba des do is a ZOI.
+:33:17: 'ZOI AUS' wü ois 1. Wert a KETTN, du gibst eam a ZOI.
+:33:21: 'ZOI AUS' wü an Wert hom, du gibst eam kan Wert.
+Na, des wird nix: 17 Fehler.

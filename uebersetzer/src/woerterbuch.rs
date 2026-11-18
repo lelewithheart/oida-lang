@@ -74,11 +74,20 @@ pub enum Schluessel {
     Extends,
     This,
     Super,
+    // Fehlende Werte und Fehler
+    Null,
+    Maybe,
+    OrElse,
+    Error,
+    Try,
+    Catch,
+    ParseInt,
+    ParseFloat,
 }
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 60] = [
+    pub const ALLE: [(Schluessel, &'static str); 68] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -139,6 +148,14 @@ impl Schluessel {
         (Schluessel::Extends, "EXTENDS"),
         (Schluessel::This, "THIS"),
         (Schluessel::Super, "SUPER"),
+        (Schluessel::Null, "NULL"),
+        (Schluessel::Maybe, "MAYBE"),
+        (Schluessel::OrElse, "ORELSE"),
+        (Schluessel::Error, "ERROR"),
+        (Schluessel::Try, "TRY"),
+        (Schluessel::Catch, "CATCH"),
+        (Schluessel::ParseInt, "PARSEINT"),
+        (Schluessel::ParseFloat, "PARSEFLOAT"),
     ];
 
     /// Ist das der Name einer eingebauten Funktion (LÄNGN, WURZL ...)?
@@ -173,6 +190,8 @@ impl Schluessel {
                 | Seed
                 | Add
                 | Remove
+                | ParseInt
+                | ParseFloat
         )
     }
 

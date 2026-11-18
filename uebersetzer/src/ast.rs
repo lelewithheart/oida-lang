@@ -22,8 +22,19 @@ pub enum Typ {
     /// Eine Klasse: Nummer in [`Typen::klassen`]. Ein Verweis auf ein Objekt am
     /// Heap; mehrere Variablen können dasselbe Objekt meinen.
     Klasse(u32),
+    /// `VIELLEICHT <typ>`: ein Wert dieses Typs oder `NIX`. `nummer` zeigt in
+    /// [`Typen::vielleicht`]. `zeiger` sagt, wie der Wert im Speicher aussieht:
+    /// Ist der Typ darin ohnehin ein Zeiger (Text, Liste, Objekt), ist NIX der
+    /// Nullzeiger; sonst steht ein Merker "ist da" neben dem Wert.
+    Vielleicht { nummer: u32, zeiger: bool },
+    /// `<typ> ODA FEHLA`: ein Wert oder ein Fehler. Nummer in [`Typen::ergebnisse`].
+    Ergebnis(u32),
+    /// Ein Fehler: im Speicher ein Text mit der Meldung.
+    Fehla,
     /// Die leere Liste `[]`, solange noch nicht klar ist, wovon sie eine Liste ist.
     LeereListe,
+    /// Das Wort `NIX`, solange noch nicht klar ist, was fehlen soll.
+    NixWert,
     /// Kein Wert (Funktion ohne Rückgabe; vor der Typprüfung auch "noch unbekannt").
     Nix,
     /// Hier ist schon ein Fehler gemeldet worden; verhindert Folgefehler.
@@ -86,6 +97,10 @@ pub struct Typen {
     pub klassen: Vec<KlassenInfo>,
     /// Der Typ der Elemente je Listentyp.
     pub listen: Vec<Typ>,
+    /// Was je `VIELLEICHT`-Typ da sein kann.
+    pub vielleicht: Vec<Typ>,
+    /// Der Typ des Werts je `... ODA FEHLA` (`Nix` bei `NIX ODA FEHLA`).
+    pub ergebnisse: Vec<Typ>,
 }
 
 impl Typen {
@@ -107,6 +122,51 @@ impl Typen {
             Typ::Liste(n) => self.listen.get(n as usize).copied(),
             _ => None,
         }
+    }
+
+    /// Der Typ "`innen` oder NIX". Jeden gibt es nur einmal.
+    pub fn vielleicht_von(&mut self, innen: Typ) -> Typ {
+        let nummer = match self.vielleicht.iter().position(|t| *t == innen) {
+            Some(n) => n,
+            None => {
+                self.vielleicht.push(innen);
+                self.vielleicht.len() - 1
+            }
+        };
+        Typ::Vielleicht { nummer: nummer as u32, zeiger: self.zeiger(innen) }
+    }
+
+    /// Was bei einem `VIELLEICHT`-Typ da sein kann.
+    pub fn innen(&self, typ: Typ) -> Option<Typ> {
+        match typ {
+            Typ::Vielleicht { nummer, .. } => self.vielleicht.get(nummer as usize).copied(),
+            _ => None,
+        }
+    }
+
+    /// Der Typ "`wert` oder ein Fehler". Jeden gibt es nur einmal.
+    pub fn ergebnis_von(&mut self, wert: Typ) -> Typ {
+        let nummer = match self.ergebnisse.iter().position(|t| *t == wert) {
+            Some(n) => n,
+            None => {
+                self.ergebnisse.push(wert);
+                self.ergebnisse.len() - 1
+            }
+        };
+        Typ::Ergebnis(nummer as u32)
+    }
+
+    /// Der Typ des Werts bei `... ODA FEHLA`.
+    pub fn wert_von(&self, typ: Typ) -> Option<Typ> {
+        match typ {
+            Typ::Ergebnis(n) => self.ergebnisse.get(n as usize).copied(),
+            _ => None,
+        }
+    }
+
+    /// Ist ein Wert dieses Typs im Speicher ein einzelner Zeiger auf etwas am Heap?
+    pub fn zeiger(&self, typ: Typ) -> bool {
+        matches!(typ, Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) | Typ::Fehla)
     }
 
     pub fn struktur(&self, typ: Typ) -> Option<&StrukturInfo> {
@@ -141,9 +201,10 @@ impl Typen {
     /// werden muss? Das sind Texte, Listen und Strukturen, die so etwas enthalten.
     pub fn verwaltet(&self, typ: Typ) -> bool {
         match typ {
-            Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) => true,
+            Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) | Typ::Fehla | Typ::Ergebnis(_) => true,
             Typ::Struktur(_) => self.struktur(typ).is_some_and(|s| s.felder.iter().any(|(_, t)| self.verwaltet(*t))),
-            Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Nix | Typ::Fehler => false,
+            Typ::Vielleicht { .. } => self.innen(typ).is_some_and(|t| self.verwaltet(t)),
+            Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Nix | Typ::NixWert | Typ::Fehler => false,
         }
     }
 }
@@ -157,6 +218,10 @@ pub enum TypAngabe {
     Name { name: String, pos: Position },
     /// `LISTN VON <typ>`
     Liste(Box<TypAngabe>),
+    /// `VIELLEICHT <typ>`
+    Vielleicht { innen: Box<TypAngabe>, pos: Position },
+    /// `<typ> ODA FEHLA`; ohne Typ davor: `NIX ODA FEHLA`
+    OderFehler { wert: Option<Box<TypAngabe>>, pos: Position },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -257,6 +322,10 @@ pub enum Eingebaut {
     Dazu,
     /// `HAU AUSSE(liste, stelle)`: das Element an der Stelle entfernen
     Raus,
+    /// `ZOI AUS(text)`: die ganze Zahl, die im Text steht, oder ein Fehler
+    ZoiAus,
+    /// `KOMMAZOI AUS(text)`: die Kommazahl, die im Text steht, oder ein Fehler
+    KommazoiAus,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -312,6 +381,20 @@ pub enum AusdruckArt {
     /// `Gegner("Hansi", 100)`: ein neues Objekt; die Felder ohne eigenen
     /// Wert der Reihe nach. Entsteht in der Typprüfung aus einem Aufruf.
     Neu { klasse: u32, argumente: Vec<Ausdruck> },
+    /// `NIX`: kein Wert. Der Typ richtet sich danach, wo es hinkommt.
+    Nix,
+    /// `x == NIX` (`ist`) oder `x != NIX`. Entsteht in der Typprüfung aus dem Vergleich.
+    IstNix { innen: Box<Ausdruck>, ist: bool },
+    /// Eine `VIELLEICHT`-Variable an einer Stelle, an der feststeht, dass sie
+    /// nicht NIX ist (nach `WENN x != NIX DAUN`). Der Typ ist der des Werts.
+    /// Die Typprüfung setzt das um die Variable herum.
+    Sicher { innen: Box<Ausdruck> },
+    /// `links ODA HOID rechts`: der Wert von links; ist dort NIX oder ein
+    /// Fehler, der von rechts (und nur dann wird rechts ausgerechnet).
+    OdaHoid { links: Box<Ausdruck>, rechts: Box<Ausdruck> },
+    /// `PROBIER ausdruck`: der Wert; ist es ein Fehler, hört die Funktion
+    /// hier auf und gibt ihn weiter.
+    Probier { innen: Box<Ausdruck> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -347,6 +430,18 @@ pub enum AnweisungArt {
     Schreib { argumente: Vec<Ausdruck> },
     /// Ein Ausdruck als Anweisung, z.B. ein Funktionsaufruf.
     Ausdruck(Ausdruck),
+    /// `PROBIER [name =] wert ... WONNS SCHIEFGEHT [fehler_name] ... PASST SCHO`
+    /// Hat `wert` geklappt, läuft `dann` (mit dem Wert in `name`), sonst
+    /// `sunst` (mit dem Fehler in `fehler_name`).
+    Probier {
+        name: Option<String>,
+        id: usize,
+        wert: Ausdruck,
+        dann: Vec<Anweisung>,
+        fehler_name: Option<String>,
+        fehler_id: usize,
+        sunst: Vec<Anweisung>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

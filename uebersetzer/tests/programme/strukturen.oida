@@ -76,8 +76,8 @@ SCHREIB(treffer(Gegner("Zwerg", Punkt(0, 0), 1, WOAHR), 5).name) OIDA
 treffer(g, 1) OIDA
 
 # Eine Struktur ohne Felder
-SOG AU nix = Leer() OIDA
-SCHREIB(nix) OIDA
+SOG AU goanix = Leer() OIDA
+SCHREIB(goanix) OIDA
 
 # Strukturen in Blöcken und Schleifen
 FIA i VON 1 BIS 3 TUA

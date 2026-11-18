@@ -194,19 +194,43 @@ impl Parser<'_> {
             TokenArt::Schluessel(Schluessel::Float) => Some(Typ::Kommazoi),
             TokenArt::Schluessel(Schluessel::Boolean) => Some(Typ::Jona),
             TokenArt::Schluessel(Schluessel::Text) => Some(Typ::Kettn),
+            TokenArt::Schluessel(Schluessel::Error) => Some(Typ::Fehla),
             _ => None,
         }
     }
 
-    /// Ein Typ: einer der vier einfachen, der Name einer Struktur oder `LISTN VON <typ>`.
+    /// Ein Typ, wie man ihn hinschreibt. Am Ende darf `ODA FEHLA` stehen
+    /// (statt eines Typs davor auch `NIX`): Dann ist es ein Wert oder ein Fehler.
     fn typ_angabe(&mut self) -> Result<TypAngabe, Fehler> {
+        let pos = self.aktuell().pos;
+        if self.nimm(Schluessel::Null) {
+            self.erwarte_schluessel(Schluessel::Or)?;
+            self.erwarte_schluessel(Schluessel::Error)?;
+            return Ok(TypAngabe::OderFehler { wert: None, pos });
+        }
+        let kern = self.typ_kern()?;
+        if self.ist(Schluessel::Or) && *self.naechstes() == TokenArt::Schluessel(Schluessel::Error) {
+            self.weiter();
+            self.weiter();
+            return Ok(TypAngabe::OderFehler { wert: Some(Box::new(kern)), pos });
+        }
+        Ok(kern)
+    }
+
+    /// Ein Typ ohne `ODA FEHLA`: einer der einfachen, der Name einer Struktur
+    /// oder Klasse, `LISTN VON <typ>` oder `VIELLEICHT <typ>`.
+    fn typ_kern(&mut self) -> Result<TypAngabe, Fehler> {
         if let Some(typ) = self.typ_hier() {
             self.weiter();
             return Ok(TypAngabe::Einfach(typ));
         }
+        let pos = self.aktuell().pos;
+        if self.nimm(Schluessel::Maybe) {
+            return Ok(TypAngabe::Vielleicht { innen: Box::new(self.typ_kern()?), pos });
+        }
         if self.nimm(Schluessel::List) {
             self.erwarte_schluessel(Schluessel::From)?;
-            return Ok(TypAngabe::Liste(Box::new(self.typ_angabe()?)));
+            return Ok(TypAngabe::Liste(Box::new(self.typ_kern()?)));
         }
         let token = self.aktuell().clone();
         if let TokenArt::Name(name) = token.art {
@@ -355,7 +379,8 @@ impl Parser<'_> {
             match token.art {
                 TokenArt::DateiEnde
                 | TokenArt::Schluessel(Schluessel::End)
-                | TokenArt::Schluessel(Schluessel::Else) => return Ok(anweisungen),
+                | TokenArt::Schluessel(Schluessel::Else)
+                | TokenArt::Schluessel(Schluessel::Catch) => return Ok(anweisungen),
                 TokenArt::Schluessel(wort @ (Schluessel::Function | Schluessel::Struct | Schluessel::Class)) => {
                     return Err(Fehler::neu(
                         token.pos,
@@ -376,6 +401,17 @@ impl Parser<'_> {
         }
         if self.ist(Schluessel::Else) {
             return Err(self.sunst_ohne_wenn());
+        }
+        if self.ist(Schluessel::Catch) {
+            return Err(Fehler::neu(
+                self.aktuell().pos,
+                format!(
+                    "{} ohne {}? Des ghört zu an {}.",
+                    self.wort(Schluessel::Catch),
+                    self.wort(Schluessel::Try),
+                    self.wort(Schluessel::Try)
+                ),
+            ));
         }
         Err(Fehler::neu(
             anfang,
@@ -466,6 +502,10 @@ impl Parser<'_> {
                 self.erwarte_oida()?;
                 AnweisungArt::Schreib { argumente }
             }
+            TokenArt::Schluessel(Schluessel::Try) => {
+                self.weiter();
+                return self.probier(pos);
+            }
             _ => {
                 // Zuweisung? Dann steht vorne ein Ziel (x, p.x, liste[i], SÖWA.x) und danach = oder +=.
                 if matches!(token.art, TokenArt::Name(_) | TokenArt::Schluessel(Schluessel::This)) {
@@ -529,6 +569,78 @@ impl Parser<'_> {
         Ok(Anweisung { art: AnweisungArt::Wenn { bedingung, dann, sunst }, pos })
     }
 
+    /// Das PROBIER am Anfang einer Anweisung ist schon gelesen. Zwei Formen:
+    ///
+    ///  - `PROBIER ausdruck OIDA`: Geht es schief, gibt die Funktion den Fehler weiter.
+    ///  - `PROBIER [name =] ausdruck ... WONNS SCHIEFGEHT [fehler] ... PASST SCHO`
+    fn probier(&mut self, pos: Position) -> Result<Anweisung, Fehler> {
+        let mut name = None;
+        if let TokenArt::Name(wort) = &self.aktuell().art
+            && *self.naechstes() == TokenArt::Gleich
+        {
+            name = Some(wort.clone());
+            self.weiter();
+            self.weiter();
+        }
+        let wert = self.ausdruck()?;
+        if self.ist(Schluessel::Oida) {
+            if let Some(name) = name {
+                return Err(Fehler::neu(
+                    pos,
+                    format!(
+                        "Manst {} {name} = {} ... {}? Oda es fehlt da Block bis {}.",
+                        self.wort(Schluessel::Declare),
+                        self.wort(Schluessel::Try),
+                        self.wort(Schluessel::Oida),
+                        self.wort(Schluessel::Catch)
+                    ),
+                ));
+            }
+            self.weiter();
+            let innen = Ausdruck::neu(AusdruckArt::Probier { innen: Box::new(wert) }, pos);
+            return Ok(Anweisung { art: AnweisungArt::Ausdruck(innen), pos });
+        }
+        let dann = self.block()?;
+        if !self.nimm(Schluessel::Catch) {
+            return Err(Fehler::neu(
+                pos,
+                format!(
+                    "Noch {} ghört entweda glei a {} (daun geht da {} weida) oda a Block mit {}.",
+                    self.wort(Schluessel::Try),
+                    self.wort(Schluessel::Oida),
+                    self.wort(Schluessel::Error),
+                    self.wort(Schluessel::Catch)
+                ),
+            ));
+        }
+        let mut fehler_name = None;
+        if let TokenArt::Name(wort) = &self.aktuell().art {
+            // Ein Name gleich hinter WONNS SCHIEFGEHT ist der Fehler, außer es beginnt damit schon die erste Anweisung.
+            let anweisung_beginnt = matches!(
+                self.naechstes(),
+                TokenArt::Gleich
+                    | TokenArt::KlammerAuf
+                    | TokenArt::Punkt
+                    | TokenArt::EckigAuf
+                    | TokenArt::PlusGleich
+                    | TokenArt::MinusGleich
+                    | TokenArt::MalGleich
+                    | TokenArt::DurchGleich
+                    | TokenArt::ProzentGleich
+            );
+            if !anweisung_beginnt {
+                fehler_name = Some(wort.clone());
+                self.weiter();
+            }
+        }
+        let sunst = self.block()?;
+        self.erwarte_end(pos, Schluessel::Try)?;
+        Ok(Anweisung {
+            art: AnweisungArt::Probier { name, id: 0, wert, dann, fehler_name, fehler_id: 0, sunst },
+            pos,
+        })
+    }
+
     /// Die Argumente bis zur schließenden Klammer; die öffnende ist schon gelesen.
     fn argumente(&mut self) -> Result<Vec<Ausdruck>, Fehler> {
         let mut argumente = Vec::new();
@@ -550,7 +662,11 @@ impl Parser<'_> {
     // --------------------------------------------------------- Ausdrücke
 
     fn kann_typ_anfangen(&self) -> bool {
-        self.typ_hier().is_some() || self.ist(Schluessel::List) || matches!(self.aktuell().art, TokenArt::Name(_))
+        self.typ_hier().is_some()
+            || self.ist(Schluessel::List)
+            || self.ist(Schluessel::Maybe)
+            || self.ist(Schluessel::Null)
+            || matches!(self.aktuell().art, TokenArt::Name(_))
     }
 
     fn kann_ausdruck_anfangen(&self) -> bool {
@@ -571,6 +687,8 @@ impl Parser<'_> {
                         | Schluessel::Pi
                         | Schluessel::This
                         | Schluessel::Super
+                        | Schluessel::Null
+                        | Schluessel::Try
                 )
                     || s.ist_funktion()
                     || self.typ_hier().is_some()
@@ -580,6 +698,23 @@ impl Parser<'_> {
     }
 
     fn ausdruck(&mut self) -> Result<Ausdruck, Fehler> {
+        // PROBIER f(): steht ganz vorne und gilt für alles dahinter.
+        if self.ist(Schluessel::Try) {
+            let pos = self.weiter().pos;
+            let innen = self.ausdruck()?;
+            return Ok(Ausdruck::neu(AusdruckArt::Probier { innen: Box::new(innen) }, pos));
+        }
+        // ODA HOID bindet am schwächsten: a ODA b ODA HOID c ist (a ODA b) ODA HOID c.
+        let mut links = self.oda()?;
+        while self.ist(Schluessel::OrElse) {
+            let pos = self.weiter().pos;
+            let rechts = self.oda()?;
+            links = Ausdruck::neu(AusdruckArt::OdaHoid { links: Box::new(links), rechts: Box::new(rechts) }, pos);
+        }
+        Ok(links)
+    }
+
+    fn oda(&mut self) -> Result<Ausdruck, Fehler> {
         let mut links = self.und()?;
         while self.ist(Schluessel::Or) {
             let pos = self.weiter().pos;
@@ -754,6 +889,10 @@ impl Parser<'_> {
                 self.erwarte(TokenArt::KlammerAuf, "a '('")?;
                 AusdruckArt::Eingebaut { funktion: eingebaut(s).unwrap(), argumente: self.argumente()? }
             }
+            TokenArt::Schluessel(Schluessel::Null) => {
+                self.weiter();
+                AusdruckArt::Nix
+            }
             TokenArt::Name(name) => {
                 self.weiter();
                 if self.aktuell().art == TokenArt::KlammerAuf {
@@ -794,6 +933,16 @@ impl Parser<'_> {
                     let innen = self.ausdruck()?;
                     self.erwarte(TokenArt::KlammerZu, "a ')'")?;
                     AusdruckArt::Umwandlung { ziel, innen: Box::new(innen) }
+                } else if self.ist(Schluessel::Try) {
+                    return Err(Fehler::neu(
+                        pos,
+                        format!(
+                            "{p} muass gaunz vuan stehn, zum Beispü: {} x = {p} f() {}",
+                            self.wort(Schluessel::Declare),
+                            self.wort(Schluessel::Oida),
+                            p = self.wort(Schluessel::Try)
+                        ),
+                    ));
                 } else {
                     return Err(self.unerwartet("a Wert"));
                 }
@@ -851,6 +1000,8 @@ fn eingebaut(schluessel: Schluessel) -> Option<Eingebaut> {
         Schluessel::Seed => Eingebaut::Samen,
         Schluessel::Add => Eingebaut::Dazu,
         Schluessel::Remove => Eingebaut::Raus,
+        Schluessel::ParseInt => Eingebaut::ZoiAus,
+        Schluessel::ParseFloat => Eingebaut::KommazoiAus,
         _ => return None,
     })
 }
@@ -909,7 +1060,13 @@ mod tests {
             AusdruckArt::ElternAufruf { name, argumente, .. } => {
                 format!("OIDN.{name}({})", argumente.iter().map(klammern).collect::<Vec<_>>().join(", "))
             }
-            AusdruckArt::Bau { .. } | AusdruckArt::Neu { .. } => unreachable!("entsteht erst in der Typprüfung"),
+            AusdruckArt::Nix => "NIX".to_string(),
+            AusdruckArt::OdaHoid { links, rechts } => format!("({} ODA HOID {})", klammern(links), klammern(rechts)),
+            AusdruckArt::Probier { innen } => format!("PROBIER {}", klammern(innen)),
+            AusdruckArt::Bau { .. }
+            | AusdruckArt::Neu { .. }
+            | AusdruckArt::IstNix { .. }
+            | AusdruckArt::Sicher { .. } => unreachable!("entsteht erst in der Typprüfung"),
         }
     }
 
@@ -1099,6 +1256,60 @@ mod tests {
         let p = parse("g.treffer(10) OIDA\nSÖWA.schritt() OIDA");
         assert!(matches!(&p.haupt[0].art, AnweisungArt::Ausdruck(a) if klammern(a) == "g.treffer(10)"));
         assert!(matches!(&p.haupt[1].art, AnweisungArt::Ausdruck(a) if klammern(a) == "SÖWA.schritt()"));
+    }
+
+    #[test]
+    fn nix_und_oda_hoid() {
+        // ODA HOID bindet schwächer als ODA; PROBIER steht ganz vorne und gilt für alles dahinter.
+        assert_eq!(ausdruck("a ODA b ODA HOID c UND d"), "((a ODA b) ODA HOID (c UND d))");
+        assert_eq!(ausdruck("x == NIX ODA y != NIX"), "((x == NIX) ODA (y != NIX))");
+        assert_eq!(ausdruck("a ODA HOID b ODA HOID 3"), "((a ODA HOID b) ODA HOID 3)");
+        assert_eq!(ausdruck("PROBIER f(1) ODA HOID 2"), "PROBIER (f(1) ODA HOID 2)");
+        // "oda hoid" klein geschrieben ist dasselbe Wort.
+        assert_eq!(ausdruck("a oda hoid 1"), "(a ODA HOID 1)");
+    }
+
+    #[test]
+    fn typen_mit_vielleicht_und_fehla() {
+        let p = parse(
+            "FUNKTIAUN f(a VIELLEICHT ZOI, b LISTN VON VIELLEICHT Punkt) GIBT ZRUCK VIELLEICHT KETTN ODA FEHLA\nPASST SCHO\n\
+             FUNKTIAUN g(f FEHLA) GIBT ZRUCK NIX ODA FEHLA\nPASST SCHO\nSOG AU x VIELLEICHT Wesen = NIX OIDA",
+        );
+        let f = &p.funktionen[0];
+        assert!(matches!(&f.parameter[0].angabe, TypAngabe::Vielleicht { innen, .. } if **innen == TypAngabe::Einfach(Typ::Zoi)));
+        let TypAngabe::Liste(element) = &f.parameter[1].angabe else { panic!() };
+        assert!(matches!(&**element, TypAngabe::Vielleicht { .. }));
+        // ODA FEHLA gilt für den ganzen Typ davor.
+        let Some(TypAngabe::OderFehler { wert: Some(wert), .. }) = &f.rueckgabe_angabe else { panic!() };
+        assert!(matches!(&**wert, TypAngabe::Vielleicht { .. }));
+        let g = &p.funktionen[1];
+        assert_eq!(g.parameter[0].angabe, TypAngabe::Einfach(Typ::Fehla));
+        assert!(matches!(&g.rueckgabe_angabe, Some(TypAngabe::OderFehler { wert: None, .. })));
+        let AnweisungArt::Deklaration { angabe: Some(TypAngabe::Vielleicht { .. }), wert, .. } = &p.haupt[0].art else { panic!() };
+        assert_eq!(wert.art, AusdruckArt::Nix);
+    }
+
+    #[test]
+    fn probier_in_beiden_formen() {
+        let p = parse(
+            "PROBIER x = f(1)\n SCHREIB(x) OIDA\nWONNS SCHIEFGEHT fehla_do\n SCHREIB(fehla_do.meldung) OIDA\nPASST SCHO\n\
+             PROBIER g()\nWONNS SCHIEFGEHT\n h() OIDA\nPASST SCHO\nPROBIER g() OIDA\nSOG AU y = PROBIER f(2) OIDA",
+        );
+        let AnweisungArt::Probier { name, wert, dann, fehler_name, sunst, .. } = &p.haupt[0].art else { panic!() };
+        assert_eq!((name.as_deref(), fehler_name.as_deref()), (Some("x"), Some("fehla_do")));
+        assert_eq!((klammern(wert), dann.len(), sunst.len()), ("f(1)".to_string(), 1, 1));
+        // Ohne Namen; der Aufruf h() ist schon die erste Anweisung, nicht der Name des Fehlers.
+        let AnweisungArt::Probier { name: None, fehler_name: None, dann, sunst, .. } = &p.haupt[1].art else { panic!() };
+        assert_eq!((dann.len(), sunst.len()), (0, 1));
+        // Mit OIDA gleich dahinter: Der Fehler geht weiter.
+        assert!(matches!(&p.haupt[2].art, AnweisungArt::Ausdruck(a) if klammern(a) == "PROBIER g()"));
+        let AnweisungArt::Deklaration { wert, .. } = &p.haupt[3].art else { panic!() };
+        assert_eq!(klammern(wert), "PROBIER f(2)");
+
+        let f = fehler("PROBIER x = f(1) OIDA");
+        assert!(f.meldung.starts_with("Manst SOG AU x = PROBIER ... OIDA?"), "{}", f.meldung);
+        let f = fehler("PROBIER f(1)\nPASST SCHO");
+        assert!(f.meldung.starts_with("Noch PROBIER ghört entweda glei a OIDA"), "{}", f.meldung);
     }
 
     #[test]

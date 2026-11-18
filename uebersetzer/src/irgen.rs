@@ -19,6 +19,13 @@
 //!    geerbten zuerst; darum passt ein Objekt auch dort, wo die Elternklasse
 //!    verlangt ist).
 //!
+//!  - `VIELLEICHT T`: Ist `T` ohnehin ein Zeiger (Text, Liste, Objekt), dann
+//!    derselbe Zeiger, und NIX ist der Nullzeiger. Sonst ein Verbund
+//!    `%vN { i1 ist_da, T wert }`.
+//!  - `T ODA FEHLA` ist ein Verbund `%eN { ptr fehler, T wert }`: Ist `fehler`
+//!    null, gilt der Wert, sonst zeigt er auf den Text mit der Meldung.
+//!    Ein `FEHLA` allein ist dieser Text.
+//!
 //! # Klassen und Methoden
 //!
 //! Eine Methode ist eine Funktion, die das Objekt als ersten Wert bekommt
@@ -80,6 +87,8 @@ declare ptr @oida_zoi_zu_text(i64)
 declare ptr @oida_kommazoi_zu_text(double)
 declare i64 @oida_text_zu_zoi(ptr, i64)
 declare double @oida_text_zu_kommazoi(ptr, i64)
+declare ptr @oida_text_als_zoi(ptr, ptr)
+declare ptr @oida_text_als_kommazoi(ptr, ptr)
 declare void @oida_fehler_durch_null(i64) noreturn
 declare void @oida_fehler_schritt_null(i64) noreturn
 declare void @oida_fehler_stelle(i64, i64, i64) noreturn
@@ -279,7 +288,7 @@ const FUSS: &str = r#"
 /// (siehe [`FUSS`]). Nur bei einfachen Werten; bei ganzen Strukturen bleibt er weg.
 fn wert_hinweis(typ: Typ) -> &'static str {
     match typ {
-        Typ::Struktur(_) => "",
+        Typ::Struktur(_) | Typ::Vielleicht { zeiger: false, .. } | Typ::Ergebnis(_) => "",
         _ => ", !tbaa !4",
     }
 }
@@ -292,10 +301,13 @@ fn ir_typ(typ: Typ) -> String {
         Typ::Zoi => "i64".to_string(),
         Typ::Kommazoi => "double".to_string(),
         Typ::Jona => "i1".to_string(),
-        Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) => "ptr".to_string(),
+        Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) | Typ::Fehla => "ptr".to_string(),
+        Typ::Vielleicht { zeiger: true, .. } => "ptr".to_string(),
+        Typ::Vielleicht { nummer, zeiger: false } => format!("%v{nummer}"),
+        Typ::Ergebnis(n) => format!("%e{n}"),
         Typ::Struktur(n) => format!("%s{n}"),
         Typ::Nix => "void".to_string(),
-        Typ::Fehler => unreachable!("nach der Typprüfung gibt es keine Fehler-Typen mehr"),
+        Typ::NixWert | Typ::Fehler => unreachable!("nach der Typprüfung gibt es keine offenen Typen mehr"),
     }
 }
 
@@ -315,6 +327,12 @@ fn klassen_angaben(plaetze: usize) -> String {
     format!("{{ ptr, ptr, [{plaetze} x ptr] }}")
 }
 
+/// Kommt dieser Typ aus den Tabellen im fertigen Programm wirklich vor?
+/// (Manche Einträge sind nur Zwischenstände der Typprüfung.)
+fn brauchbar(typ: Typ) -> bool {
+    !matches!(typ, Typ::Fehler | Typ::NixWert | Typ::LeereListe)
+}
+
 /// Gibt es eine Klasse, die von dieser erbt?
 fn hat_kinder(typen: &Typen, klasse: u32) -> bool {
     typen.klassen.iter().any(|k| k.eltern == Some(klasse))
@@ -332,8 +350,12 @@ fn weiter_unten_ersetzt(typen: &Typen, klasse: u32, name: &str) -> bool {
 /// Der Befehl, der den Wert für eine weitere Stelle mitzählt (keiner, wenn es nichts zu zählen gibt).
 fn behalt_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
     match typ {
-        Typ::Kettn | Typ::Liste(_) => Some(format!("call void @oida.behalt(ptr {wert})")),
+        Typ::Kettn | Typ::Liste(_) | Typ::Fehla => Some(format!("call void @oida.behalt(ptr {wert})")),
         Typ::Klasse(_) => Some(format!("call void @oida.behalt.objekt(ptr {wert})")),
+        Typ::Vielleicht { nummer, .. } if typen.verwaltet(typ) => {
+            Some(format!("call void @oida.behalt.v{nummer}({} {wert})", ir_typ(typ)))
+        }
+        Typ::Ergebnis(n) => Some(format!("call void @oida.behalt.e{n}(%e{n} {wert})")),
         Typ::Struktur(n) if typen.verwaltet(typ) => Some(format!("call void @oida.behalt.s{n}(%s{n} {wert})")),
         _ => None,
     }
@@ -342,7 +364,11 @@ fn behalt_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
 /// Der Befehl, der den Wert loslässt.
 fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
     match typ {
-        Typ::Kettn => Some(format!("call void @oida.lass(ptr {wert})")),
+        Typ::Kettn | Typ::Fehla => Some(format!("call void @oida.lass(ptr {wert})")),
+        Typ::Vielleicht { nummer, .. } if typen.verwaltet(typ) => {
+            Some(format!("call void @oida.lass.v{nummer}({} {wert})", ir_typ(typ)))
+        }
+        Typ::Ergebnis(n) => Some(format!("call void @oida.lass.e{n}(%e{n} {wert})")),
         Typ::Liste(n) => Some(format!("call void @oida.lass.l{n}(ptr {wert})")),
         // Kann es nur genau diese Klasse sein, steht fest, wie freigegeben wird.
         Typ::Klasse(n) if hat_kinder(typen, n) => Some(format!("call void @oida.lass.objekt(ptr {wert})")),
@@ -385,6 +411,9 @@ struct Modul<'t> {
     text_nummer: HashMap<String, usize>,
     woahr: String,
     foisch: String,
+    /// Die Wörter für NIX und FEHLA (fürs Ausgeben).
+    nix: String,
+    fehla: String,
     typen: &'t Typen,
     /// Die Klassen, wie sie im Programm stehen (für die Werte, mit denen Felder beginnen).
     klassen: &'t [KlassenDef],
@@ -424,7 +453,17 @@ impl Modul<'_> {
             Typ::Struktur(n) => format!("  call void @oida.schreib.s{n}(%s{n} {wert})\n"),
             Typ::Liste(n) => format!("  call void @oida.schreib.l{n}(ptr {wert})\n"),
             Typ::Klasse(_) => format!("  call void @oida.schreib.objekt(ptr {wert})\n"),
-            Typ::LeereListe | Typ::Nix | Typ::Fehler => unreachable!("von der Typprüfung abgelehnt"),
+            Typ::Fehla => {
+                let anfang = format!("{}(", self.fehla);
+                let (anfang, ende) = (self.text(&anfang), self.text(")"));
+                format!(
+                    "  call void @oida_schreib_text(ptr {anfang})\n  call void @oida_schreib_text_zitiert(ptr {wert})\n  \
+                     call void @oida_schreib_text(ptr {ende})\n"
+                )
+            }
+            Typ::Vielleicht { nummer, .. } => format!("  call void @oida.schreib.v{nummer}({} {wert})\n", ir_typ(typ)),
+            Typ::Ergebnis(n) => format!("  call void @oida.schreib.e{n}(%e{n} {wert})\n"),
+            Typ::LeereListe | Typ::NixWert | Typ::Nix | Typ::Fehler => unreachable!("von der Typprüfung abgelehnt"),
         }
     }
 
@@ -433,6 +472,70 @@ impl Modul<'_> {
     fn hilfsfunktionen(&mut self) -> String {
         let typen = self.typen;
         let mut aus = String::new();
+        let zaehlen: [(&str, fn(&Typen, Typ, &str) -> Option<String>); 2] =
+            [("behalt", behalt_befehl), ("lass", lass_befehl)];
+        let nix = self.nix.clone();
+        let nix = self.text(&nix);
+
+        // VIELLEICHT: nur etwas tun, wenn etwas da ist.
+        for (n, innen) in typen.vielleicht.iter().enumerate() {
+            if !brauchbar(*innen) || *innen == Typ::Nix {
+                continue;
+            }
+            let zeiger = typen.zeiger(*innen);
+            let t = ir_typ(Typ::Vielleicht { nummer: n as u32, zeiger });
+            let da = if zeiger { "%da = icmp ne ptr %w, null".to_string() } else { format!("%da = extractvalue {t} %w, 0") };
+            let (holen, wert) =
+                if zeiger { (String::new(), "%w") } else { (format!("  %innen = extractvalue {t} %w, 1\n"), "%innen") };
+            if typen.verwaltet(*innen) {
+                for (wort, erzeuge) in zaehlen {
+                    let befehl = erzeuge(typen, *innen, wert).expect("ein verwalteter Typ hat einen Befehl");
+                    let _ = writeln!(
+                        aus,
+                        "define internal void @oida.{wort}.v{n}({t} %w) {{\nstart:\n  {da}\n  \
+                         br i1 %da, label %ja, label %ende\nja:\n{holen}  {befehl}\n  br label %ende\nende:\n  ret void\n}}\n"
+                    );
+                }
+            }
+            let schreiben = self.schreib_befehle(*innen, wert, true, "j");
+            let _ = writeln!(
+                aus,
+                "define internal void @oida.schreib.v{n}({t} %w) {{\nstart:\n  {da}\n  \
+                 br i1 %da, label %ja, label %nix\nja:\n{holen}{schreiben}  ret void\nnix:\n  \
+                 call void @oida_schreib_text(ptr {nix})\n  ret void\n}}\n"
+            );
+        }
+
+        // ... ODA FEHLA: Es zählt entweder der Wert oder der Fehler.
+        for (n, wert) in typen.ergebnisse.iter().enumerate() {
+            if !brauchbar(*wert) {
+                continue;
+            }
+            let anfang = format!(
+                "start:\n  %f = extractvalue %e{n} %w, 0\n  %gut = icmp eq ptr %f, null\n  \
+                 br i1 %gut, label %wert, label %fehler\nwert:"
+            );
+            for (wort, erzeuge) in zaehlen {
+                let _ = writeln!(aus, "define internal void @oida.{wort}.e{n}(%e{n} %w) {{\n{anfang}");
+                if *wert != Typ::Nix
+                    && let Some(befehl) = erzeuge(typen, *wert, "%innen")
+                {
+                    let _ = writeln!(aus, "  %innen = extractvalue %e{n} %w, 1\n  {befehl}");
+                }
+                let fehler = erzeuge(typen, Typ::Fehla, "%f").expect("ein Fehler ist ein Text");
+                let _ = writeln!(aus, "  ret void\nfehler:\n  {fehler}\n  ret void\n}}\n");
+            }
+            let _ = writeln!(aus, "define internal void @oida.schreib.e{n}(%e{n} %w) {{\n{anfang}");
+            if *wert == Typ::Nix {
+                let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {nix})");
+            } else {
+                let _ = writeln!(aus, "  %innen = extractvalue %e{n} %w, 1");
+                aus.push_str(&self.schreib_befehle(*wert, "%innen", true, "j"));
+            }
+            aus.push_str("  ret void\nfehler:\n");
+            aus.push_str(&self.schreib_befehle(Typ::Fehla, "%f", true, "jf"));
+            aus.push_str("  ret void\n}\n\n");
+        }
 
         for (n, k) in typen.klassen.iter().enumerate() {
             // Freigeben: erst loslassen, was in den Feldern steckt, dann das Objekt selbst.
@@ -615,6 +718,8 @@ struct FunktionsBau<'m, 't> {
     schleifen: Vec<Schleife>,
     /// In einer Methode: die Nummer von SÖWA (sein Platz heißt `%v<nummer>`).
     selbst: Option<usize>,
+    /// Was die Funktion zurückgibt (`Nix` auch im Hauptprogramm).
+    rueckgabe: Typ,
 }
 
 /// Was HAU OB und WEIDA über ihre Schleife wissen müssen.
@@ -649,6 +754,8 @@ fn feld_einer_variable(ausdruck: &Ausdruck) -> bool {
     match &ausdruck.art {
         AusdruckArt::Variable { .. } | AusdruckArt::Selbst { .. } => true,
         AusdruckArt::Feld { objekt, .. } => matches!(objekt.typ, Typ::Struktur(_)) && feld_einer_variable(objekt),
+        // Eine Variable, von der feststeht, dass sie nicht NIX ist.
+        AusdruckArt::Sicher { innen } => feld_einer_variable(innen),
         _ => false,
     }
 }
@@ -664,6 +771,7 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             verwaltet: vec![Vec::new()],
             schleifen: Vec::new(),
             selbst: None,
+            rueckgabe: Typ::Nix,
         }
     }
 
@@ -924,6 +1032,10 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_variablen(self.verwaltet.len());
                 match w {
                     Some((w, typ)) => self.zeile(&format!("ret {} {w}", ir_typ(typ))),
+                    // NIX ODA FEHLA: kein Fehler, also hat es geklappt.
+                    None if matches!(self.rueckgabe, Typ::Ergebnis(_)) => {
+                        self.zeile(&format!("ret {} zeroinitializer", ir_typ(self.rueckgabe)));
+                    }
                     None => self.zeile("ret void"),
                 }
                 // Was danach noch kommt, wird nie erreicht, braucht aber einen eigenen Block.
@@ -947,6 +1059,55 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 // Das Ergebnis will niemand haben.
                 let w = self.ausdruck(ausdruck);
                 self.lass(&w, ausdruck.typ);
+            }
+            AnweisungArt::Probier { name, id, wert, dann, fehler_name, fehler_id, sunst } => {
+                let wert_typ = self.modul.typen.wert_von(wert.typ).expect("die Typprüfung verlangt ... ODA FEHLA");
+                let e = self.ausdruck(wert);
+                let et = ir_typ(wert.typ);
+                let (f, gut) = (self.temp(), self.temp());
+                let m_gut = self.marke("probier_guat");
+                let m_schief = self.marke("probier_schief");
+                let m_ende = self.marke("probier_ende");
+                self.zeile(&format!("{f} = extractvalue {et} {e}, 0"));
+                self.zeile(&format!("{gut} = icmp eq ptr {f}, null"));
+                self.zeile(&format!("br i1 {gut}, label %{m_gut}, label %{m_schief}"));
+
+                // Geklappt: Der Wert gehört der neuen Variable (oder niemandem).
+                self.beginne_block(&m_gut);
+                self.verwaltet.push(Vec::new());
+                if wert_typ != Typ::Nix {
+                    let w = self.temp();
+                    self.zeile(&format!("{w} = extractvalue {et} {e}, 1"));
+                    if name.is_some() {
+                        self.platz(*id, wert_typ);
+                        self.zeile(&format!("store {} {w}, ptr %v{id}{}", ir_typ(wert_typ), wert_hinweis(wert_typ)));
+                    } else {
+                        self.lass(&w, wert_typ);
+                    }
+                }
+                for a in dann {
+                    self.anweisung(a);
+                }
+                self.lass_variablen(1);
+                self.verwaltet.pop();
+                self.zeile(&format!("br label %{m_ende}"));
+
+                // Schiefgegangen: Der Fehler gehört der neuen Variable (oder niemandem).
+                self.beginne_block(&m_schief);
+                self.verwaltet.push(Vec::new());
+                if fehler_name.is_some() {
+                    self.platz(*fehler_id, Typ::Fehla);
+                    self.zeile(&format!("store ptr {f}, ptr %v{fehler_id}, !tbaa !4"));
+                } else {
+                    self.lass(&f, Typ::Fehla);
+                }
+                for a in sunst {
+                    self.anweisung(a);
+                }
+                self.lass_variablen(1);
+                self.verwaltet.pop();
+                self.zeile(&format!("br label %{m_ende}"));
+                self.beginne_block(&m_ende);
             }
         }
     }
@@ -1036,6 +1197,10 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                     schritte.push(wurzel);
                     wurzel = liste;
                 }
+                AusdruckArt::Sicher { innen } => {
+                    schritte.push(wurzel);
+                    wurzel = innen;
+                }
                 _ => break,
             }
         }
@@ -1063,6 +1228,19 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             .collect();
         for (schritt, stelle) in schritte.iter().zip(stellen) {
             match &schritt.art {
+                // Die Meldung eines Fehlers: Der Fehler ist selbst dieser Text.
+                AusdruckArt::Feld { objekt, .. } if objekt.typ == Typ::Fehla => {}
+                // Sicher nicht NIX: Steht ein Merker davor, liegt der Wert dahinter.
+                AusdruckArt::Sicher { innen } => {
+                    if let Typ::Vielleicht { zeiger: false, .. } = innen.typ {
+                        let t = self.temp();
+                        self.zeile(&format!(
+                            "{t} = getelementptr inbounds {}, ptr {zeiger}, i32 0, i32 1",
+                            ir_typ(innen.typ)
+                        ));
+                        zeiger = t;
+                    }
+                }
                 AusdruckArt::Feld { objekt, nummer, .. } => {
                     let t = self.temp();
                     if let Typ::Klasse(k) = objekt.typ {
@@ -1119,7 +1297,10 @@ impl<'m, 't> FunktionsBau<'m, 't> {
         }
         match &ausdruck.art {
             AusdruckArt::Text(inhalt) => (self.modul.text(inhalt), false),
-            AusdruckArt::Variable { .. } | AusdruckArt::Feld { .. } | AusdruckArt::Selbst { .. }
+            AusdruckArt::Variable { .. }
+            | AusdruckArt::Feld { .. }
+            | AusdruckArt::Selbst { .. }
+            | AusdruckArt::Sicher { .. }
                 if feld_einer_variable(ausdruck) =>
             {
                 let (zeiger, _) = self.ort(ausdruck);
@@ -1148,7 +1329,8 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             AusdruckArt::Variable { .. }
             | AusdruckArt::Feld { .. }
             | AusdruckArt::Stelle { .. }
-            | AusdruckArt::Selbst { .. } => {
+            | AusdruckArt::Selbst { .. }
+            | AusdruckArt::Sicher { .. } => {
                 let (zeiger, wurzel) = self.ort(ausdruck);
                 let t = self.temp();
                 self.zeile(&format!(
@@ -1209,8 +1391,32 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.eingebaut(*funktion, argumente, ausdruck.typ, ausdruck.pos.zeile)
             }
             AusdruckArt::Umwandlung { ziel, innen } => {
-                if innen.typ == *ziel || matches!(ziel, Typ::Klasse(_)) {
+                // Derselbe Wert unter einem anderen Typ: Im Speicher ändert sich nichts.
+                let gleich = innen.typ == *ziel
+                    || matches!(ziel, Typ::Klasse(_) | Typ::Vielleicht { zeiger: true, .. })
+                    || matches!((innen.typ, *ziel), (Typ::Kettn, Typ::Fehla) | (Typ::Fehla, Typ::Kettn));
+                if gleich {
                     return self.ausdruck(innen);
+                }
+                let (it, zt) = (ir_typ(innen.typ), ir_typ(*ziel));
+                match *ziel {
+                    // Ein Wert, wo etwas fehlen darf: den Merker "ist da" dazu.
+                    Typ::Vielleicht { .. } => {
+                        let w = self.ausdruck(innen);
+                        let (a, b) = (self.temp(), self.temp());
+                        self.zeile(&format!("{a} = insertvalue {zt} zeroinitializer, i1 true, 0"));
+                        self.zeile(&format!("{b} = insertvalue {zt} {a}, {it} {w}, 1"));
+                        return b;
+                    }
+                    // Ein Wert oder ein Fehler, wo beides sein darf.
+                    Typ::Ergebnis(_) => {
+                        let w = self.ausdruck(innen);
+                        let t = self.temp();
+                        let stelle = if innen.typ == Typ::Fehla { 0 } else { 1 };
+                        self.zeile(&format!("{t} = insertvalue {zt} zeroinitializer, {it} {w}, {stelle}"));
+                        return t;
+                    }
+                    _ => {}
                 }
                 // Aus einem Text wird beim Umwandeln nur gelesen.
                 let (w, eigen) = self.geliehen(innen);
@@ -1310,6 +1516,25 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_wenn_eigen(&o, objekt.typ, o_eigen);
                 t
             }
+            AusdruckArt::Nix => match ausdruck.typ {
+                Typ::Vielleicht { zeiger: true, .. } => "null".to_string(),
+                _ => "zeroinitializer".to_string(),
+            },
+            AusdruckArt::IstNix { innen, ist } => {
+                let (w, eigen) = self.geliehen(innen);
+                let da = self.ist_da(&w, innen.typ);
+                let t = if *ist {
+                    let t = self.temp();
+                    self.zeile(&format!("{t} = xor i1 {da}, true"));
+                    t
+                } else {
+                    da
+                };
+                self.lass_wenn_eigen(&w, innen.typ, eigen);
+                t
+            }
+            AusdruckArt::OdaHoid { links, rechts } => self.oda_hoid(links, rechts, ausdruck.typ),
+            AusdruckArt::Probier { innen } => self.probier(innen),
             AusdruckArt::ElternAufruf { name, argumente, klasse } => {
                 let typen = self.modul.typen;
                 let selbst = self.selbst.expect("die Typprüfung lässt das nur in Methoden zu");
@@ -1332,6 +1557,90 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 }
             }
         }
+    }
+
+    /// Ist bei einem `VIELLEICHT`-Wert etwas da?
+    fn ist_da(&mut self, wert: &str, typ: Typ) -> String {
+        let t = self.temp();
+        match typ {
+            Typ::Vielleicht { zeiger: true, .. } => self.zeile(&format!("{t} = icmp ne ptr {wert}, null")),
+            _ => self.zeile(&format!("{t} = extractvalue {} {wert}, 0", ir_typ(typ))),
+        }
+        t
+    }
+
+    /// `links ODA HOID rechts`: Rechts wird nur ausgerechnet, wenn links NIX oder ein Fehler ist.
+    fn oda_hoid(&mut self, links: &Ausdruck, rechts: &Ausdruck, typ: Typ) -> String {
+        let l = self.ausdruck(links);
+        let lt = ir_typ(links.typ);
+        let m_da = self.marke("hoid_da");
+        let m_sunst = self.marke("hoid_sunst");
+        let m_ende = self.marke("hoid_ende");
+        // Was links da ist, wandert in das Ergebnis; es bleibt gleich oft gezählt.
+        let wert_da = if matches!(links.typ, Typ::Ergebnis(_)) {
+            let (f, gut, w) = (self.temp(), self.temp(), self.temp());
+            self.zeile(&format!("{f} = extractvalue {lt} {l}, 0"));
+            self.zeile(&format!("{gut} = icmp eq ptr {f}, null"));
+            self.zeile(&format!("br i1 {gut}, label %{m_da}, label %{m_sunst}"));
+            self.beginne_block(&m_da);
+            self.zeile(&format!("{w} = extractvalue {lt} {l}, 1"));
+            self.zeile(&format!("br label %{m_ende}"));
+            self.beginne_block(&m_sunst);
+            // Den Fehler will hier niemand mehr.
+            self.lass(&f, Typ::Fehla);
+            w
+        } else {
+            let da = self.ist_da(&l, links.typ);
+            self.zeile(&format!("br i1 {da}, label %{m_da}, label %{m_sunst}"));
+            self.beginne_block(&m_da);
+            let w = if let Typ::Vielleicht { zeiger: false, .. } = links.typ {
+                let w = self.temp();
+                self.zeile(&format!("{w} = extractvalue {lt} {l}, 1"));
+                w
+            } else {
+                l.clone()
+            };
+            self.zeile(&format!("br label %{m_ende}"));
+            self.beginne_block(&m_sunst);
+            w
+        };
+        let r = self.ausdruck(rechts);
+        let von_rechts = self.block.clone();
+        self.zeile(&format!("br label %{m_ende}"));
+        self.beginne_block(&m_ende);
+        let t = self.temp();
+        self.zeile(&format!("{t} = phi {} [ {wert_da}, %{m_da} ], [ {r}, %{von_rechts} ]", ir_typ(typ)));
+        t
+    }
+
+    /// `PROBIER ausdruck`: Bei einem Fehler hört die Funktion hier auf und
+    /// gibt ihn weiter. Die Typprüfung lässt das nur ganz vorne in einer
+    /// Anweisung zu, also hängt hier kein Zwischenwert in der Luft.
+    fn probier(&mut self, innen: &Ausdruck) -> String {
+        let e = self.ausdruck(innen);
+        let et = ir_typ(innen.typ);
+        let (f, gut) = (self.temp(), self.temp());
+        let m_weiter = self.marke("probier_weida");
+        let m_raus = self.marke("probier_raus");
+        self.zeile(&format!("{f} = extractvalue {et} {e}, 0"));
+        self.zeile(&format!("{gut} = icmp eq ptr {f}, null"));
+        self.zeile(&format!("br i1 {gut}, label %{m_weiter}, label %{m_raus}"));
+
+        // Aufräumen wie bei GIB ZRUCK, dann den Fehler als Ergebnis dieser Funktion zurückgeben.
+        self.beginne_block(&m_raus);
+        self.lass_variablen(self.verwaltet.len());
+        let rt = ir_typ(self.rueckgabe);
+        let weiter = self.temp();
+        self.zeile(&format!("{weiter} = insertvalue {rt} zeroinitializer, ptr {f}, 0"));
+        self.zeile(&format!("ret {rt} {weiter}"));
+
+        self.beginne_block(&m_weiter);
+        if self.modul.typen.wert_von(innen.typ) == Some(Typ::Nix) {
+            return String::new();
+        }
+        let w = self.temp();
+        self.zeile(&format!("{w} = extractvalue {et} {e}, 1"));
+        w
     }
 
     /// WOAHR oder FOISCH als Text. Das sind feste Texte, die niemand zählt.
@@ -1378,6 +1687,24 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 ));
                 self.lass_wenn_eigen(&l, argumente[0].typ, l_eigen);
                 return String::new();
+            }
+            Eingebaut::ZoiAus | Eingebaut::KommazoiAus => {
+                // Die Laufzeit schreibt die Zahl in den Platz und gibt den Fehler zurück (null: keiner).
+                let (zahl, funktion) = if funktion == Eingebaut::ZoiAus {
+                    ("i64", "oida_text_als_zoi")
+                } else {
+                    ("double", "oida_text_als_kommazoi")
+                };
+                let (text, eigen) = self.geliehen(&argumente[0]);
+                let platz = self.versteckter_platz(zahl);
+                let (f, w, a, b) = (self.temp(), self.temp(), self.temp(), self.temp());
+                let et = ir_typ(ergebnis);
+                self.zeile(&format!("{f} = call ptr @{funktion}(ptr {text}, ptr {platz})"));
+                self.zeile(&format!("{w} = load {zahl}, ptr {platz}"));
+                self.zeile(&format!("{a} = insertvalue {et} zeroinitializer, ptr {f}, 0"));
+                self.zeile(&format!("{b} = insertvalue {et} {a}, {zahl} {w}, 1"));
+                self.lass_wenn_eigen(&text, Typ::Kettn, eigen);
+                return b;
             }
             Eingebaut::Laenge if matches!(argumente[0].typ, Typ::Liste(_)) => {
                 let (l, l_eigen) = self.geliehen(&argumente[0]);
@@ -1431,7 +1758,9 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             Eingebaut::Zufall if werte.is_empty() => "call double @oida_zufall()".to_string(),
             Eingebaut::Zufall => format!("call i64 @oida_zufall_zoi(i64 {}, i64 {}, i64 {zeile})", w(0), w(1)),
             Eingebaut::Samen => format!("call void @oida_zufall_samen(i64 {})", w(0)),
-            Eingebaut::Dazu | Eingebaut::Raus => unreachable!("oben erledigt"),
+            Eingebaut::Dazu | Eingebaut::Raus | Eingebaut::ZoiAus | Eingebaut::KommazoiAus => {
+                unreachable!("oben erledigt")
+            }
         };
         let t = if ergebnis == Typ::Nix {
             self.zeile(&befehl);
@@ -1524,7 +1853,9 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             (Typ::Jona, _) => format!("icmp {} i1 {l}, {r}", vergleich_ganz(op)),
             (Typ::Kommazoi, _) => format!("fcmp {} double {l}, {r}", vergleich_komma(op)),
             // Zwei Objekte sind gleich, wenn es dasselbe Objekt ist.
-            (Typ::Klasse(_), _) => format!("icmp {} ptr {l}, {r}", vergleich_ganz(op)),
+            (Typ::Klasse(_) | Typ::Vielleicht { zeiger: true, .. }, _) => {
+                format!("icmp {} ptr {l}, {r}", vergleich_ganz(op))
+            }
             (Typ::Kettn, _) => {
                 let v = self.temp();
                 self.zeile(&format!("{v} = call i32 @oida_text_vergleich(ptr {l}, ptr {r})"));
@@ -1605,6 +1936,8 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         text_nummer: HashMap::new(),
         woahr: wb.wort(Schluessel::True).to_string(),
         foisch: wb.wort(Schluessel::False).to_string(),
+        nix: wb.wort(Schluessel::Null).to_string(),
+        fehla: wb.wort(Schluessel::Error).to_string(),
         typen: &programm.typen,
         klassen: &programm.klassen,
     };
@@ -1615,6 +1948,7 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     let methoden = programm.klassen.iter().flat_map(|k| k.methoden.iter().map(move |m| (Some(k.name.as_str()), m)));
     for (klasse, f) in ohne_klasse.chain(methoden) {
         let mut bau = FunktionsBau::neu(&mut modul);
+        bau.rueckgabe = f.rueckgabe;
         let mut kopf = Vec::new();
         if klasse.is_some() {
             // SÖWA ist nur geliehen: Wer die Methode aufruft, hält das Objekt fest.
@@ -1635,6 +1969,10 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         if f.rueckgabe == Typ::Nix {
             bau.lass_variablen(1);
             bau.zeile("ret void");
+        } else if programm.typen.wert_von(f.rueckgabe) == Some(Typ::Nix) {
+            // NIX ODA FEHLA: Wer bis hierher kommt, hat es geschafft.
+            bau.lass_variablen(1);
+            bau.zeile(&format!("ret {} zeroinitializer", ir_typ(f.rueckgabe)));
         } else {
             // Die Typprüfung stellt sicher, dass jeder Weg mit GIB ZRUCK aufhört.
             bau.zeile("unreachable");
@@ -1670,6 +2008,20 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     for (n, s) in programm.typen.strukturen.iter().enumerate() {
         let felder: Vec<String> = s.felder.iter().map(|(_, typ)| ir_typ(*typ)).collect();
         let _ = writeln!(aus, "%s{n} = type {{ {} }}", felder.join(", "));
+    }
+    // VIELLEICHT (wo der Wert kein Zeiger ist): Merker "ist da", dann der Wert.
+    for (n, innen) in programm.typen.vielleicht.iter().enumerate() {
+        if brauchbar(*innen) && *innen != Typ::Nix && !programm.typen.zeiger(*innen) {
+            let _ = writeln!(aus, "%v{n} = type {{ i1, {} }}", ir_typ(*innen));
+        }
+    }
+    // ... ODA FEHLA: der Fehler (null: keiner), dann der Wert.
+    for (n, wert) in programm.typen.ergebnisse.iter().enumerate() {
+        if *wert == Typ::Nix {
+            let _ = writeln!(aus, "%e{n} = type {{ ptr }}");
+        } else if brauchbar(*wert) {
+            let _ = writeln!(aus, "%e{n} = type {{ ptr, {} }}", ir_typ(*wert));
+        }
     }
     // Ein Objekt: Zähler, Angaben zur Klasse, dann die Felder.
     for (n, k) in programm.typen.klassen.iter().enumerate() {
@@ -1741,6 +2093,40 @@ mod tests {
         // Bei w steht erst beim Laufen fest, wie freigegeben wird; bei g schon jetzt.
         assert!(haupt.contains("call void @oida.lass.objekt(ptr"), "{haupt}");
         assert!(haupt.contains("call void @oida.lass.k1(ptr"), "{haupt}");
+    }
+
+    #[test]
+    fn vielleicht_im_speicher() {
+        let ir = ir("KLASSE Wesen\n name KETTN\nPASST SCHO\n\
+             SOG AU w VIELLEICHT Wesen = NIX OIDA\nSOG AU z VIELLEICHT ZOI = NIX OIDA\nSOG AU t VIELLEICHT KETTN = NIX OIDA\n\
+             SCHREIB(w == NIX, z != NIX, z ODA HOID 3) OIDA\nz = 5 OIDA\nSCHREIB(z + 1) OIDA");
+        // Ein Objekt oder Text, der fehlen kann: derselbe Zeiger, NIX ist null.
+        let haupt = haupt(&ir);
+        assert!(haupt.contains("store ptr null, ptr %v"), "{haupt}");
+        assert!(haupt.contains("icmp ne ptr"), "{haupt}");
+        // Eine Zahl, die fehlen kann: ein Merker davor.
+        assert!(ir.contains(" = type { i1, i64 }"), "{ir}");
+        assert!(!ir.contains(" = type { i1, ptr }"), "{ir}");
+        assert!(haupt.contains("zeroinitializer, ptr %v"), "{haupt}");
+        // Nach z = 5 steht fest, dass z da ist: Es wird ohne Nachschauen gelesen.
+        assert!(haupt.contains("i32 0, i32 1\n"), "{haupt}");
+    }
+
+    #[test]
+    fn fehler_im_speicher() {
+        let ir = ir("FUNKTIAUN teil(a ZOI, b ZOI) GIBT ZRUCK ZOI ODA FEHLA\n \
+             WENN b == 0 DAUN\n  GIB ZRUCK FEHLA(\"na\") OIDA\n PASST SCHO\n GIB ZRUCK a / b OIDA\nPASST SCHO\n\
+             FUNKTIAUN zwamoi(a ZOI) GIBT ZRUCK NIX ODA FEHLA\n SOG AU q = PROBIER teil(a, 2) OIDA\n SCHREIB(q) OIDA\nPASST SCHO\n\
+             PROBIER zwamoi(4)\nWONNS SCHIEFGEHT f\n SCHREIB(f.meldung) OIDA\nPASST SCHO");
+        // Der Fehler (null: keiner), dann der Wert; ohne Wert nur der Fehler.
+        assert!(ir.contains("%e0 = type { ptr, i64 }") && ir.contains("%e1 = type { ptr }"), "{ir}");
+        assert!(ir.contains("define internal %e0 @\"oida.f.teil\"(i64 %p0, i64 %p1)"), "{ir}");
+        // PROBIER: Bei einem Fehler hört zwamoi auf und gibt ihn in seinem eigenen Typ weiter.
+        let anfang = ir.find("define internal %e1 @\"oida.f.zwamoi\"").expect("zwamoi gibt es");
+        let zwamoi = &ir[anfang..anfang + ir[anfang..].find("\n}\n").unwrap()];
+        assert!(zwamoi.contains("insertvalue %e1 zeroinitializer, ptr %t"), "{zwamoi}");
+        // Am Ende ohne GIB ZRUCK: hat geklappt.
+        assert!(zwamoi.trim_end().ends_with("ret %e1 zeroinitializer"), "{zwamoi}");
     }
 
     #[test]

@@ -1,0 +1,202 @@
+# VIELLEICHT und NIX: Werte, die fehlen können, und das Nachschauen davor.
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = 10
+    ziel VIELLEICHT Wesen = NIX
+    spitznom VIELLEICHT KETTN = NIX
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK SÖWA.name + " (" + (SÖWA.spitznom ODA HOID "ohne Spitznom") + ")" OIDA
+    PASST SCHO
+
+    FUNKTIAUN wen() GIBT ZRUCK KETTN
+        # Ein Feld kann sich ändern: zuerst in eine Variable holen, dann nachschauen.
+        SOG AU z = SÖWA.ziel OIDA
+        WENN z == NIX DAUN
+            GIB ZRUCK SÖWA.name + " hot ka Ziel" OIDA
+        PASST SCHO
+        GIB ZRUCK SÖWA.name + " zielt auf " + z.name OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Gegner ERBT VON Wesen
+    staerke ZOI = 3
+PASST SCHO
+
+# Ein Knoten zeigt auf den nächsten, der letzte auf NIX.
+KLASSE Knoten
+    wert ZOI
+    naechster VIELLEICHT Knoten
+PASST SCHO
+
+FUNKTIAUN such(liste LISTN VON Wesen, name KETTN) GIBT ZRUCK VIELLEICHT Wesen
+    FIA JEDE w IN liste TUA
+        WENN w.name == name DAUN
+            GIB ZRUCK w OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+FUNKTIAUN erste_grosse(zahlen LISTN VON ZOI, ab ZOI) GIBT ZRUCK VIELLEICHT ZOI
+    FIA JEDE z IN zahlen TUA
+        WENN z >= ab DAUN
+            GIB ZRUCK z OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+FUNKTIAUN mitte(a VIELLEICHT Punkt, b VIELLEICHT Punkt) GIBT ZRUCK VIELLEICHT Punkt
+    WENN a == NIX ODA b == NIX DAUN
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+    GIB ZRUCK Punkt((a.x + b.x) / 2, (a.y + b.y) / 2) OIDA
+PASST SCHO
+
+FUNKTIAUN laenge(k VIELLEICHT Knoten) GIBT ZRUCK ZOI
+    SOG AU n = 0 OIDA
+    SOG AU hier = k OIDA
+    SOLONG hier != NIX TUA
+        n += 1 OIDA
+        hier = hier.naechster OIDA
+    PASST SCHO
+    GIB ZRUCK n OIDA
+PASST SCHO
+
+SCHREIB("--- Zoin") OIDA
+SOG AU zahlen = [3, 8, 15] OIDA
+SOG AU g = erste_grosse(zahlen, 5) OIDA
+SOG AU kane = erste_grosse(zahlen, 100) OIDA
+SCHREIB(g, kane, g == NIX, kane == NIX, NIX != g) OIDA
+SCHREIB(g ODA HOID -1, kane ODA HOID -1, erste_grosse(zahlen, 10) ODA HOID 0) OIDA
+WENN g != NIX DAUN
+    SCHREIB("gfundn:", g + 1) OIDA
+    g += 10 OIDA
+    SCHREIB(g) OIDA
+SUNST
+    SCHREIB("nix gfundn") OIDA
+PASST SCHO
+WENN kane != NIX UND kane > 3 DAUN
+    SCHREIB("des kummt ned") OIDA
+SUNST WENN kane == NIX ODA kane < 0 DAUN
+    SCHREIB("kane is NIX") OIDA
+PASST SCHO
+SOG AU merk VIELLEICHT ZOI = 7 OIDA
+SCHREIB(merk + 1) OIDA
+merk = NIX OIDA
+SCHREIB(merk, merk ODA HOID 0) OIDA
+merk = 9 OIDA
+SCHREIB(merk * 2) OIDA
+
+SCHREIB("--- Texte") OIDA
+SOG AU hansi = Wesen("Hansi") OIDA
+SOG AU sepp = Gegner("Sepp") OIDA
+SCHREIB(hansi.sog(), hansi.spitznom) OIDA
+hansi.spitznom = "Hansl" + "i" OIDA
+SCHREIB(hansi.sog(), hansi.spitznom) OIDA
+SOG AU sn = hansi.spitznom OIDA
+WENN sn != NIX DAUN
+    SCHREIB(LÄNGN(sn), SCHREI(sn)) OIDA
+    # Hier ist sn ein ganz normaler Text: weitergeben, kopieren, in eine Liste tun.
+    SOG AU kopie = sn OIDA
+    SOG AU nomen = [sn, kopie + "!"] OIDA
+    HAU EINE(nomen, sn) OIDA
+    SCHREIB(kopie, nomen) OIDA
+PASST SCHO
+hansi.spitznom = NIX OIDA
+SCHREIB(hansi.sog(), sn) OIDA
+
+SCHREIB("--- Objekte") OIDA
+SCHREIB(hansi.wen()) OIDA
+hansi.ziel = sepp OIDA
+sepp.ziel = such([hansi, sepp], "Hansi") OIDA
+SCHREIB(hansi.wen(), "/", sepp.wen()) OIDA
+SCHREIB(hansi.ziel == sepp, hansi.ziel == hansi, sepp.ziel != NIX) OIDA
+SOG AU olle LISTN VON Wesen = [hansi, sepp, Wesen("Resi")] OIDA
+SOG AU wer = such(olle, "Resi") OIDA
+SOG AU kana = such(olle, "Neamd") OIDA
+SCHREIB(wer == NIX, kana == NIX, kana) OIDA
+WENN wer == NIX DAUN
+    SCHREIB("des kummt ned") OIDA
+SUNST
+    HAU EINE(olle, wer) OIDA
+    SOG AU nomoi = wer OIDA
+    SCHREIB(LÄNGN(olle), nomoi == olle[3], nomoi.name) OIDA
+    HAU AUSSE(olle, 3) OIDA
+    wer.lebn -= 4 OIDA
+    wer.spitznom = "Reserl" OIDA
+    SCHREIB(wer.sog(), wer.lebn, olle[2].lebn) OIDA
+PASST SCHO
+SCHREIB((such(olle, "Sepp") ODA HOID hansi).name, (kana ODA HOID hansi).name) OIDA
+# Ein Gegner oder NIX passt, wo ein Wesen oder NIX verlangt ist.
+SOG AU vg VIELLEICHT Gegner = sepp OIDA
+SOG AU vw VIELLEICHT Wesen = vg OIDA
+SCHREIB(vw == sepp, vg.staerke) OIDA
+# Der Kreis muss auf, sonst bleiben die zwei übrig.
+hansi.ziel = NIX OIDA
+sepp.ziel = NIX OIDA
+
+SCHREIB("--- Strukturen") OIDA
+SOG AU p VIELLEICHT Punkt = Punkt(2, 4) OIDA
+SOG AU q VIELLEICHT Punkt = NIX OIDA
+SCHREIB(p, q, mitte(p, Punkt(4, 8)), mitte(p, q)) OIDA
+p.x = 20 OIDA
+p.y += 1 OIDA
+SCHREIB(p.x + p.y, (q ODA HOID Punkt(0, 0)).x) OIDA
+q = p OIDA
+WENN q != NIX DAUN
+    q.x = 99 OIDA
+    SCHREIB(q.x, p.x) OIDA
+PASST SCHO
+
+SCHREIB("--- Listen") OIDA
+SOG AU plaetze = [hansi, NIX, sepp, NIX] OIDA
+SOG AU frei = 0 OIDA
+FIA JEDE platz IN plaetze TUA
+    WENN platz == NIX DAUN
+        frei += 1 OIDA
+        WEIDA OIDA
+    PASST SCHO
+    SCHREIB(platz.name) OIDA
+PASST SCHO
+plaetze[1] = Wesen("Neich") OIDA
+plaetze[0] = NIX OIDA
+SCHREIB(frei, plaetze) OIDA
+SOG AU punkte LISTN VON VIELLEICHT Punkt = [NIX, Punkt(1, 1)] OIDA
+HAU EINE(punkte, NIX) OIDA
+HAU EINE(punkte, Punkt(5, 5)) OIDA
+SCHREIB(punkte, LÄNGN(punkte)) OIDA
+SOG AU voi VIELLEICHT LISTN VON ZOI = NIX OIDA
+SCHREIB(voi, LÄNGN(voi ODA HOID [])) OIDA
+voi = [1, 2] OIDA
+HAU EINE(voi, 3) OIDA
+SCHREIB(voi, voi[2]) OIDA
+
+SCHREIB("--- Kettn aus Knotn") OIDA
+SOG AU kopf VIELLEICHT Knoten = NIX OIDA
+SCHREIB(laenge(kopf)) OIDA
+FIA i VON 1 BIS 5 TUA
+    kopf = Knoten(i * i, kopf) OIDA
+PASST SCHO
+SOG AU summe = 0 OIDA
+SOG AU hier = kopf OIDA
+SOLONG hier != NIX TUA
+    summe += hier.wert OIDA
+    hier = hier.naechster OIDA
+PASST SCHO
+SCHREIB(laenge(kopf), summe) OIDA
+# Den zweiten Knoten heraushängen.
+WENN kopf != NIX DAUN
+    SOG AU zweiter = kopf.naechster OIDA
+    WENN zweiter != NIX DAUN
+        kopf.naechster = zweiter.naechster OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(laenge(kopf)) OIDA

@@ -1,0 +1,41 @@
+--- PROBIER mit WONNS SCHIEFGEHT
+10 / 2 = 5
+Fehla: Durch nix kaun ma ned teilen. 29
+FEHLA("Durch nix kaun ma ned teilen.")
+schiefgaunga, wurscht warum
+hot klappt, wos aussakummt is wurscht
+wieda schiefgaunga
+--- ODA HOID
+3 -1
+8 / 2 = 4 nix
+4 Bruch(0, 1)
+--- weidagebn
+8 und 2 -> 8 / 2 = 4
+8 und 0 -> schief: Durch nix kaun ma ned teilen.
+ocht und 2 -> schief: Aus "ocht" kaun i ka gaunze Zoi mochn.
+8 und nix -> schief: Aus "" kaun i ka gaunze Zoi mochn.
+1000 und 0 -> schief: Durch nix kaun ma ned teilen.
+1000 und 10 -> long: 100
+--- Zoin aus Text
+42 0 2.5
+17 FEHLA("Aus "siebzehn" kaun i ka gaunze Zoi mochn.") FEHLA("Aus "" kaun i ka Kommazoi mochn.")
+17 1.5
+--- Methoden
+Hansi hot no 70
+Hansi hot nur 70
+20 50
+FEHLA("Hansi hot nur 20") 50
+-1 NIX FEHLA("Wos soll i mit 0 aufangen?")
+--- Fehla ois Wert
+guats -> schief: Aus "neun" kaun i ka gaunze Zoi mochn.
+beide[0] -> 9 / 3 = 3
+beide[1] -> schief: Aus "neun" kaun i ka gaunze Zoi mochn.
+"9 / 3 = 3" 3
+0 NIX neamd
+1 "Nummer 1" Nummer 1
+2 "Nummer 2" Nummer 2
+[FEHLA("Minus gibt's ned"), FEHLA("no ana"), FEHLA("Durch nix kaun ma ned teilen.")] 3 Minus gibt's ned
+NIX WOAHR
+FEHLA("no ana") no ana!
+--- vü auf amoi
+9503 7250

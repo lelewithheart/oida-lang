@@ -50,6 +50,21 @@
     "body": ["SOG AU ${1:name} = ${2:0} OIDA"],
     "description": "Variable ansagen"
   },
+  "SOG AU VIELLEICHT": {
+    "prefix": "sogauvielleicht",
+    "body": ["SOG AU ${1:name} VIELLEICHT ${2:ZOI} = NIX OIDA"],
+    "description": "Variable, in der etwas fehlen darf"
+  },
+  "WENN != NIX": {
+    "prefix": "wennnix",
+    "body": ["WENN ${1:name} != NIX DAUN", "\t$0", "PASST SCHO"],
+    "description": "Nachschauen, ob etwas da ist"
+  },
+  "PROBIER": {
+    "prefix": "probier",
+    "body": ["PROBIER ${1:wert} = ${2:funktion()}", "\t$3", "WONNS SCHIEFGEHT ${4:fehla}", "\t$0", "PASST SCHO"],
+    "description": "Etwas probieren und den Fehler auffangen"
+  },
   "SCHREIB": {
     "prefix": "schreib",
     "body": ["SCHREIB($1) OIDA"],

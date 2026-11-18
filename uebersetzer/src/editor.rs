@@ -33,8 +33,9 @@ pub enum Art {
 fn art_von_schluessel(schluessel: Schluessel) -> Art {
     match schluessel {
         Schluessel::Oida => Art::Endwort,
-        Schluessel::Int | Schluessel::Float | Schluessel::Boolean | Schluessel::Text => Art::Typ,
-        Schluessel::True | Schluessel::False => Art::Wahrheitswert,
+        Schluessel::Int | Schluessel::Float | Schluessel::Boolean | Schluessel::Text | Schluessel::Error => Art::Typ,
+        // NIX ist ein fester Wert wie WOAHR und FOISCH.
+        Schluessel::True | Schluessel::False | Schluessel::Null => Art::Wahrheitswert,
         Schluessel::Pi => Art::Zahl,
         s if s.ist_funktion() => Art::Funktion,
         _ => Art::Schluesselwort,
@@ -295,14 +296,20 @@ fn sprach_einstellungen(wb: &Woerterbuch) -> String {
     let funktion = auswahl(wb, &[Schluessel::Function, Schluessel::Struct, Schluessel::Class]);
     let oeffner = auswahl(wb, &[Schluessel::Then, Schluessel::Do]);
     // (Auch die Zählschleife hört in der ersten Zeile mit TUA auf.)
+    // SUNST und WONNS SCHIEFGEHT: Der Block davor hört auf, der nächste beginnt.
     let sunst = auswahl(wb, &[Schluessel::Else]);
+    let auffangen = auswahl(wb, &[Schluessel::Catch]);
+    let probier = auswahl(wb, &[Schluessel::Try]);
+    let oida = auswahl(wb, &[Schluessel::Oida]);
     let ende = auswahl(wb, &[Schluessel::End]);
     // Eine Zeile weiter einrücken nach: FUNKTIAUN ..., STRUKTUR ..., KLASSE ..., ... DAUN, ... TUA, SUNST
+    // und nach PROBIER ..., wenn die Zeile nicht mit OIDA aufhört (dann folgt der Block),
+    // und nach WONNS SCHIEFGEHT [name].
     let mehr = format!(
-        r"^\s*(?:{funktion}{danach}.*|.*{davor}{oeffner}|{sunst})\s*(?:#.*)?$"
+        r"^\s*(?:{funktion}{danach}.*|.*{davor}{oeffner}|{sunst}|{auffangen}{danach}.*|{probier}{danach}(?!.*{davor}{oida}\s*(?:#.*)?$).*)\s*(?:#.*)?$"
     );
-    // Zurückrücken bei: PASST SCHO, SUNST
-    let weniger = format!(r"^\s*(?:{ende}|{sunst}){danach}");
+    // Zurückrücken bei: PASST SCHO, SUNST, WONNS SCHIEFGEHT
+    let weniger = format!(r"^\s*(?:{ende}|{sunst}|{auffangen}){danach}");
     format!(
         r##"{{
   "//": "Erzeugt mit: oida --editor-dateien <ordner>. Nicht von Hand ändern.",
@@ -433,6 +440,30 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             "Variable ansagen",
         ),
         (
+            format!("{} {}", w(Declare), w(Maybe)),
+            format!("{}{}", w(Declare).replace(' ', ""), w(Maybe)),
+            vec![format!("{} ${{1:name}} {} ${{2:{}}} = {} {}", w(Declare), w(Maybe), w(Int), w(Null), w(Oida))],
+            "Variable, in der etwas fehlen darf",
+        ),
+        (
+            format!("{} != {}", w(If), w(Null)),
+            format!("{}{}", w(If), w(Null)),
+            vec![format!("{} ${{1:name}} != {} {}", w(If), w(Null), w(Then)), "\t$0".into(), w(End).to_string()],
+            "Nachschauen, ob etwas da ist",
+        ),
+        (
+            w(Try).to_string(),
+            w(Try).to_string(),
+            vec![
+                format!("{} ${{1:wert}} = ${{2:funktion()}}", w(Try)),
+                "\t$3".into(),
+                format!("{} ${{4:fehla}}", w(Catch)),
+                "\t$0".into(),
+                w(End).to_string(),
+            ],
+            "Etwas probieren und den Fehler auffangen",
+        ),
+        (
             w(Print).to_string(),
             w(Print).to_string(),
             vec![format!("{}($1) {}", w(Print), w(Oida))],
@@ -468,6 +499,11 @@ pub fn dateien(wb: &Woerterbuch) -> Vec<(&'static str, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Die Einstellungen für VS Code (Einrücken und Klammern) als Text.
+    fn dateien_text(wb: &Woerterbuch) -> String {
+        sprach_einstellungen(wb)
+    }
 
     fn wb() -> Woerterbuch {
         Woerterbuch::eingebaut()
@@ -510,6 +546,31 @@ mod tests {
         assert!(tokens.contains("[3,10,4,0],[3,15,4,8]"), "{tokens}");
         // w.sog(): eine Variable und eine Methode.
         assert!(tokens.contains("[7,0,1,3],[7,2,3,2]"), "{tokens}");
+    }
+
+    #[test]
+    fn nix_fehla_und_probier() {
+        let json = untersuche(
+            "FUNKTIAUN f() GIBT ZRUCK ZOI ODA FEHLA\n GIB ZRUCK 1 OIDA\nPASST SCHO\n\
+             SOG AU x VIELLEICHT ZOI = NIX OIDA\nPROBIER q = f()\nWONNS SCHIEFGEHT\nPASST SCHO",
+            &wb(),
+        );
+        assert_eq!(feld(&json, "fehler"), "[]");
+        let tokens = feld(&json, "tokens");
+        // ODA (Wort der Sprache) und FEHLA (Typ) in der ersten Zeile.
+        assert!(tokens.contains("[0,29,3,0],[0,33,5,1]"), "{tokens}");
+        // VIELLEICHT ist ein Wort der Sprache, NIX ein fester Wert.
+        assert!(tokens.contains("[3,9,10,0],[3,20,3,1]") && tokens.contains("[3,26,3,6]"), "{tokens}");
+        // PROBIER und WONNS SCHIEFGEHT (zwei Wörter, ein Stück).
+        assert!(tokens.contains("[4,0,7,0]") && tokens.contains("[5,0,16,0]"), "{tokens}");
+    }
+
+    #[test]
+    fn einruecken_nach_probier() {
+        let json = dateien_text(&wb());
+        // Die Regeln stehen als reguläre Ausdrücke in der Datei; hier wird nur geprüft, dass die Wörter drin sind.
+        assert!(json.contains("PROBIER|PROBIERS") || json.contains("PROBIERS|PROBIER"), "{json}");
+        assert!(json.contains("WONNS\\\\s+SCHIEFGEHT"), "{json}");
     }
 
     #[test]

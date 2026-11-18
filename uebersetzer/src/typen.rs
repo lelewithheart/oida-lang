@@ -8,8 +8,19 @@
 //!  - fügt die Umwandlung ZOI -> KOMMAZOI ein, wo eine ganze Zahl auf eine
 //!    Kommazahl trifft,
 //!  - sammelt alle Fehler ein, statt beim ersten aufzuhören.
+//!
+//! # Was NIX sein kann
+//!
+//! Ein Wert vom Typ `VIELLEICHT T` kann fehlen. Verwenden kann man ihn erst,
+//! wenn feststeht, dass er da ist. Bei einer Variable verfolgt die
+//! Typprüfung das mit ([`Pruefer::sicher`]): Nach `WENN x != NIX DAUN` gilt
+//! `x` im Block als `T`, ebenso nach `WENN x == NIX DAUN GIB ZRUCK ...`,
+//! rechts von `x != NIX UND` und nach einer Zuweisung mit einem echten Wert.
+//! Eine Zuweisung, die wieder NIX bringen kann, hebt das auf. Bei Feldern
+//! und Listenstellen geht das nicht (jemand anderer könnte sie inzwischen
+//! ändern); die holt man sich zuerst in eine Variable.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 use crate::fehler::{Fehler, Position};
@@ -47,6 +58,13 @@ struct Pruefer<'a> {
     methoden_klasse: Option<u32>,
     /// In einer Methode: die Klasse und die Nummer von SÖWA.
     selbst: Option<(u32, usize)>,
+    /// Die `VIELLEICHT`-Variablen (ihre Nummern), von denen an dieser Stelle
+    /// feststeht, dass sie nicht NIX sind.
+    sicher: HashSet<usize>,
+    /// Darf der Ausdruck, der als nächster geprüft wird, mit PROBIER beginnen?
+    /// Das geht nur ganz vorne in einer Anweisung: Dort hängt noch kein
+    /// Zwischenwert in der Luft, wenn die Funktion mittendrin aufhört.
+    probier_erlaubt: bool,
 }
 
 /// Das Wort, unter dem eine eingebaute Funktion im Wörterbuch steht.
@@ -76,6 +94,8 @@ fn wort_von(funktion: Eingebaut) -> Schluessel {
         Eingebaut::Samen => Schluessel::Seed,
         Eingebaut::Dazu => Schluessel::Add,
         Eingebaut::Raus => Schluessel::Remove,
+        Eingebaut::ZoiAus => Schluessel::ParseInt,
+        Eingebaut::KommazoiAus => Schluessel::ParseFloat,
     }
 }
 
@@ -104,7 +124,9 @@ fn fassungen(funktion: Eingebaut) -> &'static [(&'static [Typ], Typ)] {
         Eingebaut::Min | Eingebaut::Max => &[(&[Z, Z], Z), (&[K, K], K)],
         Eingebaut::Zufall => &[(&[], K), (&[Z, Z], Z)],
         Eingebaut::Samen => &[(&[Z], Nix)],
-        Eingebaut::Dazu | Eingebaut::Raus => unreachable!("Listenfunktionen werden eigens geprüft"),
+        Eingebaut::Dazu | Eingebaut::Raus | Eingebaut::ZoiAus | Eingebaut::KommazoiAus => {
+            unreachable!("werden eigens geprüft, weil ihr Typ nicht in dieser Tabelle stehen kann")
+        }
     }
 }
 
@@ -141,6 +163,8 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         klassen_nummern: HashMap::new(),
         methoden_klasse: None,
         selbst: None,
+        sicher: HashSet::new(),
+        probier_erlaubt: false,
     };
 
     p.strukturen(&programm.strukturen, &programm.klassen);
@@ -194,6 +218,7 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
     p.funktion = None;
     p.selbst = None;
     p.schleifen = 0;
+    p.sicher.clear();
     for a in &mut programm.haupt {
         p.anweisung(a);
     }
@@ -232,6 +257,20 @@ impl Pruefer<'_> {
                 self.typ_wort(self.typen.element(typ).unwrap_or(Typ::Fehler))
             ),
             Typ::LeereListe => format!("laare {}", self.wort(Schluessel::List)),
+            Typ::Vielleicht { .. } => format!(
+                "{} {}",
+                self.wort(Schluessel::Maybe),
+                self.typ_wort(self.typen.innen(typ).unwrap_or(Typ::Fehler))
+            ),
+            Typ::Ergebnis(_) => {
+                let vorne = match self.typen.wert_von(typ) {
+                    Some(Typ::Nix) | None => self.wort(Schluessel::Null).to_string(),
+                    Some(wert) => self.typ_wort(wert),
+                };
+                format!("{vorne} {} {}", self.wort(Schluessel::Or), self.wort(Schluessel::Error))
+            }
+            Typ::Fehla => self.wort(Schluessel::Error).to_string(),
+            Typ::NixWert => self.wort(Schluessel::Null).to_string(),
             Typ::Nix | Typ::Fehler => "nix".to_string(),
         }
     }
@@ -240,6 +279,7 @@ impl Pruefer<'_> {
     fn typ_name(&self, typ: Typ) -> String {
         match typ {
             Typ::Nix | Typ::Fehler => "nix".to_string(),
+            Typ::NixWert => self.wort(Schluessel::Null).to_string(),
             _ => format!("a {}", self.typ_wort(typ)),
         }
     }
@@ -270,14 +310,41 @@ impl Pruefer<'_> {
                 Typ::Fehler => Typ::Fehler,
                 element => self.typen.liste_von(element),
             },
+            TypAngabe::Vielleicht { innen, pos } => match self.typ_aus(innen) {
+                Typ::Fehler => Typ::Fehler,
+                Typ::Vielleicht { .. } => {
+                    let meldung = format!("Zwamoi {} hintaranaund bringt nix.", self.wort(Schluessel::Maybe));
+                    self.melde(*pos, meldung);
+                    Typ::Fehler
+                }
+                wert => self.typen.vielleicht_von(wert),
+            },
+            TypAngabe::OderFehler { wert: None, .. } => self.typen.ergebnis_von(Typ::Nix),
+            TypAngabe::OderFehler { wert: Some(innen), pos } => match self.typ_aus(innen) {
+                Typ::Fehler => Typ::Fehler,
+                Typ::Fehla => {
+                    let meldung = format!(
+                        "{f} {} {f}? Wos ka Wert hot, gibt {} {} {f} zruck.",
+                        self.wort(Schluessel::Or),
+                        self.wort(Schluessel::Null),
+                        self.wort(Schluessel::Or),
+                        f = self.wort(Schluessel::Error)
+                    );
+                    self.melde(*pos, meldung);
+                    Typ::Fehler
+                }
+                wert => self.typen.ergebnis_von(wert),
+            },
         }
     }
 
-    /// Steht der Typ ganz fest? Bei `[]` ohne Angabe ist offen, wovon es eine Liste ist.
+    /// Steht der Typ ganz fest? Bei `[]` ohne Angabe ist offen, wovon es eine
+    /// Liste ist, bei `NIX` allein, was fehlen soll.
     fn fertig(&self, typ: Typ) -> bool {
         match typ {
-            Typ::LeereListe => false,
+            Typ::LeereListe | Typ::NixWert => false,
             Typ::Liste(_) => self.typen.element(typ).is_some_and(|e| self.fertig(e)),
+            Typ::Vielleicht { .. } => self.typen.innen(typ).is_some_and(|t| self.fertig(t)),
             _ => true,
         }
     }
@@ -286,6 +353,18 @@ impl Pruefer<'_> {
     fn fertig_verlangt(&mut self, ausdruck: &Ausdruck) -> bool {
         if self.fertig(ausdruck.typ) {
             return true;
+        }
+        if ausdruck.typ == Typ::NixWert {
+            let meldung = format!(
+                "Bei {nix} waaß i ned, wos do fehln soll. Sog's dazua, zum Beispü: {} x {} {} = {nix} {}",
+                self.wort(Schluessel::Declare),
+                self.wort(Schluessel::Maybe),
+                self.wort(Schluessel::Int),
+                self.wort(Schluessel::Oida),
+                nix = self.wort(Schluessel::Null),
+            );
+            self.melde(ausdruck.pos, meldung);
+            return false;
         }
         let meldung = format!(
             "Bei [] waaß i ned, wos fia a {liste} des sei soll. Sog's dazua, zum Beispü: {} x {liste} {} {} = [] {}",
@@ -359,6 +438,9 @@ impl Pruefer<'_> {
             Typ::Struktur(n) if tiefe < self.typen.strukturen.len() => {
                 self.typen.strukturen[n as usize].felder.iter().any(|(_, t)| self.enthaelt(*t, gesucht, tiefe + 1))
             }
+            // Auch VIELLEICHT Punkt und Punkt ODA FEHLA tragen den Punkt direkt in sich.
+            Typ::Vielleicht { .. } => self.typen.innen(typ).is_some_and(|t| self.enthaelt(t, gesucht, tiefe)),
+            Typ::Ergebnis(_) => self.typen.wert_von(typ).is_some_and(|t| self.enthaelt(t, gesucht, tiefe)),
             _ => false,
         }
     }
@@ -743,6 +825,7 @@ impl Pruefer<'_> {
     fn funktion(&mut self, f: &mut Funktion) {
         self.bereiche = vec![HashMap::new()];
         self.schleifen = 0;
+        self.sicher.clear();
         self.funktion = Some((f.name.clone(), f.rueckgabe));
         // In einer Methode gibt es SÖWA; es bekommt eine Nummer wie eine Variable.
         self.selbst = self.methoden_klasse.map(|klasse| {
@@ -756,7 +839,9 @@ impl Pruefer<'_> {
         for a in &mut f.rumpf {
             self.anweisung(a);
         }
-        if f.rueckgabe != Typ::Nix && f.rueckgabe != Typ::Fehler && !gibt_sicher_zruck(&f.rumpf) {
+        // NIX ODA FEHLA: Wer ohne GIB ZRUCK ans Ende kommt, hat es geschafft.
+        let ohne_wert = f.rueckgabe == Typ::Nix || self.typen.wert_von(f.rueckgabe) == Some(Typ::Nix);
+        if !ohne_wert && f.rueckgabe != Typ::Fehler && !gibt_sicher_zruck(&f.rumpf) {
             let meldung = format!(
                 "De {} '{}' muass {} zruckgebn, oba ned jeda Weg hört mit {} auf.",
                 self.wort(Schluessel::Function),
@@ -782,6 +867,7 @@ impl Pruefer<'_> {
         let pos = anweisung.pos;
         match &mut anweisung.art {
             AnweisungArt::Deklaration { name, angabe, wert, id } => {
+                self.probier_erlaubt = true;
                 let wert_typ = self.ausdruck(wert);
                 let verlangt = angabe.as_ref().map(|a| self.typ_aus(a));
                 let mut var_typ = verlangt.unwrap_or(wert_typ);
@@ -795,15 +881,37 @@ impl Pruefer<'_> {
                         self.typ_name(wert_typ)
                     );
                     self.melde(wert.pos, meldung);
-                } else if !self.fertig_verlangt(wert) {
+                } else if var_typ != Typ::Fehler && !self.fertig_verlangt(wert) {
                     var_typ = Typ::Fehler;
                 }
                 // Erst jetzt eintragen: "SOG AU x = x" soll das äußere x meinen.
                 *id = self.neue_variable(name, var_typ, pos);
+                // Steht gleich ein echter Wert drin, ist die Variable fürs Erste nicht NIX.
+                let echter_wert = !matches!(wert_typ, Typ::Vielleicht { .. } | Typ::NixWert | Typ::Fehler);
+                if matches!(var_typ, Typ::Vielleicht { .. }) && echter_wert {
+                    self.sicher.insert(*id);
+                }
             }
             AnweisungArt::Zuweisung { ziel, op, wert } => {
+                self.probier_erlaubt = true;
                 let wert_typ = self.ausdruck(wert);
-                let ziel_typ = self.ausdruck(ziel);
+                let mut ziel_typ = self.ausdruck(ziel);
+                // Zuweisen darf man auch NIX: Hier zählt die Variable, nicht ihr sicherer Wert.
+                if op.is_none() && matches!(ziel.art, AusdruckArt::Sicher { .. }) {
+                    sicher_auspacken(ziel);
+                    ziel_typ = ziel.typ;
+                }
+                // Danach gilt für die Variable, was hineingekommen ist.
+                if op.is_none()
+                    && matches!(ziel_typ, Typ::Vielleicht { .. })
+                    && let AusdruckArt::Variable { id, .. } = &ziel.art
+                {
+                    if matches!(wert_typ, Typ::Vielleicht { .. } | Typ::NixWert | Typ::Fehler) {
+                        self.sicher.remove(id);
+                    } else {
+                        self.sicher.insert(*id);
+                    }
+                }
                 if ziel_typ == Typ::Fehler || wert_typ == Typ::Fehler {
                     return;
                 }
@@ -840,25 +948,85 @@ impl Pruefer<'_> {
                     Some(_) => false,
                 };
                 if !passt {
+                    let wos = match ergebnis {
+                        Typ::NixWert => format!("ka {}", self.wort(Schluessel::Null)),
+                        _ => self.typ_name(ergebnis).replacen("a ", "ka ", 1),
+                    };
                     let meldung = format!(
-                        "'{}' is {}, do kaunst {} einetuan.",
+                        "'{}' is {}, do kaunst {wos} einetuan.",
                         ziel_text(ziel),
-                        self.typ_name(ziel_typ),
-                        self.typ_name(ergebnis).replacen("a ", "ka ", 1)
+                        self.typ_name(ziel_typ)
                     );
                     self.melde(wert.pos, meldung);
                 }
             }
             AnweisungArt::Wenn { bedingung, dann, sunst } => {
                 self.bedingung(bedingung, Schluessel::If);
+                // Was die Bedingung über NIX sagt, gilt im jeweiligen Zweig.
+                let (wahr, falsch) = fakten(bedingung);
+                let vorher = self.sicher.clone();
+                self.sicher.extend(wahr);
                 self.block(dann);
+                let nach_dann = std::mem::replace(&mut self.sicher, vorher);
+                self.sicher.extend(falsch);
                 self.block(sunst);
+                let nach_sunst = std::mem::take(&mut self.sicher);
+                self.sicher = nach_zweigen(nach_dann, verlaesst(dann), nach_sunst, verlaesst(sunst));
             }
             AnweisungArt::Solong { bedingung, rumpf } => {
+                // Was im Rumpf neu zugewiesen wird, ist beim nächsten Durchlauf nicht mehr sicher.
+                self.vergiss_zugewiesene(rumpf);
                 self.bedingung(bedingung, Schluessel::While);
+                let (wahr, _) = fakten(bedingung);
+                let vorher = self.sicher.clone();
+                self.sicher.extend(wahr);
                 self.schleifen += 1;
                 self.block(rumpf);
                 self.schleifen -= 1;
+                self.sicher = vorher;
+            }
+            AnweisungArt::Probier { name, id, wert, dann, fehler_name, fehler_id, sunst } => {
+                let typ = self.ausdruck(wert);
+                let mut wert_typ = Typ::Fehler;
+                if typ != Typ::Fehler {
+                    match self.typen.wert_von(typ) {
+                        Some(t) => wert_typ = t,
+                        None => {
+                            let meldung = format!(
+                                "Noch {} brauch i wos, des schiefgehn kaun (a {} mit ... {} {}), des do is oba {}.",
+                                self.wort(Schluessel::Try),
+                                self.wort(Schluessel::Function),
+                                self.wort(Schluessel::Or),
+                                self.wort(Schluessel::Error),
+                                self.typ_name(typ)
+                            );
+                            self.melde(wert.pos, meldung);
+                        }
+                    }
+                }
+                if let (Some(name), Typ::Nix) = (&name, wert_typ) {
+                    let meldung = format!("Do kummt ka Wert zruck. Loss '{name} =' weg.");
+                    self.melde(pos, meldung);
+                    wert_typ = Typ::Fehler;
+                }
+                let vorher = self.sicher.clone();
+                // Hat es geklappt: der Wert, sicher da.
+                self.bereiche.push(HashMap::new());
+                if let Some(name) = name {
+                    *id = self.neue_variable(name, wert_typ, pos);
+                }
+                self.block(dann);
+                self.bereiche.pop();
+                let nach_dann = std::mem::replace(&mut self.sicher, vorher);
+                // Ist es schiefgegangen: der Fehler.
+                self.bereiche.push(HashMap::new());
+                if let Some(fehler_name) = fehler_name {
+                    *fehler_id = self.neue_variable(fehler_name, Typ::Fehla, pos);
+                }
+                self.block(sunst);
+                self.bereiche.pop();
+                let nach_sunst = std::mem::take(&mut self.sicher);
+                self.sicher = nach_zweigen(nach_dann, verlaesst(dann), nach_sunst, verlaesst(sunst));
             }
             AnweisungArt::Fia { name, id, von, bis, schritt, rumpf } => {
                 self.zoi_verlangt(von, Schluessel::From);
@@ -872,12 +1040,15 @@ impl Pruefer<'_> {
                     }
                 }
                 // Die Zählvariable gilt nur in der Schleife.
+                self.vergiss_zugewiesene(rumpf);
+                let vorher = self.sicher.clone();
                 self.bereiche.push(HashMap::new());
                 *id = self.neue_variable(name, Typ::Zoi, pos);
                 self.schleifen += 1;
                 self.block(rumpf);
                 self.schleifen -= 1;
                 self.bereiche.pop();
+                self.sicher = vorher;
             }
             AnweisungArt::FiaJede { name, id, liste, rumpf } => {
                 let listen_typ = self.ausdruck(liste);
@@ -898,16 +1069,20 @@ impl Pruefer<'_> {
                     }
                 }
                 // Das Element gilt nur in der Schleife.
+                self.vergiss_zugewiesene(rumpf);
+                let vorher = self.sicher.clone();
                 self.bereiche.push(HashMap::new());
                 *id = self.neue_variable(name, element, pos);
                 self.schleifen += 1;
                 self.block(rumpf);
                 self.schleifen -= 1;
                 self.bereiche.pop();
+                self.sicher = vorher;
             }
             AnweisungArt::HauOb => self.nur_in_schleife(Schluessel::Break, pos),
             AnweisungArt::Weida => self.nur_in_schleife(Schluessel::Continue, pos),
             AnweisungArt::GibZruck { wert } => {
+                self.probier_erlaubt = wert.is_some();
                 let wert_typ = wert.as_mut().map(|w| self.ausdruck(w));
                 let Some((fname, rueckgabe)) = self.funktion.clone() else {
                     let meldung = format!(
@@ -920,6 +1095,8 @@ impl Pruefer<'_> {
                 };
                 match (wert, rueckgabe) {
                     (None, Typ::Nix) => {}
+                    // NIX ODA FEHLA: ohne Wert heißt "hat geklappt".
+                    (None, _) if self.typen.wert_von(rueckgabe) == Some(Typ::Nix) => {}
                     (None, _) => {
                         let meldung = format!(
                             "De {} '{fname}' muass {} zruckgebn. Noch {} fehlt da Wert.",
@@ -966,15 +1143,27 @@ impl Pruefer<'_> {
                 }
             }
             AnweisungArt::Ausdruck(ausdruck) => {
-                self.ausdruck(ausdruck);
+                self.probier_erlaubt = true;
+                let typ = self.ausdruck(ausdruck);
                 let aufruf = matches!(
                     ausdruck.art,
                     AusdruckArt::Aufruf { .. }
                         | AusdruckArt::Eingebaut { .. }
                         | AusdruckArt::Methode { .. }
                         | AusdruckArt::ElternAufruf { .. }
+                        | AusdruckArt::Probier { .. }
                 );
-                if !aufruf {
+                if matches!(typ, Typ::Ergebnis(_)) {
+                    // Einen Fehler darf man nicht einfach übersehen.
+                    let meldung = format!(
+                        "Do kaun wos schiefgehn, des derfst ned afoch wegschmeißn. \
+                         Schreib {p} davua (daun geht da {} weida) oda fang eam mit {p} ... {} auf.",
+                        self.wort(Schluessel::Error),
+                        self.wort(Schluessel::Catch),
+                        p = self.wort(Schluessel::Try),
+                    );
+                    self.melde(ausdruck.pos, meldung);
+                } else if !aufruf {
                     self.melde(ausdruck.pos, "Des rechnet wos aus und schmeißt's glei wieda weg. Wos soll des?");
                 }
             }
@@ -1018,6 +1207,85 @@ impl Pruefer<'_> {
         }
     }
 
+    /// Vor einer Schleife: Variablen, denen im Rumpf etwas zugewiesen wird,
+    /// gelten nicht mehr als sicher. Beim zweiten Durchlauf könnte NIX drinstehen.
+    fn vergiss_zugewiesene(&mut self, rumpf: &[Anweisung]) {
+        let mut namen = Vec::new();
+        sammle_zugewiesene(rumpf, &mut namen);
+        for name in namen {
+            if let Some(id) = self.finde_variable(&name).map(|v| v.id) {
+                self.sicher.remove(&id);
+            }
+        }
+    }
+
+    /// Der Hinweis, wenn jemand etwas verwenden will, das NIX oder ein Fehler sein könnte.
+    fn nix_hinweis(&self, ausdruck: &Ausdruck, typ: Typ) -> Option<String> {
+        let nix = self.wort(Schluessel::Null);
+        match typ {
+            Typ::Vielleicht { .. } => Some(match &ausdruck.art {
+                AusdruckArt::Variable { name, .. } => format!(
+                    "'{name}' kunnt {nix} sei. Schau z'erst noch: {} {name} != {nix} {} ... (oda nimm {}).",
+                    self.wort(Schluessel::If),
+                    self.wort(Schluessel::Then),
+                    self.wort(Schluessel::OrElse)
+                ),
+                _ => format!(
+                    "Des kunnt {nix} sei. Tua's z'erst in a Variable und schau noch: \
+                     {} x = ... {}  {} x != {nix} {} ...",
+                    self.wort(Schluessel::Declare),
+                    self.wort(Schluessel::Oida),
+                    self.wort(Schluessel::If),
+                    self.wort(Schluessel::Then)
+                ),
+            }),
+            Typ::Ergebnis(_) => Some(format!(
+                "Do kunnt a {} drin sei. Nimm z'erst {} oda {}.",
+                self.wort(Schluessel::Error),
+                self.wort(Schluessel::Try),
+                self.wort(Schluessel::OrElse)
+            )),
+            _ => None,
+        }
+    }
+
+    /// `x == NIX` und `x != NIX`: Aus dem Vergleich wird die Frage, ob etwas da ist.
+    fn ist_nix(&mut self, ausdruck: &mut Ausdruck) -> Typ {
+        let pos = ausdruck.pos;
+        let AusdruckArt::Binaer { op, links, rechts } = &mut ausdruck.art else { unreachable!() };
+        let ist = *op == BinaerOp::Gleich;
+        let anderes = if matches!(links.art, AusdruckArt::Nix) { rechts } else { links };
+        let mut innen = std::mem::replace(&mut **anderes, Ausdruck::neu(AusdruckArt::Nix, pos));
+        let mut typ = self.ausdruck(&mut innen);
+        // Nachschauen darf man auch, wo es schon feststeht.
+        if matches!(innen.art, AusdruckArt::Sicher { .. }) {
+            sicher_auspacken(&mut innen);
+            typ = innen.typ;
+        }
+        let ergebnis = match typ {
+            Typ::Fehler => Typ::Fehler,
+            Typ::Vielleicht { .. } => Typ::Jona,
+            Typ::NixWert => {
+                let meldung = format!("{nix} mit {nix} vergleichn bringt nix.", nix = self.wort(Schluessel::Null));
+                self.melde(pos, meldung);
+                Typ::Fehler
+            }
+            _ => {
+                let meldung = format!(
+                    "{} kaun ned {nix} sei, do gibt's nix zum Nochschaun. Des geht nur bei {} ...",
+                    self.typ_name(typ).replacen("a ", "A ", 1),
+                    self.wort(Schluessel::Maybe),
+                    nix = self.wort(Schluessel::Null)
+                );
+                self.melde(innen.pos, meldung);
+                Typ::Fehler
+            }
+        };
+        ausdruck.art = AusdruckArt::IstNix { innen: Box::new(innen), ist };
+        ausdruck.typ = ergebnis;
+        ergebnis
+    }
+
     // --------------------------------------------------------- Ausdrücke
 
     /// Passt der Ausdruck dorthin, wo `ziel` verlangt wird? Aus einer ZOI
@@ -1029,6 +1297,40 @@ impl Pruefer<'_> {
         }
         if ausdruck.typ == Typ::Zoi && ziel == Typ::Kommazoi {
             einpacken(ausdruck, Typ::Kommazoi);
+            return true;
+        }
+        // Wo etwas fehlen darf, passt NIX und jeder Wert, der dort sein darf.
+        if let Some(innen) = self.typen.innen(ziel) {
+            if ausdruck.typ == Typ::NixWert {
+                ausdruck.typ = ziel;
+                return true;
+            }
+            if let Some(von) = self.typen.innen(ausdruck.typ) {
+                // VIELLEICHT Gegner passt, wo VIELLEICHT Wesen verlangt ist.
+                if let (Typ::Klasse(a), Typ::Klasse(b)) = (von, innen)
+                    && self.typen.erbt_von(a, b)
+                {
+                    einpacken(ausdruck, ziel);
+                    return true;
+                }
+                return false;
+            }
+            if matches!(ausdruck.typ, Typ::Nix | Typ::Ergebnis(_)) || !self.anpassen(ausdruck, innen) {
+                return false;
+            }
+            einpacken(ausdruck, ziel);
+            return true;
+        }
+        // Wo ein Wert oder ein Fehler verlangt ist, passt beides.
+        if let Some(wert) = self.typen.wert_von(ziel) {
+            if ausdruck.typ == Typ::Fehla {
+                einpacken(ausdruck, ziel);
+                return true;
+            }
+            if matches!(ausdruck.typ, Typ::Nix | Typ::Ergebnis(_)) || wert == Typ::Nix || !self.anpassen(ausdruck, wert) {
+                return false;
+            }
+            einpacken(ausdruck, ziel);
             return true;
         }
         // Ein Gegner ist auch ein Wesen: Wo die Elternklasse verlangt ist, passt jedes Kind.
@@ -1057,6 +1359,13 @@ impl Pruefer<'_> {
     /// Bestimmt den Typ eines Ausdrucks und trägt ihn ein.
     fn ausdruck(&mut self, ausdruck: &mut Ausdruck) -> Typ {
         let pos = ausdruck.pos;
+        // Gilt nur für diesen einen Ausdruck, nicht für die darin.
+        let probier_erlaubt = std::mem::take(&mut self.probier_erlaubt);
+        if let AusdruckArt::Binaer { op: BinaerOp::Gleich | BinaerOp::Ungleich, links, rechts } = &ausdruck.art
+            && (matches!(links.art, AusdruckArt::Nix) || matches!(rechts.art, AusdruckArt::Nix))
+        {
+            return self.ist_nix(ausdruck);
+        }
         // Heißt die "Funktion" wie eine Struktur oder Klasse, wird ein neuer Wert gebaut.
         if let AusdruckArt::Aufruf { name, .. } = &ausdruck.art {
             if let Some(&nummer) = self.struktur_nummern.get(name) {
@@ -1108,7 +1417,19 @@ impl Pruefer<'_> {
             AusdruckArt::Binaer { op, links, rechts } => {
                 let op = *op;
                 let l = self.ausdruck(links);
+                // Rechts von UND gilt, was links nachgeschaut wurde (x != NIX UND x.lebt());
+                // rechts von ODA das Gegenteil (x == NIX ODA x.lebt()).
+                let (wahr, falsch) = fakten(links);
+                let fakten = match op {
+                    BinaerOp::Und => wahr,
+                    BinaerOp::Oda => falsch,
+                    _ => Vec::new(),
+                };
+                let dazu: Vec<usize> = fakten.into_iter().filter(|id| self.sicher.insert(*id)).collect();
                 let r = self.ausdruck(rechts);
+                for id in dazu {
+                    self.sicher.remove(&id);
+                }
                 self.binaer(op, links, rechts, l, r, pos)
             }
             AusdruckArt::Aufruf { name, argumente } => {
@@ -1134,6 +1455,9 @@ impl Pruefer<'_> {
                             | (Typ::Zoi, Typ::Kettn)
                             | (Typ::Kommazoi, Typ::Kettn)
                             | (Typ::Jona, Typ::Kettn)
+                            // FEHLA("..."): Ein Fehler ist ein Text mit der Meldung.
+                            | (Typ::Kettn, Typ::Fehla)
+                            | (Typ::Fehla, Typ::Kettn)
                     );
                 if von == Typ::Fehler {
                     Typ::Fehler
@@ -1193,8 +1517,23 @@ impl Pruefer<'_> {
                             Typ::Fehler
                         }
                     }
+                } else if objekt_typ == Typ::Fehla {
+                    // Ein Fehler hat genau ein Feld: seine Meldung.
+                    if name == "meldung" {
+                        *nummer = 0;
+                        Typ::Kettn
+                    } else {
+                        let meldung = format!(
+                            "A {} hot nur des Föd 'meldung', a Föd '{name}' gibt's do ned.",
+                            self.wort(Schluessel::Error)
+                        );
+                        self.melde(pos, meldung);
+                        Typ::Fehler
+                    }
                 } else {
-                    let meldung = format!("{} hot kane Föda.", self.typ_name(objekt_typ).replacen("a ", "A ", 1));
+                    let meldung = self.nix_hinweis(objekt, objekt_typ).unwrap_or_else(|| {
+                        format!("{} hot kane Föda.", self.typ_name(objekt_typ).replacen("a ", "A ", 1))
+                    });
                     self.melde(pos, meldung);
                     Typ::Fehler
                 }
@@ -1243,9 +1582,13 @@ impl Pruefer<'_> {
                 }
             },
             AusdruckArt::Methode { objekt, name, argumente, nummer } => {
-                let objekt_typ = self.ausdruck(objekt);
+                let mut objekt_typ = self.ausdruck(objekt);
                 let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
                 let name = name.clone();
+                if let Some(meldung) = self.nix_hinweis(objekt, objekt_typ) {
+                    self.melde(pos, meldung);
+                    objekt_typ = Typ::Fehler;
+                }
                 match self.methode(objekt_typ, &name, argumente, &typen, pos) {
                     Some((stelle, rueckgabe)) => {
                         *nummer = stelle;
@@ -1264,8 +1607,113 @@ impl Pruefer<'_> {
                     None => Typ::Fehler,
                 }
             }
+            AusdruckArt::Nix => Typ::NixWert,
+            // Die zwei entstehen erst hier; ein zweites Mal kommt niemand vorbei.
+            AusdruckArt::IstNix { .. } => Typ::Jona,
+            AusdruckArt::Sicher { .. } => ausdruck.typ,
+            AusdruckArt::OdaHoid { links, rechts } => {
+                let mut l = self.ausdruck(links);
+                if matches!(links.art, AusdruckArt::Sicher { .. }) {
+                    sicher_auspacken(links);
+                    l = links.typ;
+                }
+                let r = self.ausdruck(rechts);
+                let ziel = match l {
+                    Typ::Fehler => Typ::Fehler,
+                    Typ::Vielleicht { .. } => self.typen.innen(l).unwrap_or(Typ::Fehler),
+                    Typ::Ergebnis(_) if self.typen.wert_von(l) != Some(Typ::Nix) => {
+                        self.typen.wert_von(l).unwrap_or(Typ::Fehler)
+                    }
+                    Typ::Ergebnis(_) => {
+                        let meldung = format!(
+                            "Do kummt ka Wert zruck, fia den ma an Ersotz bräucht. Nimm {} ... {}.",
+                            self.wort(Schluessel::Try),
+                            self.wort(Schluessel::Catch)
+                        );
+                        self.melde(links.pos, meldung);
+                        Typ::Fehler
+                    }
+                    _ => {
+                        let meldung = format!(
+                            "Vua {} ghört wos, des {} oda a {} sei kunnt, des do is oba {}.",
+                            self.wort(Schluessel::OrElse),
+                            self.wort(Schluessel::Null),
+                            self.wort(Schluessel::Error),
+                            self.typ_name(l)
+                        );
+                        self.melde(links.pos, meldung);
+                        Typ::Fehler
+                    }
+                };
+                if ziel == Typ::Fehler || r == Typ::Fehler {
+                    Typ::Fehler
+                } else if !self.anpassen(rechts, ziel) {
+                    let meldung = format!(
+                        "Noch {} brauch i {}, des do is oba {}.",
+                        self.wort(Schluessel::OrElse),
+                        self.typ_name(ziel),
+                        self.typ_name(r)
+                    );
+                    self.melde(rechts.pos, meldung);
+                    Typ::Fehler
+                } else {
+                    ziel
+                }
+            }
+            AusdruckArt::Probier { innen } => {
+                let typ = self.ausdruck(innen);
+                let probier = self.wort(Schluessel::Try).to_string();
+                if !probier_erlaubt {
+                    let meldung = format!(
+                        "{probier} muass gaunz vuan stehn, zum Beispü: {} x = {probier} f() {}",
+                        self.wort(Schluessel::Declare),
+                        self.wort(Schluessel::Oida)
+                    );
+                    self.melde(pos, meldung);
+                    Typ::Fehler
+                } else if typ == Typ::Fehler {
+                    Typ::Fehler
+                } else if let Some(wert) = self.typen.wert_von(typ) {
+                    let gibt_weiter = self.funktion.as_ref().is_some_and(|(_, r)| matches!(r, Typ::Ergebnis(_)));
+                    if gibt_weiter {
+                        wert
+                    } else {
+                        let meldung = format!(
+                            "{probier} gibt an {f} weida. Des geht nur in ana {}, de söwa an {f} zruckgebn kaun \
+                             ({} ... {} {f}). Sunst fang eam auf: {probier} ... {} ... {}",
+                            self.wort(Schluessel::Function),
+                            self.wort(Schluessel::Returns),
+                            self.wort(Schluessel::Or),
+                            self.wort(Schluessel::Catch),
+                            self.wort(Schluessel::End),
+                            f = self.wort(Schluessel::Error),
+                        );
+                        self.melde(pos, meldung);
+                        Typ::Fehler
+                    }
+                } else {
+                    let meldung = format!(
+                        "{probier} braucht wos, des schiefgehn kaun (a {} mit ... {} {}), des do is oba {}.",
+                        self.wort(Schluessel::Function),
+                        self.wort(Schluessel::Or),
+                        self.wort(Schluessel::Error),
+                        self.typ_name(typ)
+                    );
+                    self.melde(innen.pos, meldung);
+                    Typ::Fehler
+                }
+            }
         };
         ausdruck.typ = typ;
+        // Eine Variable, von der hier feststeht, dass sie nicht NIX ist, zählt als ihr Wert.
+        if let AusdruckArt::Variable { id, .. } = &ausdruck.art
+            && self.sicher.contains(id)
+            && let Some(innen) = self.typen.innen(typ)
+        {
+            let alt = std::mem::replace(ausdruck, Ausdruck::neu(AusdruckArt::Nix, pos));
+            *ausdruck = Ausdruck { art: AusdruckArt::Sicher { innen: Box::new(alt) }, pos, typ: innen };
+            return innen;
+        }
         typ
     }
 
@@ -1290,6 +1738,11 @@ impl Pruefer<'_> {
         };
         if gemeinsam == Typ::Zoi && typen.contains(&Typ::Kommazoi) {
             gemeinsam = Typ::Kommazoi;
+        }
+        // Steht irgendwo NIX oder etwas, das NIX sein kann, darf in der ganzen Liste etwas fehlen.
+        let fehlt_was = typen.iter().any(|t| matches!(t, Typ::NixWert | Typ::Vielleicht { .. }));
+        if fehlt_was && !matches!(gemeinsam, Typ::Vielleicht { .. }) {
+            gemeinsam = self.typen.vielleicht_von(gemeinsam);
         }
         // Objekte verschiedener Klassen: Es gilt die nächste Klasse, von der alle erben.
         for typ in &typen {
@@ -1364,7 +1817,9 @@ impl Pruefer<'_> {
             return Typ::Fehler;
         }
         // Zwei Objekte vergleichen heißt fragen: Ist es dasselbe Objekt?
-        if let (Typ::Klasse(a), Typ::Klasse(b)) = (l, r)
+        // Das geht auch, wenn eines davon NIX sein kann.
+        let kern = |t: Typ| self.typen.innen(t).unwrap_or(t);
+        if let (Typ::Klasse(a), Typ::Klasse(b)) = (kern(l), kern(r))
             && matches!(op, BinaerOp::Gleich | BinaerOp::Ungleich)
             && (self.typen.erbt_von(a, b) || self.typen.erbt_von(b, a))
         {
@@ -1394,6 +1849,23 @@ impl Pruefer<'_> {
         if op == BinaerOp::Plus && text_und_wert {
             meldung.push_str(&format!(" Nimm {}(...) zum Umwandln.", self.wort(Schluessel::Text)));
         }
+        if matches!(l, Typ::Vielleicht { .. }) || matches!(r, Typ::Vielleicht { .. }) {
+            meldung.push_str(&format!(
+                " Wos {nix} sei kunnt, muasst z'erst nochschaun ({} x != {nix} {} ...) oda mit {} an Ersotz augebn.",
+                self.wort(Schluessel::If),
+                self.wort(Schluessel::Then),
+                self.wort(Schluessel::OrElse),
+                nix = self.wort(Schluessel::Null)
+            ));
+        }
+        if matches!(l, Typ::Ergebnis(_)) || matches!(r, Typ::Ergebnis(_)) {
+            meldung.push_str(&format!(
+                " Do kunnt a {} drin sei: Nimm z'erst {} oda {}.",
+                self.wort(Schluessel::Error),
+                self.wort(Schluessel::Try),
+                self.wort(Schluessel::OrElse)
+            ));
+        }
         self.melde(pos, meldung);
         Typ::Fehler
     }
@@ -1411,6 +1883,22 @@ impl Pruefer<'_> {
             Eingebaut::Laenge if typen.len() == 1 && matches!(typen[0], Typ::Liste(_) | Typ::LeereListe) => {
                 self.fertig_verlangt(&argumente[0]);
                 return Typ::Zoi;
+            }
+            // ZOI AUS(text), KOMMAZOI AUS(text): die Zahl oder ein Fehler.
+            Eingebaut::ZoiAus | Eingebaut::KommazoiAus => {
+                if typen.len() != 1 {
+                    let meldung = format!("'{name}' wü an Wert hom, du gibst eam {}.", anzahl(typen.len()));
+                    self.melde(pos, meldung);
+                } else if typen[0] != Typ::Kettn {
+                    let meldung = format!(
+                        "'{name}' wü ois 1. Wert {}, du gibst eam {}.",
+                        self.typ_name(Typ::Kettn),
+                        self.typ_name(typen[0])
+                    );
+                    self.melde(argumente[0].pos, meldung);
+                }
+                let wert = if funktion == Eingebaut::ZoiAus { Typ::Zoi } else { Typ::Kommazoi };
+                return self.typen.ergebnis_von(wert);
             }
             _ => {}
         }
@@ -1562,6 +2050,7 @@ fn ist_ziel(ausdruck: &Ausdruck) -> bool {
         AusdruckArt::Variable { .. } | AusdruckArt::Stelle { .. } => true,
         // Das Feld eines Objekts kann man immer ändern, egal woher das Objekt kommt.
         AusdruckArt::Feld { objekt, .. } => matches!(objekt.typ, Typ::Klasse(_)) || ist_ziel(objekt),
+        AusdruckArt::Sicher { innen } => ist_ziel(innen),
         _ => false,
     }
 }
@@ -1573,6 +2062,7 @@ fn ziel_text(ausdruck: &Ausdruck) -> String {
         AusdruckArt::Feld { objekt, name, .. } => format!("{}.{name}", ziel_text(objekt)),
         AusdruckArt::Stelle { liste, .. } => format!("{}[...]", ziel_text(liste)),
         AusdruckArt::Selbst { .. } => "SÖWA".to_string(),
+        AusdruckArt::Sicher { innen } => ziel_text(innen),
         _ => "des".to_string(),
     }
 }
@@ -1584,11 +2074,99 @@ fn einpacken(ausdruck: &mut Ausdruck, ziel: Typ) {
     *ausdruck = Ausdruck { art: AusdruckArt::Umwandlung { ziel, innen: Box::new(alt) }, pos, typ: ziel };
 }
 
+/// Nimmt die Hülle [`AusdruckArt::Sicher`] wieder ab: Übrig bleibt die Variable mit ihrem VIELLEICHT-Typ.
+fn sicher_auspacken(ausdruck: &mut Ausdruck) {
+    let pos = ausdruck.pos;
+    if let AusdruckArt::Sicher { innen } = std::mem::replace(&mut ausdruck.art, AusdruckArt::Nix) {
+        *ausdruck = *innen;
+    } else {
+        unreachable!("an {pos:?} steht keine sichere Variable");
+    }
+}
+
+/// Was eine (schon geprüfte) Bedingung über NIX sagt: die Variablen, die
+/// sicher da sind, wenn sie stimmt, und die, die sicher da sind, wenn nicht.
+fn fakten(bedingung: &Ausdruck) -> (Vec<usize>, Vec<usize>) {
+    match &bedingung.art {
+        AusdruckArt::IstNix { innen, ist } => match &innen.art {
+            AusdruckArt::Variable { id, .. } if *ist => (Vec::new(), vec![*id]),
+            AusdruckArt::Variable { id, .. } => (vec![*id], Vec::new()),
+            _ => (Vec::new(), Vec::new()),
+        },
+        // a UND b stimmt: beide stimmen. Stimmt es nicht, weiß man nichts.
+        AusdruckArt::Binaer { op: BinaerOp::Und, links, rechts } => {
+            let (mut wahr, _) = fakten(links);
+            wahr.extend(fakten(rechts).0);
+            (wahr, Vec::new())
+        }
+        // a ODA b stimmt nicht: beide stimmen nicht.
+        AusdruckArt::Binaer { op: BinaerOp::Oda, links, rechts } => {
+            let (_, mut falsch) = fakten(links);
+            falsch.extend(fakten(rechts).1);
+            (Vec::new(), falsch)
+        }
+        AusdruckArt::Unaer { op: UnaerOp::Ned, innen } => {
+            let (wahr, falsch) = fakten(innen);
+            (falsch, wahr)
+        }
+        _ => (Vec::new(), Vec::new()),
+    }
+}
+
+/// Was nach einer Verzweigung noch sicher ist: was in beiden Zweigen gilt.
+/// Ein Zweig, aus dem es nicht weitergeht (GIB ZRUCK, HAU OB, WEIDA), zählt nicht mit.
+fn nach_zweigen(
+    nach_dann: HashSet<usize>,
+    dann_weg: bool,
+    nach_sunst: HashSet<usize>,
+    sunst_weg: bool,
+) -> HashSet<usize> {
+    match (dann_weg, sunst_weg) {
+        (true, false) => nach_sunst,
+        (false, true) => nach_dann,
+        _ => nach_dann.intersection(&nach_sunst).copied().collect(),
+    }
+}
+
+/// Geht es nach diesem Block sicher nicht mit der nächsten Anweisung weiter?
+fn verlaesst(block: &[Anweisung]) -> bool {
+    block.iter().any(|a| match &a.art {
+        AnweisungArt::GibZruck { .. } | AnweisungArt::HauOb | AnweisungArt::Weida => true,
+        AnweisungArt::Wenn { dann, sunst, .. } | AnweisungArt::Probier { dann, sunst, .. } => {
+            verlaesst(dann) && verlaesst(sunst)
+        }
+        _ => false,
+    })
+}
+
+/// Die Namen der Variablen, denen in diesem Block (auch weiter innen) etwas zugewiesen wird.
+fn sammle_zugewiesene(block: &[Anweisung], namen: &mut Vec<String>) {
+    for a in block {
+        match &a.art {
+            AnweisungArt::Zuweisung { ziel, op: None, .. } => {
+                if let AusdruckArt::Variable { name, .. } = &ziel.art {
+                    namen.push(name.clone());
+                }
+            }
+            AnweisungArt::Wenn { dann, sunst, .. } | AnweisungArt::Probier { dann, sunst, .. } => {
+                sammle_zugewiesene(dann, namen);
+                sammle_zugewiesene(sunst, namen);
+            }
+            AnweisungArt::Solong { rumpf, .. }
+            | AnweisungArt::Fia { rumpf, .. }
+            | AnweisungArt::FiaJede { rumpf, .. } => sammle_zugewiesene(rumpf, namen),
+            _ => {}
+        }
+    }
+}
+
 /// Hört dieser Block auf jedem Weg mit GIB ZRUCK auf?
 fn gibt_sicher_zruck(block: &[Anweisung]) -> bool {
     block.iter().any(|a| match &a.art {
         AnweisungArt::GibZruck { .. } => true,
-        AnweisungArt::Wenn { dann, sunst, .. } => gibt_sicher_zruck(dann) && gibt_sicher_zruck(sunst),
+        AnweisungArt::Wenn { dann, sunst, .. } | AnweisungArt::Probier { dann, sunst, .. } => {
+            gibt_sicher_zruck(dann) && gibt_sicher_zruck(sunst)
+        }
         _ => false,
     })
 }
@@ -2082,6 +2660,165 @@ mod tests {
              KLASSE C ERBT VON A\n FUNKTIAUN f(x KETTN)\n PASST SCHO\nPASST SCHO");
         assert_eq!(programm.typen.klassen[1].methoden[0].platz, None);
         assert_eq!(programm.typen.klassen[0].plaetze, 0);
+    }
+
+    const SUCH: &str = "KLASSE Wesen\n name KETTN\n ziel VIELLEICHT Wesen = NIX\nPASST SCHO\n\
+        FUNKTIAUN such(n ZOI) GIBT ZRUCK VIELLEICHT Wesen\n GIB ZRUCK NIX OIDA\nPASST SCHO\n\
+        FUNKTIAUN teil(a ZOI, b ZOI) GIBT ZRUCK ZOI ODA FEHLA\n \
+        WENN b == 0 DAUN\n  GIB ZRUCK FEHLA(\"na\") OIDA\n PASST SCHO\n GIB ZRUCK a / b OIDA\nPASST SCHO\n";
+
+    /// Die Anweisung `SCHREIB(...)` an der Stelle und ihr erster Wert.
+    fn geschrieben(anweisungen: &[Anweisung], stelle: usize) -> &Ausdruck {
+        let AnweisungArt::Schreib { argumente } = &anweisungen[stelle].art else { panic!("{:?}", anweisungen[stelle]) };
+        &argumente[0]
+    }
+
+    #[test]
+    fn vielleicht_typen() {
+        let programm = ok(&format!(
+            "{SUCH}SOG AU w = such(1) OIDA\nSOG AU z VIELLEICHT ZOI = NIX OIDA\nSOG AU l = [1, NIX] OIDA\n\
+             SOG AU t VIELLEICHT KETTN = \"do\" OIDA"
+        ));
+        let typ = |n: usize| match &programm.haupt[n].art {
+            AnweisungArt::Deklaration { wert, .. } => wert.typ,
+            _ => panic!(),
+        };
+        // Ein Objekt oder Text, der fehlen kann, bleibt ein Zeiger; eine Zahl bekommt einen Merker.
+        assert!(matches!(typ(0), Typ::Vielleicht { zeiger: true, .. }));
+        assert_eq!(programm.typen.innen(typ(0)), Some(Typ::Klasse(0)));
+        assert!(matches!(typ(1), Typ::Vielleicht { zeiger: false, .. }));
+        assert_eq!(programm.typen.innen(typ(1)), Some(Typ::Zoi));
+        // NIX in einer Liste: Dann darf überall darin etwas fehlen.
+        assert_eq!(programm.typen.element(typ(2)), Some(typ(1)));
+        // Ein echter Wert wird eingepackt.
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[3].art else { panic!() };
+        assert!(matches!(&wert.art, AusdruckArt::Umwandlung { innen, .. } if innen.typ == Typ::Kettn));
+
+        let f = fehler("SOG AU x = NIX OIDA");
+        assert!(f.meldung.starts_with("Bei NIX waaß i ned, wos do fehln soll."), "{}", f.meldung);
+        let f = fehler("SOG AU x ZOI = NIX OIDA");
+        assert_eq!(f.meldung, "'x' soll a ZOI sei, oba des do is NIX.");
+        let f = fehler("STRUKTUR Knoten\n naechster VIELLEICHT Knoten\nPASST SCHO");
+        assert!(f.meldung.contains("kaun si ned söwa enthoitn"), "{}", f.meldung);
+    }
+
+    #[test]
+    fn erst_nachschauen_dann_verwenden() {
+        let f = fehler(&format!("{SUCH}SOG AU w = such(1) OIDA\nSCHREIB(w.name) OIDA"));
+        assert_eq!(f.meldung, "'w' kunnt NIX sei. Schau z'erst noch: WENN w != NIX DAUN ... (oda nimm ODA HOID).");
+
+        // Im Block nach der Frage ist w ein Wesen, danach wieder nicht.
+        let programm = ok(&format!(
+            "{SUCH}SOG AU w = such(1) OIDA\nWENN w != NIX DAUN\n SCHREIB(w.name) OIDA\nSUNST\n SCHREIB(w) OIDA\nPASST SCHO\nSCHREIB(w) OIDA"
+        ));
+        let AnweisungArt::Wenn { bedingung, dann, sunst } = &programm.haupt[1].art else { panic!() };
+        assert!(matches!(&bedingung.art, AusdruckArt::IstNix { ist: false, .. }));
+        let AusdruckArt::Feld { objekt, .. } = &geschrieben(dann, 0).art else { panic!() };
+        assert!(matches!(objekt.art, AusdruckArt::Sicher { .. }));
+        assert_eq!(objekt.typ, Typ::Klasse(0));
+        assert!(matches!(geschrieben(sunst, 0).art, AusdruckArt::Variable { .. }));
+        assert!(matches!(geschrieben(&programm.haupt, 2).art, AusdruckArt::Variable { .. }));
+
+        // Wer bei NIX aufhört, hat danach sicher etwas.
+        ok(&format!(
+            "{SUCH}FUNKTIAUN f() GIBT ZRUCK KETTN\n SOG AU w = such(1) OIDA\n \
+             WENN w == NIX DAUN\n  GIB ZRUCK \"\" OIDA\n PASST SCHO\n GIB ZRUCK w.name OIDA\nPASST SCHO"
+        ));
+        // Rechts von UND gilt, was links gefragt wurde; rechts von ODA das Gegenteil.
+        ok(&format!("{SUCH}SOG AU w = such(1) OIDA\nSCHREIB(w != NIX UND w.name == \"a\", w == NIX ODA w.name == \"a\") OIDA"));
+        let f = fehler(&format!("{SUCH}SOG AU w = such(1) OIDA\nSCHREIB(w != NIX ODA w.name == \"a\") OIDA"));
+        assert!(f.meldung.starts_with("'w' kunnt NIX sei."), "{}", f.meldung);
+        // In einer Schleife mit HAU OB und WEIDA.
+        ok(&format!(
+            "{SUCH}FIA i VON 1 BIS 3 TUA\n SOG AU w = such(i) OIDA\n WENN w == NIX DAUN\n  WEIDA OIDA\n PASST SCHO\n SCHREIB(w.name) OIDA\nPASST SCHO"
+        ));
+    }
+
+    #[test]
+    fn zuweisen_hebt_die_sicherheit_auf() {
+        let f = fehler(&format!(
+            "{SUCH}SOG AU w = such(1) OIDA\nWENN w != NIX DAUN\n w = such(2) OIDA\n SCHREIB(w.name) OIDA\nPASST SCHO"
+        ));
+        assert_eq!(f.pos.zeile, 17, "{f:?}");
+        // Umgekehrt: Nach einem echten Wert steht fest, dass etwas da ist.
+        ok(&format!("{SUCH}SOG AU w = such(1) OIDA\nw = Wesen(\"a\") OIDA\nSCHREIB(w.name) OIDA"));
+        // In einer Schleife zählt auch, was weiter unten zugewiesen wird: Beim
+        // zweiten Durchlauf könnte es schon NIX sein.
+        let f = fehler(&format!(
+            "{SUCH}SOG AU w = such(1) OIDA\nWENN w != NIX DAUN\n SOLONG WOAHR TUA\n  SCHREIB(w.name) OIDA\n  w = NIX OIDA\n PASST SCHO\nPASST SCHO"
+        ));
+        assert_eq!(f.pos.zeile, 17, "{f:?}");
+        // Die Kette entlang: Die Bedingung der Schleife fragt jedes Mal neu.
+        ok(&format!("{SUCH}SOG AU w = such(1) OIDA\nSOLONG w != NIX TUA\n SCHREIB(w.name) OIDA\n w = w.ziel OIDA\nPASST SCHO"));
+        // Ein Feld gilt nie als sicher: Jemand anderer könnte es ändern.
+        let f = fehler(&format!(
+            "{SUCH}SOG AU w = Wesen(\"a\") OIDA\nWENN w.ziel != NIX DAUN\n SCHREIB(w.ziel.name) OIDA\nPASST SCHO"
+        ));
+        assert!(f.meldung.starts_with("Des kunnt NIX sei. Tua's z'erst in a Variable"), "{}", f.meldung);
+    }
+
+    #[test]
+    fn oda_hoid() {
+        let programm = ok(&format!("{SUCH}SOG AU a = such(1) ODA HOID Wesen(\"neamd\") OIDA\nSOG AU b = teil(1, 0) ODA HOID 7 OIDA"));
+        let typ = |n: usize| match &programm.haupt[n].art {
+            AnweisungArt::Deklaration { wert, .. } => wert.typ,
+            _ => panic!(),
+        };
+        assert_eq!((typ(0), typ(1)), (Typ::Klasse(0), Typ::Zoi));
+        let f = fehler("SOG AU a = 5 ODA HOID 6 OIDA");
+        assert_eq!(f.meldung, "Vua ODA HOID ghört wos, des NIX oda a FEHLA sei kunnt, des do is oba a ZOI.");
+        let f = fehler(&format!("{SUCH}SOG AU a = teil(1, 2) ODA HOID \"zwa\" OIDA"));
+        assert_eq!(f.meldung, "Noch ODA HOID brauch i a ZOI, des do is oba a KETTN.");
+    }
+
+    #[test]
+    fn fehler_muss_man_behandeln() {
+        let f = fehler(&format!("{SUCH}teil(1, 2) OIDA"));
+        assert!(f.meldung.starts_with("Do kaun wos schiefgehn, des derfst ned afoch wegschmeißn."), "{}", f.meldung);
+        let f = fehler(&format!("{SUCH}SCHREIB(teil(1, 2) + 1) OIDA"));
+        assert!(f.meldung.contains("Do kunnt a FEHLA drin sei"), "{}", f.meldung);
+        // Auffangen, mit und ohne Namen.
+        let programm = ok(&format!(
+            "{SUCH}PROBIER q = teil(1, 2)\n SCHREIB(q + 1) OIDA\nWONNS SCHIEFGEHT f\n SCHREIB(f.meldung) OIDA\nPASST SCHO\n\
+             PROBIER teil(1, 2)\nWONNS SCHIEFGEHT\nPASST SCHO"
+        ));
+        let AnweisungArt::Probier { id, fehler_id, dann, sunst, .. } = &programm.haupt[0].art else { panic!() };
+        assert_ne!(id, fehler_id);
+        assert_eq!(geschrieben(dann, 0).typ, Typ::Zoi);
+        assert_eq!(geschrieben(sunst, 0).typ, Typ::Kettn);
+        // q gilt nur im ersten Block, f nur im zweiten.
+        let f = fehler(&format!(
+            "{SUCH}PROBIER q = teil(1, 2)\n SCHREIB(q) OIDA\nWONNS SCHIEFGEHT f\n SCHREIB(q) OIDA\nPASST SCHO"
+        ));
+        assert!(f.meldung.starts_with("'q' kenn i ned"), "{}", f.meldung);
+    }
+
+    #[test]
+    fn probier_gibt_den_fehler_weiter() {
+        let programm = ok(&format!(
+            "{SUCH}FUNKTIAUN f() GIBT ZRUCK KETTN ODA FEHLA\n SOG AU q = PROBIER teil(1, 2) OIDA\n GIB ZRUCK KETTN(q) OIDA\nPASST SCHO\n\
+             FUNKTIAUN g() GIBT ZRUCK NIX ODA FEHLA\n PROBIER f() OIDA\n WENN WOAHR DAUN\n  GIB ZRUCK OIDA\n PASST SCHO\nPASST SCHO"
+        ));
+        let f = &programm.funktionen[2];
+        let AnweisungArt::Deklaration { wert, .. } = &f.rumpf[0].art else { panic!() };
+        assert!(matches!(wert.art, AusdruckArt::Probier { .. }));
+        assert_eq!(wert.typ, Typ::Zoi);
+        // Der Text wird beim Zurückgeben in "Wert oder Fehler" eingepackt.
+        let AnweisungArt::GibZruck { wert: Some(wert) } = &f.rumpf[1].art else { panic!() };
+        assert_eq!(wert.typ, f.rueckgabe);
+        assert_eq!(programm.typen.wert_von(f.rueckgabe), Some(Typ::Kettn));
+        assert_eq!(programm.typen.wert_von(programm.funktionen[3].rueckgabe), Some(Typ::Nix));
+
+        let f = fehler(&format!("{SUCH}SOG AU q = PROBIER teil(1, 2) OIDA"));
+        assert!(f.meldung.starts_with("PROBIER gibt an FEHLA weida. Des geht nur in ana FUNKTIAUN"), "{}", f.meldung);
+        let f = fehler(&format!(
+            "{SUCH}FUNKTIAUN f() GIBT ZRUCK ZOI ODA FEHLA\n GIB ZRUCK 1 OIDA\nPASST SCHO\nFUNKTIAUN g() GIBT ZRUCK ZOI ODA FEHLA\n SCHREIB(PROBIER f()) OIDA\n GIB ZRUCK 1 OIDA\nPASST SCHO"
+        ));
+        assert!(f.meldung.starts_with("PROBIER muass gaunz vuan stehn"), "{}", f.meldung);
+        // Ein Wert ODA FEHLA braucht auf jedem Weg ein GIB ZRUCK, NIX ODA FEHLA nicht.
+        let f = fehler("FUNKTIAUN f() GIBT ZRUCK ZOI ODA FEHLA\nPASST SCHO");
+        assert!(f.meldung.contains("ned jeda Weg hört mit GIB ZRUCK auf"), "{}", f.meldung);
+        ok("FUNKTIAUN f() GIBT ZRUCK NIX ODA FEHLA\nPASST SCHO");
     }
 
     #[test]

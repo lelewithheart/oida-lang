@@ -72,6 +72,16 @@ EXTENDS   = ERBT VON
 THIS      = SÖWA, MEI
 SUPER     = DE OIDN, ELTERN
 
+# --- Fehlende Werte:  SOG AU ziel VIELLEICHT Gegner = NIX OIDA ---------------
+#     "name ODA HOID 'neamd'" nimmt den Wert dahinter, wenn vorne NIX steht.
+NULL      = NIX
+MAYBE     = VIELLEICHT, VILLEICHT, KAUN SEI
+ORELSE    = ODA HOID
+# --- Fehler:  FUNKTIAUN teil(a ZOI, b ZOI) GIBT ZRUCK ZOI ODA FEHLA -----------
+#     PROBIER x = teil(1, 0) ... WONNS SCHIEFGEHT f ... PASST SCHO
+ERROR     = FEHLA
+TRY       = PROBIER, PROBIERS
+CATCH     = WONNS SCHIEFGEHT, WENNS SCHIEFGEHT
 # --- Funktionen -------------------------------------------------------------
 FUNCTION  = FUNKTIAUN
 RETURNS   = GIBT ZRUCK
@@ -104,6 +114,9 @@ UPPER     = SCHREI
 LOWER     = FLÜSTER
 TRIM      = STUTZ
 REPLACE   = ERSETZ, AUSTAUSCH
+# --- Text in eine Zahl verwandeln; geht das nicht, kommt ein FEHLA zurück ----
+PARSEINT   = ZOI AUS
+PARSEFLOAT = KOMMAZOI AUS
 
 # --- Eingebaute Funktionen zum Rechnen --------------------------------------
 SQRT      = WURZL

@@ -1,0 +1,39 @@
+--- Zoin
+8 NIX FOISCH WOAHR WOAHR
+8 -1 15
+gfundn: 9
+18
+kane is NIX
+8
+NIX 0
+18
+--- Texte
+Hansi (ohne Spitznom) NIX
+Hansi (Hansli) "Hansli"
+6 HANSLI
+Hansli ["Hansli", "Hansli!", "Hansli"]
+Hansi (ohne Spitznom) "Hansli"
+--- Objekte
+Hansi hot ka Ziel
+Hansi zielt auf Sepp / Sepp zielt auf Hansi
+WOAHR FOISCH WOAHR
+FOISCH WOAHR NIX
+4 WOAHR Resi
+Resi (Reserl) 6 6
+Sepp Hansi
+WOAHR 3
+--- Strukturen
+Punkt(2, 4) NIX Punkt(3, 6) NIX
+25 0
+99 20
+--- Listen
+Hansi
+Sepp
+2 [NIX, Wesen("Neich", 10, NIX, NIX), Gegner("Sepp", 10, NIX, NIX, 3), NIX]
+[NIX, Punkt(1, 1), NIX, Punkt(5, 5)] 4
+NIX 0
+[1, 2, 3] 3
+--- Kettn aus Knotn
+0
+5 55
+4

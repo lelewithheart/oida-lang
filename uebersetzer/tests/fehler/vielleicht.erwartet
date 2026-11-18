@@ -1,0 +1,19 @@
+:5:29: Des kunnt NIX sei. Tua's z'erst in a Variable und schau noch: SOG AU x = ... OIDA  WENN x != NIX DAUN ...
+:12:11: 'w' kunnt NIX sei. Schau z'erst noch: WENN w != NIX DAUN ... (oda nimm ODA HOID).
+:13:11: 'w' kunnt NIX sei. Schau z'erst noch: WENN w != NIX DAUN ... (oda nimm ODA HOID).
+:14:17: Des kunnt NIX sei. Tua's z'erst in a Variable und schau noch: SOG AU x = ... OIDA  WENN x != NIX DAUN ...
+:17:11: A VIELLEICHT ZOI + a ZOI? Des geht si ned aus. Wos NIX sei kunnt, muasst z'erst nochschaun (WENN x != NIX DAUN ...) oda mit ODA HOID an Ersotz augebn.
+:18:19: 'fest' soll a ZOI sei, oba des do is a VIELLEICHT ZOI.
+:19:16: Bei NIX waaß i ned, wos do fehln soll. Sog's dazua, zum Beispü: SOG AU x VIELLEICHT ZOI = NIX OIDA
+:21:6: A ZOI kaun ned NIX sei, do gibt's nix zum Nochschaun. Des geht nur bei VIELLEICHT ...
+:23:8: 'zahl' is a ZOI, do kaunst ka NIX einetuan.
+:24:9: Vua ODA HOID ghört wos, des NIX oda a FEHLA sei kunnt, des do is oba a ZOI.
+:25:20: Noch ODA HOID brauch i a ZOI, des do is oba a KETTN.
+:26:16: Zwamoi VIELLEICHT hintaranaund bringt nix.
+:29:15: 'w' kunnt NIX sei. Schau z'erst noch: WENN w != NIX DAUN ... (oda nimm ODA HOID).
+:34:15: 'w' kunnt NIX sei. Schau z'erst noch: WENN w != NIX DAUN ... (oda nimm ODA HOID).
+:37:15: 'w' kunnt NIX sei. Schau z'erst noch: WENN w != NIX DAUN ... (oda nimm ODA HOID).
+:41:19: 'w' kunnt NIX sei. Schau z'erst noch: WENN w != NIX DAUN ... (oda nimm ODA HOID).
+:45:13: NIX mit NIX vergleichn bringt nix.
+:46:11: A VIELLEICHT Wesen == a ZOI? Des geht si ned aus. Wos NIX sei kunnt, muasst z'erst nochschaun (WENN x != NIX DAUN ...) oda mit ODA HOID an Ersotz augebn.
+Na, des wird nix: 18 Fehler.

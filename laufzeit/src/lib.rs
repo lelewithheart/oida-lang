@@ -252,6 +252,41 @@ pub unsafe extern "C" fn oida_text_zu_zoi(text: *const TextKopf, zeile: i64) -> 
     }
 }
 
+/// `ZOI AUS(text)`: Schreibt die Zahl nach `ziel`. Geht es nicht, kommt der
+/// Fehler als neuer Text zurück (sonst null) und in `ziel` steht 0.
+///
+/// # Safety
+/// `text` muss ein gültiger Text sein, `ziel` Platz für eine Zahl.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_text_als_zoi(text: *const TextKopf, ziel: *mut i64) -> *mut TextKopf {
+    let inhalt = unsafe { bytes(text) };
+    let wert = text_zu_zoi(inhalt);
+    unsafe { *ziel = wert.unwrap_or(0) };
+    match wert {
+        Some(_) => std::ptr::null_mut(),
+        None => neuer_text(
+            format!("Aus \"{}\" kaun i ka gaunze Zoi mochn.", String::from_utf8_lossy(inhalt)).as_bytes(),
+        ),
+    }
+}
+
+/// `KOMMAZOI AUS(text)`: wie [`oida_text_als_zoi`], für Kommazahlen.
+///
+/// # Safety
+/// `text` muss ein gültiger Text sein, `ziel` Platz für eine Zahl.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_text_als_kommazoi(text: *const TextKopf, ziel: *mut f64) -> *mut TextKopf {
+    let inhalt = unsafe { bytes(text) };
+    let wert = text_zu_kommazoi(inhalt);
+    unsafe { *ziel = wert.unwrap_or(0.0) };
+    match wert {
+        Some(_) => std::ptr::null_mut(),
+        None => neuer_text(
+            format!("Aus \"{}\" kaun i ka Kommazoi mochn.", String::from_utf8_lossy(inhalt)).as_bytes(),
+        ),
+    }
+}
+
 /// # Safety
 /// `text` muss ein gültiger Text sein.
 #[unsafe(no_mangle)]

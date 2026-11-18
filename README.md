@@ -34,8 +34,9 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.4.** Zahlen, Texte, Strukturen, Listen, Klassen mit Vererbung, Schleifen, Funktionen,
-Eingabe und Ausgabe sind da. Wohin es geht, steht unten im [Fahrplan](#fahrplan).
+**Stand: v0.5.** Zahlen, Texte, Strukturen, Listen, Klassen mit Vererbung, fehlende Werte (`NIX`)
+und Fehler ohne Absturz, Schleifen, Funktionen, Eingabe und Ausgabe sind da.
+Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
 
@@ -130,7 +131,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.4)
+## Die Sprache (v0.5)
 
 ### Typen
 
@@ -326,7 +327,7 @@ PASST SCHO
 - `SCHREIB(sepp)` gibt `Gegner("Sepp", 100, 30)` aus.
 - Um den Speicher kümmert sich OIDA: Ein Objekt wird freigegeben, sobald es niemand mehr braucht.
   Eine Ausnahme gibt es noch: Zeigen zwei Objekte gegenseitig aufeinander, bleiben beide bis zum
-  Ende des Programms liegen.
+  Ende des Programms liegen, außer man trennt den Kreis selbst auf (ein Feld auf `NIX` setzen).
 
 Ein größeres Beispiel steht in [`beispiele/arena.oida`](beispiele/arena.oida).
 
@@ -360,6 +361,117 @@ PASST SCHO
 - Greift man auf eine Stelle zu, die es nicht gibt, bricht das Programm mit einer Meldung ab.
 - Um den Speicher kümmert sich OIDA: Eine Liste wird freigegeben, sobald sie niemand mehr braucht.
 
+### Fehlende Werte: VIELLEICHT und NIX
+
+Normalerweise steht in einer Variable immer ein Wert. Soll etwas auch fehlen dürfen, sagt man
+das beim Typ dazu: `VIELLEICHT <typ>`. Der fehlende Wert heißt `NIX`.
+
+```
+KLASSE Wesen
+    name KETTN
+    ziel VIELLEICHT Wesen = NIX          # am Anfang hat niemand ein Ziel
+PASST SCHO
+
+FUNKTIAUN such(olle LISTN VON Wesen, name KETTN) GIBT ZRUCK VIELLEICHT Wesen
+    FIA JEDE w IN olle TUA
+        WENN w.name == name DAUN
+            GIB ZRUCK w OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+SOG AU wer = such(olle, "Sepp") OIDA
+SCHREIB(wer.name) OIDA                   # geht nicht: 'wer' kunnt NIX sei
+WENN wer != NIX DAUN
+    SCHREIB(wer.name) OIDA               # hier schon: Es steht fest, dass wer da ist
+PASST SCHO
+```
+
+Das ist der Unterschied zu `null` in C# oder Java: Was `NIX` sein könnte, lässt der Compiler
+nicht verwenden, bevor nachgeschaut wurde. Ein Programm kann also nicht mittendrin abstürzen,
+weil etwas fehlt, mit dem niemand gerechnet hat.
+
+- **Nachschauen** geht mit `x != NIX` und `x == NIX`. Der Compiler merkt sich, was daraus folgt:
+  im Block von `WENN x != NIX DAUN`, im `SUNST` von `WENN x == NIX DAUN`, nach
+  `WENN x == NIX DAUN GIB ZRUCK ... PASST SCHO` (auch mit `HAU OB` oder `WEIDA`), rechts von
+  `x != NIX UND ...` und in `SOLONG x != NIX TUA`.
+- Das gilt nur für **Variablen**. Ein Feld (`hansi.ziel`) oder eine Stelle in einer Liste könnte
+  inzwischen jemand anderer ändern; die holt man sich zuerst in eine Variable:
+  `SOG AU z = hansi.ziel OIDA` und dann `WENN z != NIX DAUN`.
+- Weist man der Variable wieder etwas zu, das `NIX` sein kann, muss man neu nachschauen.
+- **Ersatz angeben:** `wert ODA HOID ersatz` nimmt den Wert, und wenn er fehlt, den Ersatz:
+  `SOG AU name = spitznom ODA HOID "neamd" OIDA`.
+- Wo `VIELLEICHT ZOI` verlangt ist, passt jede `ZOI` und `NIX`. Umgekehrt nicht.
+- `VIELLEICHT` geht mit jedem Typ, auch in Listen (`[hansi, NIX]` ist eine `LISTN VON VIELLEICHT Wesen`).
+  Bei Texten, Listen und Objekten kostet es nichts extra.
+- `SCHREIB` gibt `NIX` aus, wenn nichts da ist.
+
+Damit geht auch eine Kette, in der jedes Glied auf das nächste zeigt:
+
+```
+KLASSE Knoten
+    wert ZOI
+    naechster VIELLEICHT Knoten
+PASST SCHO
+
+SOG AU hier VIELLEICHT Knoten = Knoten(1, Knoten(2, NIX)) OIDA
+SOLONG hier != NIX TUA
+    SCHREIB(hier.wert) OIDA
+    hier = hier.naechster OIDA
+PASST SCHO
+```
+
+### Fehler: FEHLA und PROBIER
+
+Eine Funktion, bei der etwas schiefgehen kann, sagt das in ihrem Rückgabetyp: `<typ> ODA FEHLA`.
+Sie gibt dann entweder den Wert zurück oder einen Fehler mit einer Meldung.
+
+```
+FUNKTIAUN teil(a ZOI, b ZOI) GIBT ZRUCK ZOI ODA FEHLA
+    WENN b == 0 DAUN
+        GIB ZRUCK FEHLA("Durch nix kaun ma ned teilen.") OIDA
+    PASST SCHO
+    GIB ZRUCK a / b OIDA
+PASST SCHO
+```
+
+Wer so eine Funktion aufruft, muss sich um den Fehler kümmern; einfach ignorieren lässt der
+Compiler nicht zu. Dafür gibt es drei Wege:
+
+```
+# 1. Auffangen: der eine Block, wenn es geklappt hat, der andere, wenn nicht.
+PROBIER q = teil(10, 0)
+    SCHREIB("Ergebnis:", q) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Na:", f.meldung) OIDA
+PASST SCHO
+
+# 2. Einen Ersatz nehmen.
+SOG AU q = teil(10, 0) ODA HOID 0 OIDA
+
+# 3. Weitergeben: Geht es schief, hört die Funktion hier auf und gibt denselben Fehler zurück.
+FUNKTIAUN hoibe_hoibe(a ZOI, b ZOI) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU q = PROBIER teil(a, b) OIDA
+    GIB ZRUCK "jeda kriagt " + KETTN(q) OIDA
+PASST SCHO
+```
+
+- Es gibt keine Exceptions: Ein Fehler ist ein ganz normaler Rückgabewert. Man sieht am Typ,
+  welche Funktion schiefgehen kann, und an jedem Aufruf, was dann passiert.
+- Das Weitergeben (`PROBIER` ohne Block) geht nur in einer Funktion, die selbst `... ODA FEHLA`
+  zurückgibt, und es steht ganz vorne: `SOG AU x = PROBIER f() OIDA`, `x = PROBIER f() OIDA`,
+  `GIB ZRUCK PROBIER f() OIDA` oder allein als `PROBIER f() OIDA`.
+- Gibt eine Funktion keinen Wert zurück, kann aber scheitern: `GIBT ZRUCK NIX ODA FEHLA`. Kommt sie
+  ohne `GIB ZRUCK FEHLA(...)` ans Ende, hat es geklappt.
+- Den Namen hinter `PROBIER` und hinter `WONNS SCHIEFGEHT` kann man weglassen, wenn man den Wert
+  oder den Fehler nicht braucht.
+- Ein `FEHLA` hat ein Feld: `f.meldung`. Eigene Arten von Fehlern gibt es noch nicht.
+- Aus einem Text eine Zahl machen, ohne dass das Programm bei `"abc"` abbricht:
+  `ZOI AUS(text)` und `KOMMAZOI AUS(text)` geben `ZOI ODA FEHLA` bzw. `KOMMAZOI ODA FEHLA` zurück.
+
+Ein Beispiel mit beidem steht in [`beispiele/loga.oida`](beispiele/loga.oida).
+
 ### Ausgabe
 
 ```
@@ -377,8 +489,9 @@ SOG AU name = LIES("Wia haaßt du? ") OIDA    # zeigt die Frage und wartet auf e
 SOG AU zeile = LIES() OIDA                   # ohne Frage
 ```
 
-`LIES` gibt immer einen Text zurück, ohne den Zeilenumbruch. Für eine Zahl: `ZOI(LIES("Oida, wia oid? "))`.
-Ist die Eingabe zu Ende, kommt ein leerer Text.
+`LIES` gibt immer einen Text zurück, ohne den Zeilenumbruch. Für eine Zahl: `ZOI(LIES("Oida, wia oid? "))`;
+steht dort keine Zahl, bricht das Programm ab. Wer das abfangen will, nimmt `ZOI AUS(...)`
+(siehe [Fehler](#fehler-fehla-und-probier)). Ist die Eingabe zu Ende, kommt ein leerer Text.
 
 ### Eingebaute Funktionen
 
@@ -394,6 +507,8 @@ Für Texte (gezählt wird ab 0, in Zeichen):
 | `FLÜSTER(text)`                | in Kleinbuchstaben                                    | `FLÜSTER("OIDA")` ist `"oida"`        |
 | `STUTZ(text)`                  | ohne Leerraum am Anfang und am Ende                   | `STUTZ("  jo  ")` ist `"jo"`          |
 | `ERSETZ(text, alt, neu)`       | jedes `alt` durch `neu` ersetzt                       | `ERSETZ("aba", "a", "o")` ist `"obo"` |
+| `ZOI AUS(text)`                | die ganze Zahl im Text, als `ZOI ODA FEHLA`           | `ZOI AUS("17") ODA HOID 0` ist `17`   |
+| `KOMMAZOI AUS(text)`           | die Kommazahl im Text, als `KOMMAZOI ODA FEHLA`       | `KOMMAZOI AUS("x") ODA HOID 0.0` ist `0.0` |
 
 Für Listen:
 
@@ -545,15 +660,16 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 
 ## Was OIDA noch nicht kann
 
-- Einen fehlenden Wert ("kein Objekt") gibt es noch nicht; ein Feld mit einer Klasse als Typ
-  braucht immer ein Objekt. Darum gehen verkettete Dinge (ein Knoten, der auf den nächsten zeigt)
-  vorerst nur über Listen.
 - Aus einem `Wesen` wieder einen `Gegner` machen (fragen, was es wirklich ist) geht noch nicht.
-- Objekte, die im Kreis aufeinander zeigen, werden erst am Ende des Programms freigegeben.
+- Objekte, die im Kreis aufeinander zeigen, werden erst am Ende des Programms freigegeben, wenn
+  man den Kreis nicht selbst auftrennt. Verweise, die nicht mitzählen, fehlen noch.
+- Ob etwas `NIX` ist, merkt sich der Compiler nur bei Variablen, nicht bei Feldern und Listenstellen.
+- Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - Strukturen und Listen kann man nicht mit `=` vergleichen.
 - Listen kann man nicht sortieren oder durchsuchen lassen; das schreibt man vorerst selbst.
 - Keine Dateien, kein Fenster, keine Grafik.
-- Fehler beim Laufen (etwa `ZOI("abc")`) brechen das Programm ab; abfangen kann man sie noch nicht.
+- Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0 und `ZOI("abc")` brechen das
+  Programm weiterhin mit einer Meldung ab (für Texte gibt es stattdessen `ZOI AUS`).
 - Ganze Zahlen laufen bei mehr als 64 Bit still über.
 - Die Meldungen beim Laufen (`Durch nix kaun ma ned teilen`) richten sich nicht nach dem Wörterbuch.
 - Nur Windows, 64 Bit.
@@ -573,7 +689,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 1 | Zählschleife, `HAU OB`, `WEIDA`, `+=`, Eingabe, Text- und Rechenfunktionen, Zufall | fertig |
 | 2 | Strukturen als direkte Werte und Listen, `FIA JEDE` | fertig |
 | 3 | Klassen mit Feldern, Methoden und Vererbung | fertig |
-| 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | offen |
+| 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | fertig |
 | 5 | Generics für eigene Typen, Funktionen als Werte, ein Wörterbuch-Typ | offen |
 | 6 | Programme aus mehreren Dateien, Standardbibliothek in OIDA | offen |
 | 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | offen |

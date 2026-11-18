@@ -1,0 +1,199 @@
+# Fehler ohne Exceptions: Eine Funktion gibt einen Wert ODA an FEHLA zurück,
+# und wer sie aufruft, muss sich darum kümmern.
+
+STRUKTUR Bruch
+    oben ZOI
+    unten ZOI
+PASST SCHO
+
+KLASSE Konto
+    name KETTN
+    stand ZOI = 0
+
+    FUNKTIAUN heb_ob(betrag ZOI) GIBT ZRUCK NIX ODA FEHLA
+        WENN betrag <= 0 DAUN
+            GIB ZRUCK FEHLA("Wos soll i mit " + KETTN(betrag) + " aufangen?") OIDA
+        PASST SCHO
+        WENN betrag > SÖWA.stand DAUN
+            GIB ZRUCK FEHLA(SÖWA.name + " hot nur " + KETTN(SÖWA.stand)) OIDA
+        PASST SCHO
+        SÖWA.stand -= betrag OIDA
+    PASST SCHO
+
+    # Gibt den Fehler von heb_ob einfach weiter.
+    FUNKTIAUN schick(wem Konto, betrag ZOI) GIBT ZRUCK ZOI ODA FEHLA
+        SOG AU merk = "vua dem Schickn: " + KETTN(SÖWA.stand) OIDA
+        PROBIER SÖWA.heb_ob(betrag) OIDA
+        wem.stand += betrag OIDA
+        GIB ZRUCK SÖWA.stand OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN teil(a ZOI, b ZOI) GIBT ZRUCK ZOI ODA FEHLA
+    WENN b == 0 DAUN
+        GIB ZRUCK FEHLA("Durch nix kaun ma ned teilen.") OIDA
+    PASST SCHO
+    GIB ZRUCK a / b OIDA
+PASST SCHO
+
+FUNKTIAUN kuerz(b Bruch) GIBT ZRUCK Bruch ODA FEHLA
+    WENN b.unten == 0 DAUN
+        GIB ZRUCK FEHLA("Unten steht a Nulla: " + KETTN(b.oben) + "/0") OIDA
+    PASST SCHO
+    SOG AU t = b.unten OIDA
+    SOLONG t > 1 TUA
+        WENN b.oben % t == 0 UND b.unten % t == 0 DAUN
+            GIB ZRUCK Bruch(b.oben / t, b.unten / t) OIDA
+        PASST SCHO
+        t -= 1 OIDA
+    PASST SCHO
+    GIB ZRUCK b OIDA
+PASST SCHO
+
+# Drei Schritte hintereinander; der erste, der schiefgeht, beendet die Funktion.
+FUNKTIAUN rechne(a KETTN, b KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU texte = [a, b] OIDA
+    SOG AU x = PROBIER ZOI AUS(a) OIDA
+    SOG AU y = 0 OIDA
+    y = PROBIER ZOI AUS(b) OIDA
+    FIA JEDE t IN texte TUA
+        WENN LÄNGN(t) > 3 DAUN
+            SOG AU q = PROBIER teil(x, y) OIDA
+            GIB ZRUCK "long: " + KETTN(q) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK PROBIER als_text(x, y) OIDA
+PASST SCHO
+
+FUNKTIAUN als_text(x ZOI, y ZOI) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU q = PROBIER teil(x, y) OIDA
+    GIB ZRUCK KETTN(x) + " / " + KETTN(y) + " = " + KETTN(q) OIDA
+PASST SCHO
+
+FUNKTIAUN wer(nummer ZOI) GIBT ZRUCK VIELLEICHT KETTN ODA FEHLA
+    WENN nummer < 0 DAUN
+        GIB ZRUCK FEHLA("Minus gibt's ned") OIDA
+    PASST SCHO
+    WENN nummer == 0 DAUN
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+    GIB ZRUCK "Nummer " + KETTN(nummer) OIDA
+PASST SCHO
+
+FUNKTIAUN zeig(wos KETTN, ergebnis KETTN ODA FEHLA)
+    PROBIER e = ergebnis
+        SCHREIB(wos, "->", e) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(wos, "-> schief:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+SCHREIB("--- PROBIER mit WONNS SCHIEFGEHT") OIDA
+PROBIER q = teil(10, 2)
+    SCHREIB("10 / 2 =", q) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned", f) OIDA
+PASST SCHO
+PROBIER q = teil(10, 0)
+    SCHREIB("des kummt ned", q) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Fehla:", f.meldung, LÄNGN(f.meldung)) OIDA
+    SCHREIB(f) OIDA
+PASST SCHO
+PROBIER teil(1, 0)
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT
+    SCHREIB("schiefgaunga, wurscht warum") OIDA
+PASST SCHO
+
+# Ohne Namen: Der Wert oder der Fehler wird trotzdem ausgerechnet und danach weggeworfen.
+PROBIER rechne("8", "2")
+    SCHREIB("hot klappt, wos aussakummt is wurscht") OIDA
+WONNS SCHIEFGEHT
+    SCHREIB("des kummt ned") OIDA
+PASST SCHO
+PROBIER rechne("8", "ocht")
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT
+    SCHREIB("wieda schiefgaunga") OIDA
+PASST SCHO
+
+SCHREIB("--- ODA HOID") OIDA
+SCHREIB(teil(9, 3) ODA HOID -1, teil(9, 0) ODA HOID -1) OIDA
+SCHREIB(rechne("8", "2") ODA HOID "nix", rechne("8", "zwa") ODA HOID "nix") OIDA
+SCHREIB((kuerz(Bruch(6, 8)) ODA HOID Bruch(0, 1)).unten, kuerz(Bruch(1, 0)) ODA HOID Bruch(0, 1)) OIDA
+
+SCHREIB("--- weidagebn") OIDA
+zeig("8 und 2", rechne("8", "2")) OIDA
+zeig("8 und 0", rechne("8", "0")) OIDA
+zeig("ocht und 2", rechne("ocht", "2")) OIDA
+zeig("8 und nix", rechne("8", "")) OIDA
+zeig("1000 und 0", rechne("1000", "0")) OIDA
+zeig("1000 und 10", rechne("1000", "10")) OIDA
+
+SCHREIB("--- Zoin aus Text") OIDA
+SCHREIB(ZOI AUS(" 42 ") ODA HOID 0, ZOI AUS("4 2") ODA HOID 0, KOMMAZOI AUS("2.5") ODA HOID 0.0) OIDA
+SCHREIB(ZOI AUS("17"), ZOI AUS("siebzehn"), KOMMAZOI AUS("")) OIDA
+SCHREIB(ZOI AUS("1" + KETTN(7)) ODA HOID 0, KOMMAZOI AUS(KETTN(1) + ".5") ODA HOID 0.0) OIDA
+
+SCHREIB("--- Methoden") OIDA
+SOG AU hansi = Konto("Hansi") OIDA
+SOG AU sepp = Konto("Sepp") OIDA
+hansi.stand = 100 OIDA
+PROBIER hansi.heb_ob(30)
+    SCHREIB("Hansi hot no", hansi.stand) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned", f) OIDA
+PASST SCHO
+PROBIER hansi.heb_ob(500)
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+SCHREIB(hansi.schick(sepp, 50), sepp.stand) OIDA
+SCHREIB(hansi.schick(sepp, 50), sepp.stand) OIDA
+SCHREIB(hansi.schick(sepp, -1) ODA HOID -1, hansi.heb_ob(1), hansi.heb_ob(0)) OIDA
+
+SCHREIB("--- Fehla ois Wert") OIDA
+SOG AU gmerkt = teil(1, 0) OIDA
+SOG AU gmerkt2 = gmerkt OIDA
+# Ein Ergebnis kann man herumreichen wie jeden Wert; behandelt wird es am Ende.
+SOG AU guats = rechne("9", "3") OIDA
+SOG AU schlechts = rechne("neun", "3") OIDA
+SOG AU beide = [guats, schlechts, guats] OIDA
+guats = schlechts OIDA
+zeig("guats", guats) OIDA
+zeig("beide[0]", beide[0]) OIDA
+zeig("beide[1]", beide[1]) OIDA
+SCHREIB(beide[2], LÄNGN(beide)) OIDA
+SOG AU olle LISTN VON FEHLA = [] OIDA
+FIA i VON -1 BIS 2 TUA
+    PROBIER w = wer(i)
+        SCHREIB(i, w, w ODA HOID "neamd") OIDA
+    WONNS SCHIEFGEHT f
+        HAU EINE(olle, f) OIDA
+        HAU EINE(olle, FEHLA("no ana")) OIDA
+    PASST SCHO
+PASST SCHO
+PROBIER gmerkt2
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT f
+    HAU EINE(olle, f) OIDA
+PASST SCHO
+SCHREIB(olle, LÄNGN(olle), olle[0].meldung) OIDA
+SOG AU vf VIELLEICHT FEHLA = NIX OIDA
+SCHREIB(vf, vf == NIX) OIDA
+vf = olle[1] OIDA
+SCHREIB(vf, vf.meldung + "!") OIDA
+
+SCHREIB("--- vü auf amoi") OIDA
+SOG AU guat = 0 OIDA
+SOG AU schlecht = 0 OIDA
+FIA i VON 0 BIS 999 TUA
+    PROBIER t = rechne(KETTN(i), KETTN(i % 4))
+        guat += LÄNGN(t) OIDA
+    WONNS SCHIEFGEHT f
+        schlecht += LÄNGN(f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(guat, schlecht) OIDA

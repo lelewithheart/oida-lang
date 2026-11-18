@@ -1,0 +1,74 @@
+# Lager: Werte, die fehlen können (VIELLEICHT, NIX), und Fehler ohne Absturz
+# (FEHLA, PROBIER).
+#
+# Jede Zeile bucht etwas: "Semmel 12" legt zwölf Semmeln dazu, "Semmel -5"
+# nimmt fünf weg. Dabei kann einiges schiefgehen; das Programm läuft trotzdem
+# weiter und sagt, was nicht gepasst hat.
+
+KLASSE Woar
+    name KETTN
+    stück ZOI
+PASST SCHO
+
+KLASSE Loga
+    woarn LISTN VON Woar = []
+
+    # Die Ware mit dem Namen, oder NIX, wenn es sie nicht gibt.
+    FUNKTIAUN find(name KETTN) GIBT ZRUCK VIELLEICHT Woar
+        FIA JEDE w IN SÖWA.woarn TUA
+            WENN w.name == name DAUN
+                GIB ZRUCK w OIDA
+            PASST SCHO
+        PASST SCHO
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+
+    # Bucht eine Zeile und gibt den neuen Stand zurück, oder einen Fehler.
+    FUNKTIAUN buch(zeile KETTN) GIBT ZRUCK ZOI ODA FEHLA
+        SOG AU lucke = SUACH(zeile, " ") OIDA
+        WENN lucke < 1 DAUN
+            GIB ZRUCK FEHLA("In '" + zeile + "' fehlt de Zoi.") OIDA
+        PASST SCHO
+        SOG AU name = STICKL(zeile, 0, lucke) OIDA
+        # Ist das keine Zahl, hört die Funktion hier auf und gibt den Fehler weiter.
+        SOG AU wievü = PROBIER ZOI AUS(STICKL(zeile, lucke + 1)) OIDA
+
+        SOG AU woar = SÖWA.find(name) OIDA
+        WENN woar == NIX DAUN
+            WENN wievü < 0 DAUN
+                GIB ZRUCK FEHLA(name + " hom ma gor ned.") OIDA
+            PASST SCHO
+            HAU EINE(SÖWA.woarn, Woar(name, wievü)) OIDA
+            GIB ZRUCK wievü OIDA
+        PASST SCHO
+        # Ab hier steht fest, dass woar nicht NIX ist.
+        WENN woar.stück + wievü < 0 DAUN
+            GIB ZRUCK FEHLA("Von " + name + " san nur " + KETTN(woar.stück) + " do.") OIDA
+        PASST SCHO
+        woar.stück += wievü OIDA
+        GIB ZRUCK woar.stück OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU loga = Loga() OIDA
+SOG AU zeilen = ["Semmel 12", "Kipferl 4", "Semmel -5", "Krapfn", "Kipferl vier", "Kipferl -9", "Brezn -1", "Semmel 3"] OIDA
+
+FIA JEDE zeile IN zeilen TUA
+    PROBIER stand = loga.buch(zeile)
+        SCHREIB(zeile, "-> jetzt", stand) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(zeile, "-> geht ned:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+SCHREIB() OIDA
+FIA JEDE w IN loga.woarn TUA
+    SCHREIB(w.name + ":", w.stück) OIDA
+PASST SCHO
+
+SOG AU brezn = loga.find("Brezn") OIDA
+WENN brezn == NIX DAUN
+    SCHREIB("Brezn hom ma kane.") OIDA
+PASST SCHO
+# Kurz: der Stand, oder 0, wenn eine Zeile nicht zu buchen ist.
+SCHREIB("Krapfn:", loga.buch("Krapfn 2") ODA HOID 0, "- Strudl:", loga.buch("Strudl -1") ODA HOID 0) OIDA

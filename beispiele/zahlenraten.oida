@@ -12,14 +12,18 @@ SOLONG WOAHR TUA
         HAU OB OIDA
     PASST SCHO
 
-    SOG AU tipp = ZOI(eingabe) OIDA
-    versuche += 1 OIDA
-    WENN tipp < geheim DAUN
-        SCHREIB("Z'klan!") OIDA
-    SUNST WENN tipp > geheim DAUN
-        SCHREIB("Z'groß!") OIDA
-    SUNST
-        SCHREIB("Richtig! Du host", versuche, "Versuche braucht.") OIDA
-        HAU OB OIDA
+    # ZOI AUS gibt die Zahl zurück oder einen Fehler, wenn im Text keine steht.
+    PROBIER tipp = ZOI AUS(eingabe)
+        versuche += 1 OIDA
+        WENN tipp < geheim DAUN
+            SCHREIB("Z'klan!") OIDA
+        SUNST WENN tipp > geheim DAUN
+            SCHREIB("Z'groß!") OIDA
+        SUNST
+            SCHREIB("Richtig! Du host", versuche, "Versuche braucht.") OIDA
+            HAU OB OIDA
+        PASST SCHO
+    WONNS SCHIEFGEHT
+        SCHREIB("'" + eingabe + "' is ka Zoi. Probier's nomoi.") OIDA
     PASST SCHO
 PASST SCHO
