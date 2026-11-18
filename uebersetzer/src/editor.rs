@@ -8,11 +8,12 @@
 //!   Wörterbuch: Grammatik (Einfärben ohne Compiler), Einrückregeln, Schnipsel.
 
 use std::fmt::Write;
+use std::path::Path;
 
 use crate::fehler::{Fehler, Position};
 use crate::lexer::{self, Token, TokenArt};
 use crate::woerterbuch::{Schluessel, Woerterbuch};
-use crate::{parser, typen};
+use crate::{treiber, typen};
 
 /// Die Arten, als die ein Wort eingefärbt wird. Die Nummer steht im JSON;
 /// die Reihenfolge muss zu `ARTEN` in `vscode/extension.js` passen.
@@ -103,15 +104,32 @@ impl Umrechner<'_> {
 /// Zeilen und Spalten fangen bei 0 an, Spalten und Längen sind in
 /// UTF-16-Einheiten (so zählt VS Code). `art` ist die Nummer aus [`Art`].
 pub fn untersuche(quelltext: &str, wb: &Woerterbuch) -> String {
+    untersuche_datei(quelltext, wb, None)
+}
+
+/// Wie [`untersuche`]. `pfad` ist die Datei, aus der der Text stammt: Von
+/// ihrem Ordner aus werden die Dateien gesucht, die sie mit BRAUCH dazuholt.
+pub fn untersuche_datei(quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) -> String {
     let quelltext = quelltext.strip_prefix('\u{feff}').unwrap_or(quelltext);
     let (tokens, mut fehler) = lexer::zerlegen_nachsichtig(quelltext, wb);
+    // Die Namen der Strukturen und Klassen aus den dazugeholten Dateien.
+    let mut fremde_typen: Vec<String> = Vec::new();
     if fehler.is_empty() {
-        match parser::parsen(tokens.clone(), wb) {
-            Err(f) => fehler.push(f),
-            Ok(mut programm) => {
-                if let Err(alle) = typen::pruefen(&mut programm, wb) {
-                    fehler = alle;
-                }
+        let (quellen, programm) = treiber::lade(pfad, quelltext, wb);
+        let ergebnis = programm.and_then(|mut programm| {
+            fremde_typen.extend(programm.strukturen.iter().map(|s| s.name.clone()));
+            fremde_typen.extend(programm.klassen.iter().map(|k| k.name.clone()));
+            typen::pruefen(&mut programm, wb)
+        });
+        if let Err(alle) = ergebnis {
+            fehler = alle;
+        }
+        // Ein Fehler in einer anderen Datei wird dort gezeigt, wo sie dazugeholt wird.
+        for f in &mut fehler {
+            if f.pos.datei != 0 {
+                let quelle = &quellen[f.pos.datei as usize];
+                f.meldung = format!("In {}, Zeile {}: {}", quelle.name, f.pos.zeile, f.meldung);
+                f.pos = quelle.von;
             }
         }
     }
@@ -154,7 +172,7 @@ pub fn untersuche(quelltext: &str, wb: &Woerterbuch) -> String {
                 if nach_punkt {
                     // objekt.feld oder objekt.methode(...)
                     if aufruf { Art::Funktion } else { Art::Feld }
-                } else if strukturen.contains(&name.as_str()) {
+                } else if strukturen.contains(&name.as_str()) || fremde_typen.contains(name) {
                     Art::Typ
                 } else if aufruf {
                     Art::Funktion
@@ -477,6 +495,12 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             "Kurze Funktion ohne Namen",
         ),
         (
+            w(Import).to_string(),
+            w(Import).to_string(),
+            vec![format!("{} ${{1|listen,texte,mathe,\"datei.oida\"|}} {}", w(Import), w(Oida))],
+            "Bibliothek oder eigene Datei dazuholen",
+        ),
+        (
             format!("{} {} T", w(Function), w(From)),
             format!("{}{}", w(Function), w(From)),
             vec![
@@ -622,6 +646,37 @@ mod tests {
         // FUNKTIAUN ohne Namen und VAZEICHNIS sind Wörter der Sprache, f(2) ist ein Aufruf.
         assert!(tokens.contains("[3,11,9,0]") && tokens.contains("[4,11,10,0]"), "{tokens}");
         assert!(tokens.contains("[5,9,1,2]"), "{tokens}");
+    }
+
+    #[test]
+    fn brauch_holt_die_bibliothek() {
+        let json = untersuche("BRAUCH listen OIDA\nSCHREIB(summe([1, 2])) OIDA", &wb());
+        assert_eq!(feld(&json, "fehler"), "[]");
+        // BRAUCH ist ein Wort der Sprache.
+        assert!(feld(&json, "tokens").starts_with("[[0,0,6,0],"), "{json}");
+        let json = untersuche("# nix\nBRAUCH gibtsned OIDA", &wb());
+        assert!(feld(&json, "fehler").contains("\"zeile\":1,\"spalte\":0,\"laenge\":6"), "{json}");
+        assert!(feld(&json, "fehler").contains("A Bibliothek 'gibtsned' gibt's ned."), "{json}");
+    }
+
+    #[test]
+    fn fehler_in_einer_anderen_datei_steht_beim_brauch() {
+        let ordner = std::env::temp_dir().join(format!("oida-editor-test-{}", std::process::id()));
+        std::fs::create_dir_all(&ordner).unwrap();
+        std::fs::write(
+            ordner.join("teil.oida"),
+            "KLASSE Wesen\n name KETTN\nPASST SCHO\nFUNKTIAUN hoib(x ZOI) GIBT ZRUCK ZOI\n GIB ZRUCK x + \"a\" OIDA\nPASST SCHO\n",
+        )
+        .unwrap();
+        let haupt = ordner.join("haupt.oida");
+        let json = untersuche_datei("# obn\nBRAUCH \"teil\" OIDA\nSOG AU w = Wesen(\"a\") OIDA", &wb(), Some(&haupt));
+        let _ = std::fs::remove_dir_all(&ordner);
+        // Der Fehler aus teil.oida, Zeile 5, wird am BRAUCH gezeigt (Zeile 1, ab 0 gezählt).
+        let fehler = feld(&json, "fehler");
+        assert!(fehler.contains("\"zeile\":1,\"spalte\":0,\"laenge\":6"), "{fehler}");
+        assert!(fehler.contains("teil.oida, Zeile 5: A ZOI + a KETTN?"), "{fehler}");
+        // Die Klasse aus der anderen Datei ist hier ein Typ.
+        assert!(feld(&json, "tokens").contains("[2,11,5,1]"), "{json}");
     }
 
     #[test]

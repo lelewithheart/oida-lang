@@ -1,0 +1,7 @@
+BRAUCH "teile/kaputt.oida" OIDA
+BRAUCH listen OIDA
+FUNKTIAUN rahmen(wos KETTN) GIBT ZRUCK KETTN
+    GIB ZRUCK wos OIDA
+PASST SCHO
+SCHREIB(hoib(4) + "x") OIDA
+SCHREIB(nur([1, 2], FUNKTIAUN(z KETTN) => z == "a")) OIDA

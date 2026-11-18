@@ -135,7 +135,7 @@ function woerterbuchArgumente() {
  * Schickt den Text an  oida --editor  und gibt die Antwort zurück
  * (oder null, wenn es keinen Compiler gibt oder er nicht antwortet).
  */
-function frageCompiler(text, arbeitsordner) {
+function frageCompiler(text, arbeitsordner, datei) {
     const compiler = findeCompiler();
     if (!compiler) {
         compilerFehlt(false);
@@ -146,7 +146,9 @@ function frageCompiler(text, arbeitsordner) {
         let meldungen = '';
         let prozess;
         try {
-            prozess = cp.spawn(compiler, ['--editor', ...woerterbuchArgumente()], {
+            // Die Datei sagt dem Compiler, von wo aus er sucht, was mit BRAUCH dazugeholt wird.
+            const woher = datei ? [datei] : [];
+            prozess = cp.spawn(compiler, ['--editor', ...woerterbuchArgumente(), ...woher], {
                 cwd: arbeitsordner,
                 windowsHide: true,
             });
@@ -200,7 +202,8 @@ function untersuche(dokument) {
         return alt.ergebnis;
     }
     const arbeitsordner = dokument.uri.scheme === 'file' ? path.dirname(dokument.uri.fsPath) : undefined;
-    const ergebnis = frageCompiler(dokument.getText(), arbeitsordner);
+    const datei = dokument.uri.scheme === 'file' ? dokument.fileName : undefined;
+    const ergebnis = frageCompiler(dokument.getText(), arbeitsordner, datei);
     antworten.set(schluessel, { version: dokument.version, ergebnis });
     return ergebnis;
 }

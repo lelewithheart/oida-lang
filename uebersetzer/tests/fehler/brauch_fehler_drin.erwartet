@@ -1,0 +1,5 @@
+:6:17: A ZOI + a KETTN? Des geht si ned aus. Nimm KETTN(...) zum Umwandln.
+:7:21: 'nur VON ZOI' wü ois 2. Wert a FUNKTIAUN(ZOI) GIBT ZRUCK JONA, du gibst eam a FUNKTIAUN(KETTN) GIBT ZRUCK JONA.
+teile/kaputt.oida:2:21: A ZOI + a KETTN? Des geht si ned aus. Nimm KETTN(...) zum Umwandln.
+teile/kaputt.oida:4:1: De FUNKTIAUN 'rahmen' gibt's scho. Zwamoi geht ned.
+Na, des wird nix: 4 Fehler.

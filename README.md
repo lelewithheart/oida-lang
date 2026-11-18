@@ -34,8 +34,9 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.6.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
-(Generics), Funktionen als Werte, fehlende Werte (`NIX`) und Fehler ohne Absturz sind da.
+**Stand: v0.7.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+(Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
+mehreren Dateien und eine mitgelieferte Bibliothek sind da.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -131,7 +132,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.6)
+## Die Sprache (v0.7)
 
 ### Typen
 
@@ -669,6 +670,92 @@ Die Namen dieser Funktionen gelten nur mit Klammer. Eine Variable darf also `win
 
 Greift man bei `STICKL` über den Text hinaus, bricht das Programm mit einer Meldung ab.
 
+### Mehrere Dateien: BRAUCH
+
+Ein größeres Programm verteilt man auf mehrere Dateien. `BRAUCH` holt Funktionen, Klassen und
+Strukturen aus einer anderen Datei dazu:
+
+```
+# spui.oida
+BRAUCH "gegner.oida" OIDA          # eine eigene Datei, vom Ordner dieser Datei aus gesucht
+BRAUCH "teile/kortn" OIDA          # die Endung .oida darf fehlen
+BRAUCH listen OIDA                 # ohne Anführungszeichen: ein Teil der mitgelieferten Bibliothek
+
+SOG AU g = Gegner("Sepp") OIDA     # Gegner steht in gegner.oida
+```
+
+Übersetzt wird nur die eine Datei (`oida spui.oida`); den Rest holt der Compiler selbst. Heraus
+kommt wie immer eine einzige `.exe`.
+
+- `BRAUCH` steht ganz außen, am besten ganz oben.
+- In einer dazugeholten Datei stehen nur `FUNKTIAUN`, `KLASSE`, `STRUKTUR` und weitere `BRAUCH`.
+  Was gleich laufen soll, steht in der Datei, die übersetzt wird.
+- Alles gilt im ganzen Programm, egal aus welcher Datei es kommt und in welcher Reihenfolge.
+  Zwei Funktionen (oder Klassen) mit demselben Namen gehen deshalb nicht, auch nicht in
+  verschiedenen Dateien.
+- Jede Datei zählt nur einmal, auch wenn mehrere sie brauchen oder zwei sich gegenseitig.
+- Steckt ein Fehler in einer dazugeholten Datei, nennt die Meldung diese Datei und die Zeile dort.
+
+### Die Bibliothek
+
+Mit OIDA kommt eine kleine Sammlung von Funktionen, die selbst in OIDA geschrieben ist
+([`bibliothek/`](bibliothek/)). Sie steckt im Compiler; man braucht keine Dateien dazu.
+
+**`BRAUCH listen OIDA`** (gehen mit jeder Liste; `passt` und `vuaher` sind Funktionen):
+
+| Funktion | Ergebnis |
+|---|---|
+| `nur(liste, passt)` | nur die Elemente, bei denen `passt` WOAHR sagt |
+| `mach(liste, f)` | aus jedem Element wird `f(element)` |
+| `erstes(liste, passt)` | das erste passende Element, oder `NIX` |
+| `wo(liste, passt)` | die Stelle des ersten passenden Elements, oder `-1` |
+| `olle(liste, passt)`, `irgendans(liste, passt)` | passen alle? passt mindestens eines? |
+| `wievü(liste, passt)` | wie viele passen |
+| `hot(liste, wert)` | kommt der Wert vor? |
+| `sortiert(liste, vuaher)` | sortierte Kopie; `vuaher(a, b)` sagt, ob `a` vor `b` gehört |
+| `sortier(liste, vuaher)` | sortiert die Liste selbst |
+| `kopie(liste)`, `umdraht(liste)`, `zamm(a, b)` | Kopie, von hinten nach vorne, hintereinandergehängt |
+| `ausschnitt(liste, ab, anzahl)` | `anzahl` Elemente ab der Stelle `ab` |
+| `klanstes(liste)`, `größtes(liste)` | kleinstes und größtes Element, oder `NIX` |
+| `summe(zahlen)`, `kommasumme(zahlen)` | Summe einer `LISTN VON ZOI` bzw. `KOMMAZOI` |
+| `zoin(erste, letzte)` | die ganzen Zahlen von `erste` bis `letzte` |
+| `zufoi_aus(liste)` | ein zufälliges Element, oder `NIX` |
+| `misch(liste)` | bringt die Liste selbst in zufällige Reihenfolge |
+
+```
+BRAUCH listen OIDA
+SOG AU zahlen = [5, 3, 8, 1] OIDA
+SCHREIB(sortiert(nur(zahlen, FUNKTIAUN(z ZOI) => z > 2), FUNKTIAUN(a ZOI, b ZOI) => a < b)) OIDA   # [3, 5, 8]
+```
+
+**`BRAUCH texte OIDA`**
+
+| Funktion | Ergebnis |
+|---|---|
+| `teil(text, trenna)` | zerlegt: `teil("a,b", ",")` ist `["a", "b"]` |
+| `wörter(text)` | an Leerzeichen zerlegt, ohne leere Stücke |
+| `zeichn(text)` | die einzelnen Zeichen |
+| `verbind(teile, dazwischn)` | hängt zusammen: `verbind(["a", "b"], "-")` ist `"a-b"` |
+| `enthoit(text, gsuacht)`, `fangt_au(text, anfang)`, `hört_auf(text, schluss)` | `JONA` |
+| `wiederhoi(text, wia_oft)` | derselbe Text mehrmals |
+| `vuan_auffülln(text, breite, füllung)`, `hintn_auffülln(...)` | auf eine Breite auffüllen: `"007"` |
+
+**`BRAUCH mathe OIDA`**
+
+| Funktion | Ergebnis |
+|---|---|
+| `klemm(wert, untn, obn)` | hält den Wert zwischen zwei Grenzen |
+| `abstand(x1, y1, x2, y2)` | wie weit zwei Punkte auseinanderliegen |
+| `zwischn(a, b, wia_weit)` | der Wert zwischen `a` und `b` (bei 0 `a`, bei 1 `b`) |
+| `vuazeichn(x)`, `quadrat(x)`, `is_grod(n)` | -1/0/1, x mal x, gerade? |
+| `in_grad(bogn)`, `in_bogn(grad)` | Winkel umrechnen |
+| `zufoi_zwischn(untn, obn)` | zufällige `KOMMAZOI` in dem Bereich |
+
+Weil alles im ganzen Programm gilt, kann eine eigene Funktion nicht so heißen wie eine aus einem
+Teil der Bibliothek, den man dazuholt. Eine Variable schon (`SOG AU summe = 0 OIDA` geht).
+
+Ein Beispiel mit zwei Dateien und der Bibliothek: [`beispiele/turnier.oida`](beispiele/turnier.oida).
+
 ### Kommentare
 
 ```
@@ -762,6 +849,7 @@ steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
 ```
 woerterbuch.txt        die Wörter der Sprache
 beispiele/             Beispielprogramme, jeweils mit der erwarteten Ausgabe (.erwartet)
+bibliothek/            die mitgelieferte Bibliothek, in OIDA geschrieben (wird in oida.exe eingebaut)
 uebersetzer/           der Compiler (Rust), ergibt oida.exe
   src/woerterbuch.rs     Wörterbuch lesen, längster Treffer gewinnt
   src/lexer.rs           Quelltext -> Tokens
@@ -793,8 +881,8 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 - Ob etwas `NIX` ist, merkt sich der Compiler nur bei Variablen, nicht bei Feldern und Listenstellen.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - Strukturen und Listen kann man nicht mit `=` vergleichen.
-- Sortieren, filtern und Ähnliches schreibt man vorerst selbst (als Vorlage, siehe
-  [`beispiele/woatzöhla.oida`](beispiele/woatzöhla.oida)); eine mitgelieferte Sammlung kommt mit Schritt 6.
+- Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
+- Die Bibliothek ist klein: Listen, Texte, etwas Rechnen. Dateien lesen und schreiben fehlt noch.
 - Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
 - Bei einem Verzeichnis geht als Schlüssel nur `ZOI` oder `KETTN`.
 - Keine Dateien, kein Fenster, keine Grafik.
@@ -821,7 +909,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 3 | Klassen mit Feldern, Methoden und Vererbung | fertig |
 | 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | fertig |
 | 5 | Vorlagen (Generics), Funktionen als Werte, das Verzeichnis (Schlüssel → Wert) | fertig |
-| 6 | Programme aus mehreren Dateien, Standardbibliothek in OIDA | offen |
+| 6 | Programme aus mehreren Dateien, Bibliothek in OIDA | fertig |
 | 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | offen |
 | 8 | Das Spiel nachbauen | offen |
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |

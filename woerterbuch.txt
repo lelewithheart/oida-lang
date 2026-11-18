@@ -84,6 +84,8 @@ ORELSE    = ODA HOID
 ERROR     = FEHLA
 TRY       = PROBIER, PROBIERS
 CATCH     = WONNS SCHIEFGEHT, WENNS SCHIEFGEHT
+# --- Andere Dateien dazunehmen:  BRAUCH "gegner.oida" OIDA,  BRAUCH listen OIDA
+IMPORT    = BRAUCH, HOL EINA
 # --- Funktionen -------------------------------------------------------------
 FUNCTION  = FUNKTIAUN
 RETURNS   = GIBT ZRUCK

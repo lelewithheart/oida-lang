@@ -1,0 +1,69 @@
+# Die mitgelieferte Bibliothek: listen, texte, mathe.
+
+BRAUCH listen OIDA
+BRAUCH texte OIDA
+BRAUCH mathe OIDA
+# Zweimal dasselbe schadet nicht.
+BRAUCH listen OIDA
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+KLASSE Wesen
+    name KETTN
+    lebn ZOI
+PASST SCHO
+
+SCHREIB("--- listen") OIDA
+SOG AU zahlen = [5, 3, 8, 1, 9, 2, 8] OIDA
+SCHREIB(nur(zahlen, FUNKTIAUN(z ZOI) => z > 4), mach(zahlen, FUNKTIAUN(z ZOI) => z * 1.5)) OIDA
+SCHREIB(erstes(zahlen, FUNKTIAUN(z ZOI) => z > 7), erstes(zahlen, FUNKTIAUN(z ZOI) => z > 70)) OIDA
+SCHREIB(wo(zahlen, FUNKTIAUN(z ZOI) => z == 8), wo(zahlen, FUNKTIAUN(z ZOI) => z == 80)) OIDA
+SCHREIB(olle(zahlen, FUNKTIAUN(z ZOI) => z > 0), olle(zahlen, FUNKTIAUN(z ZOI) => z > 1), irgendans(zahlen, FUNKTIAUN(z ZOI) => z > 8)) OIDA
+SCHREIB(wievü(zahlen, FUNKTIAUN(z ZOI) => z == 8), hot(zahlen, 9), hot(zahlen, 7), hot(["a", "b"], "b")) OIDA
+SCHREIB(kopie(zahlen), ausschnitt(zahlen, 2, 3), ausschnitt(zahlen, 5, 99), ausschnitt(zahlen, -2, 3)) OIDA
+SCHREIB(umdraht(zahlen), zamm([1, 2], [3]), zamm(["a"], zamm(["b"], ["c"]))) OIDA
+SCHREIB(sortiert(zahlen, FUNKTIAUN(a ZOI, b ZOI) => a < b), sortiert(zahlen, FUNKTIAUN(a ZOI, b ZOI) => a > b)) OIDA
+SCHREIB(zahlen, summe(zahlen), kommasumme([1.5, 2.5]), klanstes(zahlen), größtes(zahlen), größtes(["Sepp", "Hansi"])) OIDA
+SOG AU kane LISTN VON ZOI = [] OIDA
+SCHREIB(klanstes(kane), größtes(kane), sortiert(kane, FUNKTIAUN(a ZOI, b ZOI) => a < b), summe(kane), zufoi_aus(kane)) OIDA
+SCHREIB(zoin(3, 7), zoin(5, 4), summe(zoin(1, 100))) OIDA
+sortier(zahlen, FUNKTIAUN(a ZOI, b ZOI) => a < b) OIDA
+SCHREIB(zahlen) OIDA
+
+# Sortieren lässt Gleiches in der Reihenfolge von vorher.
+SOG AU punkte = [Punkt(2, 1), Punkt(1, 2), Punkt(2, 3), Punkt(1, 4), Punkt(0, 5), Punkt(2, 6)] OIDA
+SCHREIB(mach(sortiert(punkte, FUNKTIAUN(a Punkt, b Punkt) => a.x < b.x), FUNKTIAUN(p Punkt) => p.x * 10 + p.y)) OIDA
+
+SOG AU leit = [Wesen("Hansi", 7), Wesen("Sepp", 0), Wesen("Resi", 12)] OIDA
+SOG AU lebendig = nur(leit, FUNKTIAUN(w Wesen) => w.lebn > 0) OIDA
+SCHREIB(mach(lebendig, FUNKTIAUN(w Wesen) => w.name), wievü(leit, FUNKTIAUN(w Wesen) => w.lebn == 0)) OIDA
+SOG AU stärkstes = erstes(sortiert(leit, FUNKTIAUN(a Wesen, b Wesen) => a.lebn > b.lebn), FUNKTIAUN(w Wesen) => WOAHR) OIDA
+WENN stärkstes != NIX DAUN
+    SCHREIB(stärkstes.name, hot(leit, stärkstes), hot(lebendig, leit[1])) OIDA
+PASST SCHO
+
+# Der Zufall: Mit festem Startwert kommt immer dasselbe.
+SOMEN(7) OIDA
+SOG AU kortn = zoin(1, 10) OIDA
+misch(kortn) OIDA
+SCHREIB(LÄNGN(kortn), summe(kortn), hot(kortn, 10), zufoi_aus(kortn) != NIX) OIDA
+SCHREIB(sortiert(kortn, FUNKTIAUN(a ZOI, b ZOI) => a < b)) OIDA
+
+SCHREIB("--- texte") OIDA
+SCHREIB(teil("a,b,,c", ","), teil("ohne", ","), teil("", ","), teil("a--b--", "--"), teil("oida", "")) OIDA
+SCHREIB(wörter("  heast   oida  na "), wörter(""), zeichn("öha")) OIDA
+SCHREIB(verbind(["a", "b", "c"], ", "), verbind([], ", "), verbind(["allan"], "-"), verbind(wörter("des is guat"), "_")) OIDA
+SCHREIB(enthoit("Servas", "rva"), enthoit("Servas", "x"), fangt_au("Servas", "Ser"), fangt_au("Ser", "Servas")) OIDA
+SCHREIB(hört_auf("Servas", "vas"), hört_auf("Servas", "Ser"), hört_auf("as", "Servas"), fangt_au("x", ""), hört_auf("x", "")) OIDA
+SCHREIB(wiederhoi("ha", 3), wiederhoi("x", 0) + "|", vuan_auffülln("7", 3, "0"), hintn_auffülln("ab", 5, ".") + "|", vuan_auffülln("lang", 2, " ")) OIDA
+
+SCHREIB("--- mathe") OIDA
+SCHREIB(klemm(15, 0, 10), klemm(-3, 0, 10), klemm(4, 0, 10), klemm(2.5, 0.0, 1.0), klemm("m", "a", "f")) OIDA
+SCHREIB(vuazeichn(-2.5), vuazeichn(0), vuazeichn(7), quadrat(3), abstand(0, 0, 3, 4)) OIDA
+SCHREIB(zwischn(10, 20, 0.25), zwischn(0, 1, 0.5), RUNDN(in_grad(PI)), RUNDN(in_bogn(180) * 1000)) OIDA
+SCHREIB(is_grod(4), is_grod(7), is_grod(0)) OIDA
+SOG AU z = zufoi_zwischn(2, 3) OIDA
+SCHREIB(z >= 2 UND z < 3) OIDA

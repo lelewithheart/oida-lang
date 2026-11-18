@@ -1,0 +1,40 @@
+# Turnier: ein Programm aus zwei Dateien, das die mitgelieferte Bibliothek verwendet.
+#
+#   BRAUCH "datei.oida"   holt Klassen, Strukturen und Funktionen aus einer eigenen Datei
+#   BRAUCH listen         holt einen Teil der Bibliothek (listen, texte, mathe)
+
+BRAUCH "turnier/spiela.oida" OIDA
+BRAUCH listen OIDA
+BRAUCH texte OIDA
+
+SOG AU olle = spiela_aus("Hansi, Sepp, Resi, Mitzi") OIDA
+
+# Jeder gegen jeden. Wer gewinnt, steht hier fest, damit immer dasselbe herauskommt.
+SOG AU runde = 0 OIDA
+FIA i VON 0 BIS LÄNGN(olle) - 1 TUA
+    FIA j VON i + 1 BIS LÄNGN(olle) - 1 TUA
+        runde += 1 OIDA
+        SOG AU sieger = olle[i] OIDA
+        WENN (i * 3 + j * 5 + runde) % 3 == 0 DAUN
+            sieger = olle[j] OIDA
+        PASST SCHO
+        sieger.gwinnt(2 + runde % 2) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Die Tabelle: nach Punkten, die meisten zuerst.
+SOG AU tabelle = sortiert(olle, FUNKTIAUN(a Spiela, b Spiela) => a.punkte > b.punkte) OIDA
+SCHREIB("    Nom      Pkt Sig") OIDA
+SCHREIB(wiederhoi("-", 20)) OIDA
+FIA i VON 0 BIS LÄNGN(tabelle) - 1 TUA
+    SCHREIB(tabelle[i].zeile(i + 1)) OIDA
+PASST SCHO
+
+SCHREIB() OIDA
+SOG AU ohne_sieg = nur(olle, FUNKTIAUN(s Spiela) => s.spiele == 0) OIDA
+SCHREIB("Punkte gesamt:", summe(mach(olle, FUNKTIAUN(s Spiela) => s.punkte))) OIDA
+SCHREIB("Ohne Sieg:", verbind(mach(ohne_sieg, FUNKTIAUN(s Spiela) => s.name), ", ")) OIDA
+SOG AU erster = erstes(tabelle, FUNKTIAUN(s Spiela) => WOAHR) OIDA
+WENN erster != NIX DAUN
+    SCHREIB("Gwunna hot", SCHREI(erster.name) + "!") OIDA
+PASST SCHO

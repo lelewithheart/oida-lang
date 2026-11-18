@@ -327,7 +327,7 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         programm.typen = p.typen;
         Ok(())
     } else {
-        p.fehler.sort_by_key(|f| (f.pos.zeile, f.pos.spalte));
+        p.fehler.sort_by_key(|f| (f.pos.datei, f.pos.zeile, f.pos.spalte));
         // Derselbe Fehler in mehreren Fassungen einer Vorlage wird nur einmal gezeigt.
         p.fehler.dedup_by(|a, b| a.pos == b.pos && a.meldung == b.meldung);
         Err(p.fehler)
@@ -2143,7 +2143,8 @@ impl Pruefer<'_> {
             let ist_funktion = variable.is_some_and(|(_, typ)| {
                 matches!(typ, Typ::Funktion(_)) || matches!(self.typen.innen(typ), Some(Typ::Funktion(_)))
             });
-            if ist_funktion || (variable.is_some() && !self.signaturen.contains_key(&name)) {
+            let funktion_mit_nom = self.signaturen.contains_key(&name) || self.funktions_vorlagen.contains_key(&name);
+            if ist_funktion || (variable.is_some() && !funktion_mit_nom) {
                 let AusdruckArt::Aufruf { name, argumente } = std::mem::replace(&mut ausdruck.art, AusdruckArt::Nix)
                 else {
                     unreachable!()

@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::fehler::Fehler;
+use crate::ast::{Import, Programm};
+use crate::fehler::{Fehler, Position};
 use crate::woerterbuch::Woerterbuch;
 use crate::{irgen, lexer, parser, typen};
 
@@ -21,12 +22,150 @@ const LAUFZEIT_KENNUNG: &str = env!("OIDA_LAUFZEIT_KENNUNG");
 const SYSTEM_BIBLIOTHEKEN: [&str; 6] =
     ["-lkernel32", "-lntdll", "-luserenv", "-lws2_32", "-ldbghelp", "-lsynchronization"];
 
-/// Lexer, Parser, Typprüfung und IR-Erzeugung hintereinander.
-pub fn zu_ir(quelltext: &str, wb: &Woerterbuch) -> Result<String, Vec<Fehler>> {
+/// Die mitgelieferte Bibliothek: in OIDA geschrieben und in den Compiler
+/// eingebaut. `BRAUCH listen OIDA` holt den Teil mit diesem Namen dazu.
+pub const BIBLIOTHEK: [(&str, &str); 3] = [
+    ("listen", include_str!("../../bibliothek/listen.oida")),
+    ("texte", include_str!("../../bibliothek/texte.oida")),
+    ("mathe", include_str!("../../bibliothek/mathe.oida")),
+];
+
+/// Eine Datei, aus der das Programm besteht. Ihre Stelle in der Liste ist
+/// die Nummer in [`Position::datei`]; die erste ist die Datei, die übersetzt wird.
+pub struct Quelle {
+    /// Wie die Datei in Meldungen heißt.
+    pub name: String,
+    pub text: String,
+    /// Wo in der ersten Datei das BRAUCH steht, über das diese Datei (direkt
+    /// oder über andere) dazugekommen ist. Dort zeigt der Editor ihre Fehler an.
+    pub von: Position,
+}
+
+/// Woran man eine Datei wiedererkennt, damit sie nur einmal geladen wird.
+fn kennung(pfad: &Path) -> String {
+    fs::canonicalize(pfad).unwrap_or_else(|_| pfad.to_path_buf()).to_string_lossy().to_lowercase()
+}
+
+/// Liest das Programm samt allem, was es mit BRAUCH dazuholt, und macht einen
+/// Syntaxbaum daraus. `pfad` ist die Datei, aus der `quelltext` stammt (wenn
+/// es eine gibt): Von ihrem Ordner aus werden die anderen Dateien gesucht.
+pub fn lade(pfad: Option<&Path>, quelltext: &str, wb: &Woerterbuch) -> (Vec<Quelle>, Result<Programm, Vec<Fehler>>) {
+    let name = pfad.map_or_else(|| "<eingabe>".to_string(), |p| p.display().to_string());
+    let mut quellen = vec![Quelle { name, text: quelltext.to_string(), von: Position::default() }];
+    let ergebnis = lade_alles(pfad, quelltext, wb, &mut quellen);
+    (quellen, ergebnis)
+}
+
+fn lade_alles(
+    pfad: Option<&Path>,
+    quelltext: &str,
+    wb: &Woerterbuch,
+    quellen: &mut Vec<Quelle>,
+) -> Result<Programm, Vec<Fehler>> {
     let tokens = lexer::zerlegen(quelltext, wb).map_err(|f| vec![f])?;
     let mut programm = parser::parsen(tokens, wb).map_err(|f| vec![f])?;
-    typen::pruefen(&mut programm, wb)?;
-    Ok(irgen::erzeugen(&programm, wb))
+    if programm.importe.is_empty() {
+        return Ok(programm);
+    }
+
+    let mut geladen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Some(pfad) = pfad {
+        geladen.insert(kennung(pfad));
+    }
+    let ordner = pfad.and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
+    // Was noch zu holen ist: das BRAUCH, der Ordner der Datei, in der es steht,
+    // und die Stelle in der ersten Datei, über die es hereinkommt.
+    let mut offen: std::collections::VecDeque<(Import, PathBuf, Position)> =
+        programm.importe.iter().map(|i| (i.clone(), ordner.clone(), i.pos)).collect();
+    // Die Bibliothek ist mit den Wörtern geschrieben, die beim Bauen des
+    // Compilers galten, auch wenn hier ein eigenes Wörterbuch verwendet wird.
+    let eingebaut = Woerterbuch::eingebaut();
+
+    while let Some((import, ordner, von)) = offen.pop_front() {
+        let melde = |meldung: String| vec![Fehler::neu(import.pos, meldung)];
+        let (wieder, name, text, woerter, naechster_ordner) = if import.bibliothek {
+            let Some((teil, text)) = BIBLIOTHEK.iter().find(|(teil, _)| *teil == import.ziel) else {
+                let namen: Vec<&str> = BIBLIOTHEK.iter().map(|(teil, _)| *teil).collect();
+                return Err(melde(format!(
+                    "A Bibliothek '{}' gibt's ned. Es gibt: {}. (A eigene Datei ghört in Anführungszeichn.)",
+                    import.ziel,
+                    namen.join(", ")
+                )));
+            };
+            (format!("oida:{teil}"), format!("bibliothek/{teil}.oida"), text.to_string(), &eingebaut, PathBuf::new())
+        } else {
+            let mut datei = ordner.join(&import.ziel);
+            if datei.extension().is_none() {
+                datei.set_extension("oida");
+            }
+            // In Meldungen überall derselbe Schrägstrich, egal wie der Pfad zusammengesetzt wurde.
+            let anzeige = datei.display().to_string().replace('\\', "/");
+            let bytes = fs::read(&datei).map_err(|e| {
+                melde(match e.kind() {
+                    std::io::ErrorKind::NotFound => format!("De Datei {anzeige} find i ned."),
+                    _ => format!("De Datei {anzeige} kaun i ned lesn: {e}"),
+                })
+            })?;
+            let text = String::from_utf8(bytes)
+                .map_err(|_| melde(format!("{anzeige} is ka UTF-8. Speicher de Datei im Editor ois UTF-8 o.")))?;
+            let daneben = datei.parent().map(Path::to_path_buf).unwrap_or_default();
+            (kennung(&datei), anzeige, text, wb, daneben)
+        };
+        if !geladen.insert(wieder) {
+            continue; // schon da: Jede Datei zählt nur einmal, auch im Kreis.
+        }
+        let nummer = quellen.len() as u16;
+        quellen.push(Quelle { name, text: text.clone(), von });
+
+        let hier = |mut f: Fehler| {
+            f.pos.datei = nummer;
+            vec![f]
+        };
+        let mut tokens = lexer::zerlegen(&text, woerter).map_err(hier)?;
+        for token in &mut tokens {
+            token.pos.datei = nummer;
+            token.ende.datei = nummer;
+        }
+        let teil = parser::parsen(tokens, woerter).map_err(hier)?;
+        if let Some(erste) = teil.haupt.first() {
+            use crate::woerterbuch::Schluessel as S;
+            return Err(vec![Fehler::neu(
+                erste.pos,
+                format!(
+                    "In ana Datei, de mit {} dazuaghoit wird, derfn nur {}, {} und {} stehn. \
+                     Wos glei laufn soll, ghört in de Datei, de übersetzt wird.",
+                    wb.wort(S::Import),
+                    wb.wort(S::Function),
+                    wb.wort(S::Class),
+                    wb.wort(S::Struct)
+                ),
+            )]);
+        }
+        for weiter in teil.importe {
+            offen.push_back((weiter, naechster_ordner.clone(), von));
+        }
+        programm.strukturen.extend(teil.strukturen);
+        programm.klassen.extend(teil.klassen);
+        programm.funktionen.extend(teil.funktionen);
+    }
+    Ok(programm)
+}
+
+/// Lexer, Parser, Typprüfung und IR-Erzeugung hintereinander, samt allem,
+/// was das Programm mit BRAUCH dazuholt. Gibt auch die Dateien zurück, aus
+/// denen es besteht (für die Meldungen).
+pub fn uebersetze(pfad: Option<&Path>, quelltext: &str, wb: &Woerterbuch) -> (Vec<Quelle>, Result<String, Vec<Fehler>>) {
+    let (quellen, programm) = lade(pfad, quelltext, wb);
+    let ir = programm.and_then(|mut programm| {
+        typen::pruefen(&mut programm, wb)?;
+        Ok(irgen::erzeugen(&programm, wb))
+    });
+    (quellen, ir)
+}
+
+/// Wie [`uebersetze`], für ein Programm, das in keiner Datei steht.
+pub fn zu_ir(quelltext: &str, wb: &Woerterbuch) -> Result<String, Vec<Fehler>> {
+    uebersetze(None, quelltext, wb).1
 }
 
 /// Sucht das Wörterbuch:
@@ -156,4 +295,46 @@ pub fn baue_exe(ir: &str, ausgabe: &Path, optimieren: bool) -> Result<(), String
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn die_bibliothek_laesst_sich_ganz_uebersetzen() {
+        // Jeder Teil für sich und alle zusammen: keine Fehler, keine doppelten Namen.
+        let wb = Woerterbuch::eingebaut();
+        let mut alle = String::new();
+        for (teil, _) in BIBLIOTHEK {
+            let quelltext = format!("BRAUCH {teil} OIDA\n");
+            zu_ir(&quelltext, &wb).unwrap_or_else(|f| panic!("{teil}: {f:?}"));
+            alle.push_str(&quelltext);
+        }
+        zu_ir(&alle, &wb).unwrap_or_else(|f| panic!("alle zusammen: {f:?}"));
+    }
+
+    #[test]
+    fn die_bibliothek_geht_auch_mit_eigenem_woerterbuch() {
+        // Wer WENN zu FOIS macht, kann die Bibliothek trotzdem verwenden: Sie
+        // wird mit den Wörtern gelesen, mit denen sie geschrieben ist.
+        let eigenes = crate::woerterbuch::EINGEBAUT.replace("IF        = WENN, WAUN", "IF        = FOIS");
+        let wb = Woerterbuch::laden(&eigenes, "test").unwrap();
+        let ir = zu_ir("BRAUCH listen OIDA\nFOIS summe([1, 2]) > 2 DAUN\n SCHREIB(1) OIDA\nPASST SCHO", &wb);
+        assert!(ir.is_ok(), "{:?}", ir.err());
+        assert!(zu_ir("WENN WOAHR DAUN\nPASST SCHO", &wb).is_err());
+    }
+
+    #[test]
+    fn jede_datei_zaehlt_nur_einmal() {
+        let wb = Woerterbuch::eingebaut();
+        let (quellen, programm) = lade(None, "BRAUCH listen OIDA\nBRAUCH texte OIDA\nBRAUCH listen OIDA", &wb);
+        assert!(programm.is_ok());
+        let namen: Vec<&str> = quellen.iter().map(|q| q.name.as_str()).collect();
+        assert_eq!(namen, vec!["<eingabe>", "bibliothek/listen.oida", "bibliothek/texte.oida"]);
+        // Die Stellen aus der Bibliothek tragen die Nummer ihrer Datei.
+        let programm = programm.unwrap();
+        assert!(programm.funktionen.iter().any(|f| f.name == "summe" && f.pos.datei == 1));
+        assert!(programm.funktionen.iter().any(|f| f.name == "verbind" && f.pos.datei == 2));
+    }
 }

@@ -402,6 +402,23 @@ impl Parser<'_> {
             let token = self.aktuell();
             match token.art {
                 TokenArt::DateiEnde => return Ok(programm),
+                TokenArt::Schluessel(Schluessel::Import) => {
+                    // BRAUCH listen OIDA (mitgeliefert) oder BRAUCH "datei.oida" OIDA
+                    let pos = self.weiter().pos;
+                    let token = self.aktuell().clone();
+                    let (ziel, bibliothek) = match token.art {
+                        TokenArt::Text(pfad) => (pfad, false),
+                        TokenArt::Name(name) => (name, true),
+                        _ => {
+                            return Err(self.unerwartet(
+                                "da Nom von ana Bibliothek (zum Beispü listen) oda a Datei in Anführungszeichn",
+                            ));
+                        }
+                    };
+                    self.weiter();
+                    self.erwarte_oida()?;
+                    programm.importe.push(Import { ziel, bibliothek, pos });
+                }
                 TokenArt::Schluessel(Schluessel::Function) => {
                     let funktion = self.funktion()?;
                     programm.funktionen.push(funktion);
@@ -519,6 +536,12 @@ impl Parser<'_> {
                     return Err(Fehler::neu(
                         token.pos,
                         format!("A {} kaunst ned in wos aundas einebaun, de ghört gaunz noch außn.", self.wort(wort)),
+                    ));
+                }
+                TokenArt::Schluessel(Schluessel::Import) => {
+                    return Err(Fehler::neu(
+                        token.pos,
+                        format!("{} ghört gaunz noch außn, am bestn gaunz obn in de Datei.", self.wort(Schluessel::Import)),
                     ));
                 }
                 _ => anweisungen.push(self.anweisung()?),

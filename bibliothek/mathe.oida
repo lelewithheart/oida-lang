@@ -1,0 +1,56 @@
+# OIDA-Bibliothek: Rechnen.         Dazuholen mit:  BRAUCH mathe OIDA
+
+# Hält den Wert zwischen `untn` und `obn`: klemm(15, 0, 10) ist 10.
+# (Für alles, was man mit < vergleichen kann.)
+FUNKTIAUN klemm VON T(wert T, untn T, obn T) GIBT ZRUCK T
+    WENN wert < untn DAUN
+        GIB ZRUCK untn OIDA
+    PASST SCHO
+    WENN obn < wert DAUN
+        GIB ZRUCK obn OIDA
+    PASST SCHO
+    GIB ZRUCK wert OIDA
+PASST SCHO
+
+# -1, 0 oder 1, je nachdem, ob die Zahl unter, auf oder über null liegt.
+FUNKTIAUN vuazeichn(x KOMMAZOI) GIBT ZRUCK ZOI
+    WENN x < 0 DAUN
+        GIB ZRUCK -1 OIDA
+    PASST SCHO
+    WENN x > 0 DAUN
+        GIB ZRUCK 1 OIDA
+    PASST SCHO
+    GIB ZRUCK 0 OIDA
+PASST SCHO
+
+FUNKTIAUN quadrat(x KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK x * x OIDA
+PASST SCHO
+
+# Wie weit die Punkte (x1, y1) und (x2, y2) auseinanderliegen.
+FUNKTIAUN abstand(x1 KOMMAZOI, y1 KOMMAZOI, x2 KOMMAZOI, y2 KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK WURZL(quadrat(x2 - x1) + quadrat(y2 - y1)) OIDA
+PASST SCHO
+
+# Der Wert zwischen a und b: bei wia_weit = 0 ist es a, bei 1 ist es b, bei 0.5 die Mitte.
+FUNKTIAUN zwischn(a KOMMAZOI, b KOMMAZOI, wia_weit KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK a + (b - a) * wia_weit OIDA
+PASST SCHO
+
+# Winkel umrechnen: Bogenmaß (wie SINUS es will) und Grad.
+FUNKTIAUN in_grad(bogn KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK bogn * 180 / PI OIDA
+PASST SCHO
+
+FUNKTIAUN in_bogn(grad KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK grad * PI / 180 OIDA
+PASST SCHO
+
+FUNKTIAUN is_grod(n ZOI) GIBT ZRUCK JONA
+    GIB ZRUCK n % 2 == 0 OIDA
+PASST SCHO
+
+# Eine zufällige Kommazahl von `untn` bis unter `obn`.
+FUNKTIAUN zufoi_zwischn(untn KOMMAZOI, obn KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK untn + ZUFOI() * (obn - untn) OIDA
+PASST SCHO

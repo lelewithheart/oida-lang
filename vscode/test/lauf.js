@@ -119,6 +119,31 @@ const pruefungen = {
         assert.deepStrictEqual(vscode.languages.getDiagnostics(dokument.uri), []);
     },
 
+    async 'BRAUCH holt andere Dateien und die Bibliothek dazu'() {
+        schreibe('teil.oida', 'KLASSE Wesen\n    name KETTN\nPASST SCHO\n');
+        const dokument = await oeffne(schreibe('haupt.oida',
+            'BRAUCH "teil.oida" OIDA\nBRAUCH listen OIDA\nSOG AU w = Wesen("Hansi") OIDA\n'
+            + 'SCHREIB(summe([1, 2]), w.name) OIDA\n'));
+        const liste = await tokens(dokument);
+        const art = (zeile, spalte) => (liste.find((t) => t[0] === zeile && t[1] === spalte) || [])[3];
+        assert.strictEqual(art(0, 0), 'keyword');   // BRAUCH
+        assert.strictEqual(art(2, 11), 'type');     // Wesen aus der anderen Datei
+        await warte(500);
+        assert.deepStrictEqual(vscode.languages.getDiagnostics(dokument.uri), []);
+    },
+
+    async 'Ein Fehler in einer dazugeholten Datei steht beim BRAUCH'() {
+        schreibe('kaputt.oida', 'FUNKTIAUN hoib(x ZOI) GIBT ZRUCK ZOI\n    GIB ZRUCK x + "a" OIDA\nPASST SCHO\n');
+        const dokument = await oeffne(schreibe('haupt2.oida', '# oben\nBRAUCH "kaputt.oida" OIDA\nSCHREIB(hoib(2)) OIDA\n'));
+        const fehler = await bis('Fehler erscheint', () => {
+            const liste = vscode.languages.getDiagnostics(dokument.uri);
+            return liste.length > 0 ? liste : null;
+        });
+        assert.strictEqual(fehler.length, 1);
+        assert.ok(/kaputt\.oida, Zeile 2: A ZOI \+ a KETTN\?/.test(fehler[0].message), fehler[0].message);
+        assert.strictEqual(fehler[0].range.start.line, 1);
+    },
+
     async 'Fehlendes OIDA wird unterstrichen'() {
         const dokument = await oeffne(schreibe('fehler.oida', 'SOG AU alter = 17\nSCHREIB(alter) OIDA\n'));
         const fehler = await bis('Fehler erscheint', () => {

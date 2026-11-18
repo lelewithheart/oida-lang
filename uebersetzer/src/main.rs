@@ -24,7 +24,8 @@ Optionen:
   --version               de Version auzagn
 
 Fia Editoren (so redt de VS-Code-Erweiterung mit'm Compiler):
-  --editor                Programm von da Eingabe lesn, Fehler und Wortoatn ois JSON ausgebn
+  --editor [datei]        Programm von da Eingabe lesn, Fehler und Wortoatn ois JSON ausgebn
+                          (de Datei sogt nur, wo des Programm liegt, fia BRAUCH)
   --editor-dateien <ordner>
                           Grammatik, Einrückregln und Schnipsel fia VS Code erzeugn
 ";
@@ -110,7 +111,9 @@ fn hauptprogramm() -> Result<ExitCode, String> {
         let mut bytes = Vec::new();
         std::io::stdin().read_to_end(&mut bytes).map_err(|e| format!("I kaun de Eingabe ned lesn: {e}"))?;
         let quelltext = String::from_utf8(bytes).map_err(|_| "De Eingabe is ka UTF-8.".to_string())?;
-        println!("{}", editor::untersuche(&quelltext, &wb));
+        // Steht eine Datei dabei, ist das die, aus der die Eingabe stammt:
+        // Von dort aus werden die Dateien gesucht, die sie mit BRAUCH dazuholt.
+        println!("{}", editor::untersuche_datei(&quelltext, &wb, optionen.datei.as_deref()));
         return Ok(ExitCode::SUCCESS);
     }
     if let Some(ordner) = optionen.editor_dateien {
@@ -132,11 +135,14 @@ fn hauptprogramm() -> Result<ExitCode, String> {
     let quelltext = String::from_utf8(bytes)
         .map_err(|_| format!("{name} is ka UTF-8. Speicher de Datei im Editor ois UTF-8 o."))?;
 
-    let ir = match treiber::zu_ir(&quelltext, &wb) {
+    let (quellen, ergebnis) = treiber::uebersetze(Some(&datei), &quelltext, &wb);
+    let ir = match ergebnis {
         Ok(ir) => ir,
         Err(fehler) => {
             for f in &fehler {
-                eprintln!("{}", f.anzeigen(&name, &quelltext));
+                // Der Fehler kann in einer Datei stecken, die mit BRAUCH dazugekommen ist.
+                let quelle = &quellen[f.pos.datei as usize];
+                eprintln!("{}", f.anzeigen(&quelle.name, &quelle.text));
             }
             eprintln!("Na, des wird nix: {} Fehler.", fehler.len());
             return Ok(ExitCode::from(1));

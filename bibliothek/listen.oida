@@ -1,0 +1,236 @@
+# OIDA-Bibliothek: Listen.          Dazuholen mit:  BRAUCH listen OIDA
+#
+# Fast alles hier sind Vorlagen (VON T): Sie gehen mit jeder Liste, egal was
+# drin ist. Keine dieser Funktionen ändert die Liste, die sie bekommt, außer
+# es steht dabei (sortier, misch).
+
+# Nur die Elemente, bei denen `passt` WOAHR sagt.
+FUNKTIAUN nur VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA JEDE x IN liste TUA
+        WENN passt(x) DAUN
+            HAU EINE(aus, x) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Aus jedem Element etwas Neues machen.
+FUNKTIAUN mach VON A UND B(liste LISTN VON A, f FUNKTIAUN(A) GIBT ZRUCK B) GIBT ZRUCK LISTN VON B
+    SOG AU aus LISTN VON B = [] OIDA
+    FIA JEDE x IN liste TUA
+        HAU EINE(aus, f(x)) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Das erste Element, bei dem `passt` WOAHR sagt, oder NIX.
+FUNKTIAUN erstes VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK VIELLEICHT T
+    FIA JEDE x IN liste TUA
+        WENN passt(x) DAUN
+            GIB ZRUCK x OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+# Die Stelle des ersten Elements, bei dem `passt` WOAHR sagt, oder -1.
+FUNKTIAUN wo VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK ZOI
+    FIA i VON 0 BIS LÄNGN(liste) - 1 TUA
+        WENN passt(liste[i]) DAUN
+            GIB ZRUCK i OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK -1 OIDA
+PASST SCHO
+
+# Sagt `passt` bei allen WOAHR? (Bei einer leeren Liste: WOAHR.)
+FUNKTIAUN olle VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK JONA
+    FIA JEDE x IN liste TUA
+        WENN NED passt(x) DAUN
+            GIB ZRUCK FOISCH OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK WOAHR OIDA
+PASST SCHO
+
+# Sagt `passt` bei mindestens einem WOAHR?
+FUNKTIAUN irgendans VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK JONA
+    FIA JEDE x IN liste TUA
+        WENN passt(x) DAUN
+            GIB ZRUCK WOAHR OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK FOISCH OIDA
+PASST SCHO
+
+# Bei wie vielen sagt `passt` WOAHR?
+FUNKTIAUN wievü VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK ZOI
+    SOG AU n = 0 OIDA
+    FIA JEDE x IN liste TUA
+        WENN passt(x) DAUN
+            n += 1 OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK n OIDA
+PASST SCHO
+
+# Kommt der Wert in der Liste vor? (Für alles, was man mit == vergleichen kann.)
+FUNKTIAUN hot VON T(liste LISTN VON T, gsuacht T) GIBT ZRUCK JONA
+    FIA JEDE x IN liste TUA
+        WENN x == gsuacht DAUN
+            GIB ZRUCK WOAHR OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK FOISCH OIDA
+PASST SCHO
+
+# Eine neue Liste mit denselben Elementen.
+FUNKTIAUN kopie VON T(liste LISTN VON T) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA JEDE x IN liste TUA
+        HAU EINE(aus, x) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# `anzahl` Elemente ab der Stelle `ab` (weniger, wenn die Liste vorher aus ist).
+FUNKTIAUN ausschnitt VON T(liste LISTN VON T, ab ZOI, anzahl ZOI) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    SOG AU letzte = KLANSTA(ab + anzahl, LÄNGN(liste)) - 1 OIDA
+    FIA i VON GRÖSSTA(ab, 0) BIS letzte TUA
+        HAU EINE(aus, liste[i]) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Die Liste von hinten nach vorne.
+FUNKTIAUN umdraht VON T(liste LISTN VON T) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA i VON LÄNGN(liste) - 1 BIS 0 SCHRITT -1 TUA
+        HAU EINE(aus, liste[i]) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Erst alles aus der einen Liste, dann alles aus der anderen.
+FUNKTIAUN zamm VON T(vuan LISTN VON T, hintn LISTN VON T) GIBT ZRUCK LISTN VON T
+    SOG AU aus = kopie(vuan) OIDA
+    FIA JEDE x IN hintn TUA
+        HAU EINE(aus, x) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Eine sortierte Kopie. `vuaher(a, b)` sagt, ob a vor b stehen soll.
+# Was gleich viel gilt, bleibt in der Reihenfolge von vorher.
+FUNKTIAUN sortiert VON T(liste LISTN VON T, vuaher FUNKTIAUN(T, T) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON T
+    SOG AU n = LÄNGN(liste) OIDA
+    WENN n < 2 DAUN
+        GIB ZRUCK kopie(liste) OIDA
+    PASST SCHO
+    # In der Mitte teilen, beide Hälften sortieren, dann zusammenmischen.
+    SOG AU mitte = n / 2 OIDA
+    SOG AU links = sortiert(ausschnitt(liste, 0, mitte), vuaher) OIDA
+    SOG AU rechts = sortiert(ausschnitt(liste, mitte, n - mitte), vuaher) OIDA
+    SOG AU aus LISTN VON T = [] OIDA
+    SOG AU i = 0 OIDA
+    SOG AU j = 0 OIDA
+    SOLONG i < LÄNGN(links) UND j < LÄNGN(rechts) TUA
+        WENN vuaher(rechts[j], links[i]) DAUN
+            HAU EINE(aus, rechts[j]) OIDA
+            j += 1 OIDA
+        SUNST
+            HAU EINE(aus, links[i]) OIDA
+            i += 1 OIDA
+        PASST SCHO
+    PASST SCHO
+    SOLONG i < LÄNGN(links) TUA
+        HAU EINE(aus, links[i]) OIDA
+        i += 1 OIDA
+    PASST SCHO
+    SOLONG j < LÄNGN(rechts) TUA
+        HAU EINE(aus, rechts[j]) OIDA
+        j += 1 OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Sortiert die Liste selbst (ändert sie).
+FUNKTIAUN sortier VON T(liste LISTN VON T, vuaher FUNKTIAUN(T, T) GIBT ZRUCK JONA)
+    SOG AU fertig = sortiert(liste, vuaher) OIDA
+    FIA i VON 0 BIS LÄNGN(fertig) - 1 TUA
+        liste[i] = fertig[i] OIDA
+    PASST SCHO
+PASST SCHO
+
+# Das kleinste Element, oder NIX bei einer leeren Liste. (Für alles, was man mit < vergleichen kann.)
+FUNKTIAUN klanstes VON T(liste LISTN VON T) GIBT ZRUCK VIELLEICHT T
+    WENN LÄNGN(liste) == 0 DAUN
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+    SOG AU bestes = liste[0] OIDA
+    FIA JEDE x IN liste TUA
+        WENN x < bestes DAUN
+            bestes = x OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK bestes OIDA
+PASST SCHO
+
+# Das größte Element, oder NIX bei einer leeren Liste.
+FUNKTIAUN größtes VON T(liste LISTN VON T) GIBT ZRUCK VIELLEICHT T
+    WENN LÄNGN(liste) == 0 DAUN
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+    SOG AU bestes = liste[0] OIDA
+    FIA JEDE x IN liste TUA
+        WENN bestes < x DAUN
+            bestes = x OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK bestes OIDA
+PASST SCHO
+
+FUNKTIAUN summe(zahlen LISTN VON ZOI) GIBT ZRUCK ZOI
+    SOG AU s = 0 OIDA
+    FIA JEDE z IN zahlen TUA
+        s += z OIDA
+    PASST SCHO
+    GIB ZRUCK s OIDA
+PASST SCHO
+
+FUNKTIAUN kommasumme(zahlen LISTN VON KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    SOG AU s = 0.0 OIDA
+    FIA JEDE z IN zahlen TUA
+        s += z OIDA
+    PASST SCHO
+    GIB ZRUCK s OIDA
+PASST SCHO
+
+# Die ganzen Zahlen von `erste` bis `letzte` (beide dabei).
+FUNKTIAUN zoin(erste ZOI, letzte ZOI) GIBT ZRUCK LISTN VON ZOI
+    SOG AU aus LISTN VON ZOI = [] OIDA
+    FIA i VON erste BIS letzte TUA
+        HAU EINE(aus, i) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Ein zufälliges Element, oder NIX bei einer leeren Liste.
+FUNKTIAUN zufoi_aus VON T(liste LISTN VON T) GIBT ZRUCK VIELLEICHT T
+    WENN LÄNGN(liste) == 0 DAUN
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+    GIB ZRUCK liste[ZUFOI(0, LÄNGN(liste) - 1)] OIDA
+PASST SCHO
+
+# Bringt die Liste selbst in eine zufällige Reihenfolge (ändert sie).
+FUNKTIAUN misch VON T(liste LISTN VON T)
+    FIA i VON LÄNGN(liste) - 1 BIS 1 SCHRITT -1 TUA
+        SOG AU j = ZUFOI(0, i) OIDA
+        SOG AU merk = liste[i] OIDA
+        liste[i] = liste[j] OIDA
+        liste[j] = merk OIDA
+    PASST SCHO
+PASST SCHO

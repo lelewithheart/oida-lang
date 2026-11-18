@@ -1,0 +1,20 @@
+# Wird von mehrere_dateien.oida dazugeholt.
+# Der Pfad gilt von dieser Datei aus, nicht von der, die übersetzt wird.
+BRAUCH "hilfe.oida" OIDA
+
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = 10
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK rahmen(SÖWA.name) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Gegner ERBT VON Wesen
+    wo Punkt
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK DE OIDN.sog() + " bei " + KETTN(SÖWA.wo.x) OIDA
+    PASST SCHO
+PASST SCHO

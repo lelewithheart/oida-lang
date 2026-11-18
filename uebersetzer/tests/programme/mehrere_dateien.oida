@@ -1,0 +1,24 @@
+# Ein Programm aus mehreren Dateien: BRAUCH holt Funktionen, Klassen und
+# Strukturen aus anderen Dateien und aus der mitgelieferten Bibliothek dazu.
+
+BRAUCH "teile/wesen.oida" OIDA
+BRAUCH "teile/hilfe" OIDA
+BRAUCH listen OIDA
+
+FUNKTIAUN nomen(leit LISTN VON Wesen) GIBT ZRUCK LISTN VON KETTN
+    GIB ZRUCK mach(leit, FUNKTIAUN(w Wesen) => w.name) OIDA
+PASST SCHO
+
+SOG AU leit LISTN VON Wesen = [Wesen("Hansi"), Gegner("Sepp", Punkt(3, 4)), Wesen("Resi")] OIDA
+leit[1].lebn = 25 OIDA
+leit[2].lebn = 17 OIDA
+FIA JEDE w IN leit TUA
+    SCHREIB(w.sog()) OIDA
+PASST SCHO
+SCHREIB(nomen(leit), rahmen("x"), zwamoi(Punkt(1, 2)), zwamoi("ha")) OIDA
+SOG AU bestes = stärkstes(leit) OIDA
+WENN bestes != NIX DAUN
+    SCHREIB(bestes.name, bestes.lebn) OIDA
+PASST SCHO
+# texte kommt nur über hilfe.oida herein, gilt aber im ganzen Programm.
+SCHREIB(verbind(nomen(nur(leit, FUNKTIAUN(w Wesen) => w.lebn > 10)), " und ")) OIDA

@@ -7,11 +7,14 @@ use std::fmt::Write;
 pub struct Position {
     pub zeile: u32,
     pub spalte: u32,
+    /// In welcher Datei: die Nummer in der Liste der Quellen
+    /// (`treiber::Quelle`). 0 ist die Datei, die übersetzt wird.
+    pub datei: u16,
 }
 
 impl Position {
     pub fn neu(zeile: u32, spalte: u32) -> Position {
-        Position { zeile, spalte }
+        Position { zeile, spalte, datei: 0 }
     }
 }
 

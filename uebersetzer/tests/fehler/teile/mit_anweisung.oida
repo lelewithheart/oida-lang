@@ -1,0 +1,4 @@
+FUNKTIAUN doppelt(x ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK x * 2 OIDA
+PASST SCHO
+SCHREIB("i lauf ned") OIDA

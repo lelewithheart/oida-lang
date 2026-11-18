@@ -1,0 +1,29 @@
+# Wird von wesen.oida dazugeholt (und von mehrere_dateien.oida noch einmal).
+BRAUCH texte OIDA
+# Im Kreis und ohne Endung: Jede Datei zählt nur einmal.
+BRAUCH "wesen" OIDA
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+FUNKTIAUN rahmen(wos KETTN) GIBT ZRUCK KETTN
+    GIB ZRUCK "[" + vuan_auffülln(wos, 6, ".") + "]" OIDA
+PASST SCHO
+
+# Verwendet eine Klasse aus der Datei, die diese hier dazuholt.
+FUNKTIAUN stärkstes(leit LISTN VON Wesen) GIBT ZRUCK VIELLEICHT Wesen
+    SOG AU bestes VIELLEICHT Wesen = NIX OIDA
+    FIA JEDE w IN leit TUA
+        WENN bestes == NIX ODA bestes.lebn < w.lebn DAUN
+            bestes = w OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK bestes OIDA
+PASST SCHO
+
+# Eine Vorlage aus einer anderen Datei.
+FUNKTIAUN zwamoi VON T(wos T) GIBT ZRUCK LISTN VON T
+    GIB ZRUCK [wos, wos] OIDA
+PASST SCHO

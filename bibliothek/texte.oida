@@ -1,0 +1,104 @@
+# OIDA-Bibliothek: Texte.           Dazuholen mit:  BRAUCH texte OIDA
+
+# Die einzelnen Zeichen eines Texts.
+FUNKTIAUN zeichn(zeile KETTN) GIBT ZRUCK LISTN VON KETTN
+    SOG AU aus LISTN VON KETTN = [] OIDA
+    FIA i VON 0 BIS LÄNGN(zeile) - 1 TUA
+        HAU EINE(aus, STICKL(zeile, i, 1)) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Zerlegt einen Text an jedem `trenna`: teil("a,b,,c", ",") ist ["a", "b", "", "c"].
+# Mit einem leeren Trenner kommen die einzelnen Zeichen.
+FUNKTIAUN teil(zeile KETTN, trenna KETTN) GIBT ZRUCK LISTN VON KETTN
+    WENN trenna == "" DAUN
+        GIB ZRUCK zeichn(zeile) OIDA
+    PASST SCHO
+    SOG AU aus LISTN VON KETTN = [] OIDA
+    SOG AU rest = zeile OIDA
+    SOLONG WOAHR TUA
+        SOG AU stö = SUACH(rest, trenna) OIDA
+        WENN stö < 0 DAUN
+            HAU OB OIDA
+        PASST SCHO
+        HAU EINE(aus, STICKL(rest, 0, stö)) OIDA
+        rest = STICKL(rest, stö + LÄNGN(trenna)) OIDA
+    PASST SCHO
+    HAU EINE(aus, rest) OIDA
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Die Wörter eines Texts: an Leerzeichen zerlegt, leere Stücke fallen weg.
+FUNKTIAUN wörter(zeile KETTN) GIBT ZRUCK LISTN VON KETTN
+    SOG AU aus LISTN VON KETTN = [] OIDA
+    FIA JEDE wort IN teil(zeile, " ") TUA
+        WENN wort != "" DAUN
+            HAU EINE(aus, wort) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Hängt die Texte zusammen, mit `dazwischn` zwischen je zweien.
+FUNKTIAUN verbind(teile LISTN VON KETTN, dazwischn KETTN) GIBT ZRUCK KETTN
+    SOG AU aus = "" OIDA
+    FIA i VON 0 BIS LÄNGN(teile) - 1 TUA
+        WENN i > 0 DAUN
+            aus += dazwischn OIDA
+        PASST SCHO
+        aus += teile[i] OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+FUNKTIAUN enthoit(zeile KETTN, gsuacht KETTN) GIBT ZRUCK JONA
+    GIB ZRUCK SUACH(zeile, gsuacht) >= 0 OIDA
+PASST SCHO
+
+FUNKTIAUN fangt_au(zeile KETTN, anfang KETTN) GIBT ZRUCK JONA
+    WENN LÄNGN(anfang) > LÄNGN(zeile) DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    GIB ZRUCK STICKL(zeile, 0, LÄNGN(anfang)) == anfang OIDA
+PASST SCHO
+
+FUNKTIAUN hört_auf(zeile KETTN, schluss KETTN) GIBT ZRUCK JONA
+    WENN LÄNGN(schluss) > LÄNGN(zeile) DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    GIB ZRUCK STICKL(zeile, LÄNGN(zeile) - LÄNGN(schluss)) == schluss OIDA
+PASST SCHO
+
+# Derselbe Text `wia_oft` mal hintereinander.
+FUNKTIAUN wiederhoi(wos KETTN, wia_oft ZOI) GIBT ZRUCK KETTN
+    SOG AU aus = "" OIDA
+    FIA i VON 1 BIS wia_oft TUA
+        aus += wos OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Füllt vorne mit `füllung` auf, bis der Text `breite` Zeichen hat: vuan_auffülln("7", 3, "0") ist "007".
+FUNKTIAUN vuan_auffülln(zeile KETTN, breite ZOI, füllung KETTN) GIBT ZRUCK KETTN
+    WENN füllung == "" DAUN
+        GIB ZRUCK zeile OIDA
+    PASST SCHO
+    SOG AU aus = zeile OIDA
+    SOLONG LÄNGN(aus) < breite TUA
+        aus = füllung + aus OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Füllt hinten auf.
+FUNKTIAUN hintn_auffülln(zeile KETTN, breite ZOI, füllung KETTN) GIBT ZRUCK KETTN
+    WENN füllung == "" DAUN
+        GIB ZRUCK zeile OIDA
+    PASST SCHO
+    SOG AU aus = zeile OIDA
+    SOLONG LÄNGN(aus) < breite TUA
+        aus += füllung OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO

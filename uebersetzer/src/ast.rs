@@ -616,8 +616,22 @@ pub struct KlassenDef {
     pub pos: Position,
 }
 
+/// `BRAUCH listen OIDA` oder `BRAUCH "gegner.oida" OIDA`: Die Funktionen,
+/// Klassen und Strukturen von dort gelten auch hier.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Import {
+    /// Der Name der mitgelieferten Bibliothek oder der Pfad der Datei.
+    pub ziel: String,
+    /// Ohne Anführungszeichen: eine mitgelieferte Bibliothek.
+    pub bibliothek: bool,
+    pub pos: Position,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Programm {
+    /// Was mit BRAUCH dazugeholt wird. Der Treiber lädt die Dateien und hängt
+    /// ihren Inhalt hier an, bevor die Typprüfung beginnt.
+    pub importe: Vec<Import>,
     pub strukturen: Vec<StrukturDef>,
     /// Die Klassen. Ihre Stelle hier ist ihre Nummer in [`Typen::klassen`].
     pub klassen: Vec<KlassenDef>,

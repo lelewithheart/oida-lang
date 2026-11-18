@@ -70,6 +70,11 @@
     "body": ["FUNKTIAUN(${1:x} ${2:ZOI}) => ${0:x}"],
     "description": "Kurze Funktion ohne Namen"
   },
+  "BRAUCH": {
+    "prefix": "brauch",
+    "body": ["BRAUCH ${1|listen,texte,mathe,\"datei.oida\"|} OIDA"],
+    "description": "Bibliothek oder eigene Datei dazuholen"
+  },
   "FUNKTIAUN VON T": {
     "prefix": "funktiaunvon",
     "body": ["FUNKTIAUN ${1:name} VON T(${2:liste} LISTN VON T) GIBT ZRUCK T", "\t$0", "PASST SCHO"],

@@ -1,0 +1,30 @@
+# Gehört zu beispiele/turnier.oida: die Spieler und was man mit ihnen machen kann.
+# Eine Datei, die dazugeholt wird, enthält nur Klassen, Strukturen und Funktionen.
+
+BRAUCH texte OIDA
+
+KLASSE Spiela
+    name KETTN
+    punkte ZOI = 0
+    spiele ZOI = 0
+
+    FUNKTIAUN gwinnt(wievü ZOI)
+        SÖWA.punkte += wievü OIDA
+        SÖWA.spiele += 1 OIDA
+    PASST SCHO
+
+    # Eine Zeile für die Tabelle: Name links, Zahlen rechtsbündig.
+    FUNKTIAUN zeile(platz ZOI) GIBT ZRUCK KETTN
+        GIB ZRUCK vuan_auffülln(KETTN(platz), 2, " ") + ". " + hintn_auffülln(SÖWA.name, 8, " ")
+            + vuan_auffülln(KETTN(SÖWA.punkte), 4, " ") + vuan_auffülln(KETTN(SÖWA.spiele), 4, " ") OIDA
+    PASST SCHO
+PASST SCHO
+
+# "Hansi,Sepp,Resi" -> drei Spieler
+FUNKTIAUN spiela_aus(nomen KETTN) GIBT ZRUCK LISTN VON Spiela
+    SOG AU aus LISTN VON Spiela = [] OIDA
+    FIA JEDE name IN teil(nomen, ",") TUA
+        HAU EINE(aus, Spiela(STUTZ(name))) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
