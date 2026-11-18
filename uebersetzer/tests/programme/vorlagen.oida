@@ -1,0 +1,211 @@
+# Vorlagen: Funktionen, Klassen und Strukturen, bei denen ein Typ offen bleibt
+# (VON T) und erst beim Verwenden feststeht.
+
+STRUKTUR Paar VON A UND B
+    links A
+    rechts B
+PASST SCHO
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = 10
+PASST SCHO
+
+# Ein Stapel: Was zuletzt hineinkommt, kommt zuerst heraus.
+KLASSE Stopl VON T
+    drin LISTN VON T = []
+
+    FUNKTIAUN drauf(wos T)
+        HAU EINE(SÖWA.drin, wos) OIDA
+    PASST SCHO
+
+    FUNKTIAUN owa() GIBT ZRUCK VIELLEICHT T
+        SOG AU n = LÄNGN(SÖWA.drin) OIDA
+        WENN n == 0 DAUN
+            GIB ZRUCK NIX OIDA
+        PASST SCHO
+        SOG AU obn = SÖWA.drin[n - 1] OIDA
+        HAU AUSSE(SÖWA.drin, n - 1) OIDA
+        GIB ZRUCK obn OIDA
+    PASST SCHO
+
+    FUNKTIAUN wievü() GIBT ZRUCK ZOI
+        GIB ZRUCK LÄNGN(SÖWA.drin) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Eine Kette aus Gliedern; die Vorlage kommt in ihren eigenen Feldern vor.
+KLASSE Glied VON T
+    wert T
+    naechstes VIELLEICHT Glied VON T
+PASST SCHO
+
+# Merkt sich zu einem Schlüssel einen Wert (zwei offene Typen).
+KLASSE Merka VON K UND W
+    schlissln LISTN VON K = []
+    werte LISTN VON W = []
+
+    FUNKTIAUN merk(schlissl K, wert W)
+        FIA i VON 0 BIS LÄNGN(SÖWA.schlissln) - 1 TUA
+            WENN SÖWA.schlissln[i] == schlissl DAUN
+                SÖWA.werte[i] = wert OIDA
+                GIB ZRUCK OIDA
+            PASST SCHO
+        PASST SCHO
+        HAU EINE(SÖWA.schlissln, schlissl) OIDA
+        HAU EINE(SÖWA.werte, wert) OIDA
+    PASST SCHO
+
+    FUNKTIAUN hol(schlissl K) GIBT ZRUCK VIELLEICHT W
+        FIA i VON 0 BIS LÄNGN(SÖWA.schlissln) - 1 TUA
+            WENN SÖWA.schlissln[i] == schlissl DAUN
+                GIB ZRUCK SÖWA.werte[i] OIDA
+            PASST SCHO
+        PASST SCHO
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN erstes VON T(liste LISTN VON T) GIBT ZRUCK VIELLEICHT T
+    WENN LÄNGN(liste) == 0 DAUN
+        GIB ZRUCK NIX OIDA
+    PASST SCHO
+    GIB ZRUCK liste[0] OIDA
+PASST SCHO
+
+FUNKTIAUN nur VON T(liste LISTN VON T, passt FUNKTIAUN(T) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA JEDE x IN liste TUA
+        WENN passt(x) DAUN
+            HAU EINE(aus, x) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+FUNKTIAUN mach VON A UND B(liste LISTN VON A, f FUNKTIAUN(A) GIBT ZRUCK B) GIBT ZRUCK LISTN VON B
+    SOG AU aus LISTN VON B = [] OIDA
+    FIA JEDE x IN liste TUA
+        HAU EINE(aus, f(x)) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Geht mit allem, was man mit < vergleichen kann: Zahlen und Texte.
+FUNKTIAUN größtes VON T(liste LISTN VON T, ersotz T) GIBT ZRUCK T
+    SOG AU bestes = ersotz OIDA
+    FIA JEDE x IN liste TUA
+        WENN bestes < x DAUN
+            bestes = x OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK bestes OIDA
+PASST SCHO
+
+FUNKTIAUN sortiert VON T(liste LISTN VON T, vuaher FUNKTIAUN(T, T) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA JEDE x IN liste TUA
+        HAU EINE(aus, x) OIDA
+    PASST SCHO
+    FIA i VON 1 BIS LÄNGN(aus) - 1 TUA
+        SOG AU j = i OIDA
+        SOLONG j > 0 UND vuaher(aus[j], aus[j - 1]) TUA
+            SOG AU merk = aus[j] OIDA
+            aus[j] = aus[j - 1] OIDA
+            aus[j - 1] = merk OIDA
+            j -= 1 OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+FUNKTIAUN tausch VON A UND B(p Paar VON A UND B) GIBT ZRUCK Paar VON B UND A
+    GIB ZRUCK Paar(p.rechts, p.links) OIDA
+PASST SCHO
+
+# Ruft sich selbst auf und eine andere Vorlage.
+FUNKTIAUN zöh VON T(g VIELLEICHT Glied VON T) GIBT ZRUCK ZOI
+    WENN g == NIX DAUN
+        GIB ZRUCK 0 OIDA
+    PASST SCHO
+    GIB ZRUCK 1 + zöh(g.naechstes) OIDA
+PASST SCHO
+
+SCHREIB("--- Funktionen") OIDA
+SOG AU zahlen = [4, 9, 2, 7, 1] OIDA
+SOG AU nomen = ["Sepp", "Hansi", "Resi"] OIDA
+SOG AU kane LISTN VON KOMMAZOI = [] OIDA
+SCHREIB(erstes(zahlen), erstes(nomen), erstes(kane), erstes(zahlen) ODA HOID 0) OIDA
+SCHREIB(nur(zahlen, FUNKTIAUN(z ZOI) => z > 3), nur(nomen, FUNKTIAUN(n KETTN) => LÄNGN(n) == 4)) OIDA
+SCHREIB(mach(zahlen, FUNKTIAUN(z ZOI) => "Nr. " + KETTN(z)), mach(nomen, FUNKTIAUN(n KETTN) => LÄNGN(n))) OIDA
+SCHREIB(größtes(zahlen, 0), größtes(nomen, ""), größtes([1.5, 0.5], 0.0)) OIDA
+SCHREIB(sortiert(zahlen, FUNKTIAUN(a ZOI, b ZOI) => a < b), sortiert(nomen, FUNKTIAUN(a KETTN, b KETTN) => a > b)) OIDA
+SCHREIB(zahlen, nomen) OIDA
+
+SCHREIB("--- Strukturen") OIDA
+SOG AU p = Paar("Hansi", 17) OIDA
+SOG AU q Paar VON ZOI UND Punkt = Paar(1, Punkt(2, 3)) OIDA
+SCHREIB(p, p.links, p.rechts + 1, q, q.rechts.y) OIDA
+SCHREIB(tausch(p), tausch(tausch(q)).rechts.x) OIDA
+SOG AU paare = [Paar("a", 1), Paar("b", 2)] OIDA
+HAU EINE(paare, Paar VON KETTN UND ZOI("c", 3)) OIDA
+SCHREIB(paare, mach(paare, FUNKTIAUN(x Paar VON KETTN UND ZOI) => x.rechts)) OIDA
+
+SCHREIB("--- Klassen") OIDA
+SOG AU stopl = Stopl VON ZOI() OIDA
+FIA i VON 1 BIS 4 TUA
+    stopl.drauf(i * 10) OIDA
+PASST SCHO
+SCHREIB(stopl.wievü(), stopl.owa(), stopl.owa(), stopl.wievü(), stopl) OIDA
+SOG AU wortstopl Stopl VON KETTN = Stopl VON KETTN() OIDA
+wortstopl.drauf("untn") OIDA
+wortstopl.drauf("ob" + "n") OIDA
+SCHREIB(wortstopl.owa() ODA HOID "laa", wortstopl.owa() ODA HOID "laa", wortstopl.owa() ODA HOID "laa") OIDA
+SOG AU wesn = Stopl VON Wesen() OIDA
+wesn.drauf(Wesen("Hansi")) OIDA
+wesn.drauf(Wesen("Sepp")) OIDA
+SOG AU obn = wesn.owa() OIDA
+WENN obn != NIX DAUN
+    obn.lebn -= 3 OIDA
+    SCHREIB(obn.name, obn.lebn, wesn.wievü()) OIDA
+PASST SCHO
+# Ein Stapel von Stapeln.
+SOG AU stopln = Stopl VON Stopl VON ZOI() OIDA
+stopln.drauf(stopl) OIDA
+stopln.drauf(Stopl VON ZOI()) OIDA
+SCHREIB(stopln.wievü(), stopln.drin[0].wievü(), stopln.drin[1].wievü()) OIDA
+
+SOG AU glieda VIELLEICHT Glied VON KETTN = NIX OIDA
+FIA JEDE n IN nomen TUA
+    glieda = Glied(n, glieda) OIDA
+PASST SCHO
+SOG AU zoikettn = Glied(1, Glied(2, NIX)) OIDA
+SCHREIB(zöh(glieda), zöh(zoikettn), zoikettn.wert + 1) OIDA
+WENN glieda != NIX DAUN
+    SCHREIB(glieda.wert, glieda) OIDA
+PASST SCHO
+
+SOG AU oida_von = Merka VON KETTN UND ZOI() OIDA
+oida_von.merk("Hansi", 17) OIDA
+oida_von.merk("Sepp", 40) OIDA
+oida_von.merk("Hansi", 18) OIDA
+SCHREIB(oida_von.hol("Hansi"), oida_von.hol("Sepp") ODA HOID 0, oida_von.hol("Resi")) OIDA
+SOG AU wer_wo = Merka VON ZOI UND Punkt() OIDA
+wer_wo.merk(7, Punkt(1, 2)) OIDA
+SCHREIB(wer_wo.hol(7), wer_wo.hol(8), wer_wo) OIDA
+
+SCHREIB("--- vü auf amoi") OIDA
+SOG AU groß = Stopl VON Paar VON ZOI UND KETTN() OIDA
+FIA i VON 1 BIS 1000 TUA
+    groß.drauf(Paar(i, "nr" + KETTN(i))) OIDA
+    WENN i % 3 == 0 DAUN
+        groß.owa() OIDA
+    PASST SCHO
+PASST SCHO
+SOG AU lange = nur(groß.drin, FUNKTIAUN(x Paar VON ZOI UND KETTN) => LÄNGN(x.rechts) > 4) OIDA
+SCHREIB(groß.wievü(), LÄNGN(lange), größtes(mach(lange, FUNKTIAUN(x Paar VON ZOI UND KETTN) => x.links), 0)) OIDA

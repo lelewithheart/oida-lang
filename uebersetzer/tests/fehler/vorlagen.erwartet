@@ -1,0 +1,17 @@
+:6:5: De STRUKTUR 'Knotn VON ZOI' kaun si ned söwa enthoitn, de warat unendlich groß. Nimm a LISTN dafia. (bei 'Knotn VON ZOI')
+:17:29: A Vorlog (KLASSE ... VON ...) kaun ned erbn.
+:19:22: Von ana Vorlog wia 'Stopl' kaun ma ned erbn.
+:27:21: A Punkt < a Punkt? Des geht si ned aus. (bei 'größtes VON Punkt')
+:33:9: Bei 'erstes' waaß i ned, wos 'T' sei soll: Aus de Werte in da Klammer geht's ned hervua.
+:34:9: 'erstes' wü an Wert hom, du gibst eam 2 Werte.
+:35:9: Bei 'erstes' waaß i ned, wos 'T' sei soll: Aus de Werte in da Klammer geht's ned hervua.
+:37:25: 'größtes VON ZOI' wü ois 2. Wert a ZOI, du gibst eam a KETTN.
+:38:12: Bei 'Stopl' waaß i ned, wos 'T' sei soll. Schreib's dazua: Stopl VON ...(...)
+:39:12: 'Stopl' braucht an Typ (T), du gibst 2.
+:40:10: 'Stopl' is a Vorlog, do ghört dazua, wovon: Stopl VON ...
+:41:12: 'Punkt' is ka Vorlog, do ghört ka VON dahinta. (A Vorlog schaut so aus: KLASSE Punkt VON T)
+:42:12: A Vorlog 'Gibtsned' kenn i ned.
+:43:12: 'erstes' is a Vorlog: Ois Wert geht de ned, weu ned feststeht, mit wöchn Typen. Pack den Aufruf in a FUNKTIAUN ohne Nom.
+:46:9: 'drauf' wü ois 1. Wert a ZOI, du gibst eam a KETTN.
+:47:28: 't' soll a Stopl VON KETTN sei, oba des do is a Stopl VON ZOI.
+Na, des wird nix: 16 Fehler.

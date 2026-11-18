@@ -1,0 +1,22 @@
+--- Funktionen
+4 "Sepp" NIX 4
+[4, 9, 7] ["Sepp", "Resi"]
+["Nr. 4", "Nr. 9", "Nr. 2", "Nr. 7", "Nr. 1"] [4, 5, 4]
+9 Sepp 1.5
+[1, 2, 4, 7, 9] ["Sepp", "Resi", "Hansi"]
+[4, 9, 2, 7, 1] ["Sepp", "Hansi", "Resi"]
+--- Strukturen
+Paar VON KETTN UND ZOI("Hansi", 17) Hansi 18 Paar VON ZOI UND Punkt(1, Punkt(2, 3)) 3
+Paar VON ZOI UND KETTN(17, "Hansi") 2
+[Paar VON KETTN UND ZOI("a", 1), Paar VON KETTN UND ZOI("b", 2), Paar VON KETTN UND ZOI("c", 3)] [1, 2, 3]
+--- Klassen
+4 40 30 2 Stopl VON ZOI([10, 20])
+obn untn laa
+Sepp 7 1
+2 2 0
+3 2 2
+Resi Glied VON KETTN("Resi", Glied VON KETTN("Hansi", Glied VON KETTN("Sepp", NIX)))
+18 40 NIX
+Punkt(1, 2) NIX Merka VON ZOI UND Punkt([7], [Punkt(1, 2)])
+--- vü auf amoi
+667 601 1000

@@ -9,6 +9,16 @@
 //!    Kommazahl trifft,
 //!  - sammelt alle Fehler ein, statt beim ersten aufzuhören.
 //!
+//! # Vorlagen (Generics)
+//!
+//! `FUNKTIAUN erster VON T(...)`, `KLASSE Stapel VON T` und `STRUKTUR Paar
+//! VON A UND B` sind Vorlagen: Für sie selbst entsteht kein Code. Erst wenn
+//! feststeht, was `T` ist (`Stapel VON ZOI`, ein Aufruf mit einer Liste von
+//! Texten ...), wird die Vorlage kopiert und mit diesem Typ geprüft wie eine
+//! gewöhnliche Funktion oder Klasse ([`Pruefer::typ_umgebung`] sagt dabei,
+//! wofür `T` steht). Jede Fassung gibt es nur einmal. Ob der Rumpf mit einem
+//! Typ funktioniert (etwa `a < b`), zeigt sich also erst beim Verwenden.
+//!
 //! # Was NIX sein kann
 //!
 //! Ein Wert vom Typ `VIELLEICHT T` kann fehlen. Verwenden kann man ihn erst,
@@ -79,6 +89,26 @@ struct Pruefer<'a> {
     /// Die Funktionen ohne Namen, in denen wir gerade stecken, die innerste hinten.
     lambdas: Vec<LambdaKontext>,
     naechste_lambda: usize,
+    /// Die Vorlagen, wie sie im Programm stehen.
+    struktur_vorlagen: HashMap<String, StrukturDef>,
+    klassen_vorlagen: HashMap<String, KlassenDef>,
+    funktions_vorlagen: HashMap<String, Funktion>,
+    /// Wofür die Typnamen einer Vorlage gerade stehen (`T` -> `ZOI`).
+    typ_umgebung: HashMap<String, Typ>,
+    /// Die Fassungen, die es schon gibt: Vorlage und Typen -> Nummer oder Name.
+    struktur_fassungen: HashMap<(String, Vec<Typ>), u32>,
+    klassen_fassungen: HashMap<(String, Vec<Typ>), u32>,
+    funktions_fassungen: HashMap<(String, Vec<Typ>), String>,
+    /// Umgekehrt: aus welcher Vorlage und mit welchen Typen eine Struktur oder Klasse entstanden ist.
+    struktur_aus: HashMap<u32, (String, Vec<Typ>)>,
+    klasse_aus: HashMap<u32, (String, Vec<Typ>)>,
+    /// Fassungen, deren Inhalt noch geprüft werden muss.
+    offene_funktionen: Vec<(Funktion, HashMap<String, Typ>)>,
+    offene_klassen: Vec<(u32, KlassenDef, HashMap<String, Typ>)>,
+    fertige_funktionen: Vec<Funktion>,
+    fertige_klassen: Vec<(u32, KlassenDef)>,
+    /// Die Fassung, die gerade geprüft wird (für Meldungen).
+    fassung: Option<String>,
 }
 
 /// Das Wort, unter dem eine eingebaute Funktion im Wörterbuch steht.
@@ -181,6 +211,20 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         probier_erlaubt: false,
         lambdas: Vec::new(),
         naechste_lambda: 0,
+        struktur_vorlagen: HashMap::new(),
+        klassen_vorlagen: HashMap::new(),
+        funktions_vorlagen: HashMap::new(),
+        typ_umgebung: HashMap::new(),
+        struktur_fassungen: HashMap::new(),
+        klassen_fassungen: HashMap::new(),
+        funktions_fassungen: HashMap::new(),
+        struktur_aus: HashMap::new(),
+        klasse_aus: HashMap::new(),
+        offene_funktionen: Vec::new(),
+        offene_klassen: Vec::new(),
+        fertige_funktionen: Vec::new(),
+        fertige_klassen: Vec::new(),
+        fassung: None,
     };
 
     p.strukturen(&programm.strukturen, &programm.klassen);
@@ -188,13 +232,16 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
 
     // Alle Funktionen kennenlernen, damit die Reihenfolge egal ist.
     for f in &mut programm.funktionen {
-        for parameter in &mut f.parameter {
-            parameter.typ = p.typ_aus(&parameter.angabe);
+        let vorlage = !f.typ_parameter.is_empty();
+        if !vorlage {
+            for parameter in &mut f.parameter {
+                parameter.typ = p.typ_aus(&parameter.angabe);
+            }
+            f.rueckgabe = f.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| p.typ_aus(angabe));
         }
-        f.rueckgabe = f.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| p.typ_aus(angabe));
-        let schon = if p.struktur_nummern.contains_key(&f.name) {
+        let schon = if p.struktur_nummern.contains_key(&f.name) || p.struktur_vorlagen.contains_key(&f.name) {
             Some(Schluessel::Struct)
-        } else if p.klassen_nummern.contains_key(&f.name) {
+        } else if p.klassen_nummern.contains_key(&f.name) || p.klassen_vorlagen.contains_key(&f.name) {
             Some(Schluessel::Class)
         } else {
             None
@@ -209,9 +256,15 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
             p.melde(f.pos, meldung);
             continue;
         }
-        if p.signaturen.contains_key(&f.name) {
+        if p.signaturen.contains_key(&f.name) || p.funktions_vorlagen.contains_key(&f.name) {
             let meldung = format!("De {} '{}' gibt's scho. Zwamoi geht ned.", p.wort(Schluessel::Function), f.name);
             p.melde(f.pos, meldung);
+            // Damit die zweite nicht als gewöhnliche Funktion geprüft wird.
+            f.typ_parameter.clear();
+            continue;
+        }
+        if vorlage {
+            p.funktions_vorlagen.insert(f.name.clone(), f.clone());
             continue;
         }
         p.signaturen.insert(
@@ -221,7 +274,9 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
     }
 
     for f in &mut programm.funktionen {
-        p.funktion(f);
+        if !p.funktions_vorlagen.contains_key(&f.name) {
+            p.funktion(f);
+        }
     }
     for (nummer, k) in programm.klassen.iter_mut().enumerate() {
         // Eine doppelte Klasse ist schon gemeldet; ihr Inhalt wird nicht geprüft.
@@ -239,18 +294,371 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         p.anweisung(a);
     }
 
+    // Jetzt die Fassungen der Vorlagen, die dabei gebraucht wurden. Beim
+    // Prüfen können weitere dazukommen.
+    loop {
+        if let Some((mut f, umgebung)) = p.offene_funktionen.pop() {
+            p.typ_umgebung = umgebung;
+            p.fassung = Some(f.name.clone());
+            p.methoden_klasse = None;
+            p.selbst = None;
+            p.funktion(&mut f);
+            p.fertige_funktionen.push(f);
+        } else if let Some((nummer, mut k, umgebung)) = p.offene_klassen.pop() {
+            p.typ_umgebung = umgebung;
+            p.fassung = Some(p.typen.klassen[nummer as usize].name.clone());
+            p.klassen_inhalt(nummer, &mut k);
+            p.fertige_klassen.push((nummer, k));
+        } else {
+            break;
+        }
+    }
+    p.fassung = None;
+    p.typ_umgebung.clear();
+
+    // Die Vorlagen selbst fallen weg, ihre Fassungen kommen dazu. Die Klassen
+    // müssen in der Reihenfolge ihrer Nummern stehen.
+    programm.funktionen.retain(|f| f.typ_parameter.is_empty());
+    programm.funktionen.append(&mut p.fertige_funktionen);
+    p.fertige_klassen.sort_by_key(|(nummer, _)| *nummer);
+    programm.klassen.extend(std::mem::take(&mut p.fertige_klassen).into_iter().map(|(_, k)| k));
+
     if p.fehler.is_empty() {
         programm.typen = p.typen;
         Ok(())
     } else {
         p.fehler.sort_by_key(|f| (f.pos.zeile, f.pos.spalte));
+        // Derselbe Fehler in mehreren Fassungen einer Vorlage wird nur einmal gezeigt.
+        p.fehler.dedup_by(|a, b| a.pos == b.pos && a.meldung == b.meldung);
         Err(p.fehler)
     }
 }
 
 impl Pruefer<'_> {
     fn melde(&mut self, pos: Position, meldung: impl Into<String>) {
+        let mut meldung: String = meldung.into();
+        // In einer Vorlage dazusagen, mit welchen Typen es nicht geht.
+        if let Some(fassung) = &self.fassung {
+            meldung.push_str(&format!(" (bei '{fassung}')"));
+        }
         self.fehler.push(Fehler::neu(pos, meldung));
+    }
+
+    /// Wie die Fassung einer Vorlage heißt: `Stapel VON ZOI`, `Paar VON ZOI UND KETTN`.
+    fn fassungs_name(&self, name: &str, typen: &[Typ]) -> String {
+        let typen: Vec<String> = typen.iter().map(|t| self.typ_wort(*t)).collect();
+        let und = format!(" {} ", self.wort(Schluessel::And));
+        format!("{name} {} {}", self.wort(Schluessel::From), typen.join(&und))
+    }
+
+    /// Passen so viele Typen zur Vorlage?
+    fn typen_anzahl_passt(&mut self, name: &str, offen: &[String], gegeben: usize, pos: Position) -> bool {
+        if offen.len() == gegeben {
+            return true;
+        }
+        let meldung = format!(
+            "'{name}' braucht {} ({}), du gibst {}.",
+            if offen.len() == 1 { "an Typ".to_string() } else { format!("{} Typen", offen.len()) },
+            offen.join(", "),
+            if gegeben == 1 { "an".to_string() } else { gegeben.to_string() }
+        );
+        self.melde(pos, meldung);
+        false
+    }
+
+    /// Die Klasse, die aus einer Vorlage mit diesen Typen entsteht.
+    fn klassen_fassung(&mut self, name: &str, typen: Vec<Typ>, pos: Position) -> Typ {
+        let schluessel = (name.to_string(), typen.clone());
+        if let Some(nummer) = self.klassen_fassungen.get(&schluessel) {
+            return Typ::Klasse(*nummer);
+        }
+        let mut k = self.klassen_vorlagen[name].clone();
+        if !self.typen_anzahl_passt(name, &k.typ_parameter, typen.len(), pos) {
+            return Typ::Fehler;
+        }
+        // Erst die Nummer vergeben: Die Klasse darf in ihren eigenen Feldern vorkommen.
+        let nummer = self.typen.klassen.len() as u32;
+        let voller_name = self.fassungs_name(name, &typen);
+        self.typen.klassen.push(KlassenInfo { name: voller_name.clone(), ..KlassenInfo::default() });
+        self.klassen_fassungen.insert(schluessel, nummer);
+        self.klasse_aus.insert(nummer, (name.to_string(), typen.clone()));
+
+        let umgebung: HashMap<String, Typ> = k.typ_parameter.iter().cloned().zip(typen).collect();
+        let aussen = std::mem::replace(&mut self.typ_umgebung, umgebung.clone());
+        let aussen_fassung = self.fassung.replace(voller_name.clone());
+        let mut felder: Vec<KlassenFeldInfo> = Vec::new();
+        for (stelle, feld) in k.felder.iter().enumerate() {
+            let typ = self.typ_aus(&feld.angabe);
+            if felder.iter().any(|f| f.name == feld.name) {
+                let meldung = format!("Des Föd '{}' gibt's in '{name}' scho.", feld.name);
+                self.melde(feld.pos, meldung);
+                continue;
+            }
+            felder.push(KlassenFeldInfo {
+                name: feld.name.clone(),
+                typ,
+                klasse: nummer,
+                stelle,
+                hat_standard: feld.standard.is_some(),
+            });
+        }
+        let mut methoden: Vec<MethodenInfo> = Vec::new();
+        for m in &mut k.methoden {
+            for parameter in &mut m.parameter {
+                parameter.typ = self.typ_aus(&parameter.angabe);
+            }
+            m.rueckgabe = m.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| self.typ_aus(angabe));
+            if methoden.iter().any(|alt| alt.name == m.name) {
+                let meldung = format!("De Methode '{}' gibt's in '{name}' scho. Zwamoi geht ned.", m.name);
+                self.melde(m.pos, meldung);
+                continue;
+            }
+            if felder.iter().any(|f| f.name == m.name) {
+                let meldung = format!("'{}' is in '{name}' scho a Föd, des kaun ned a no a Methode sei.", m.name);
+                self.melde(m.pos, meldung);
+                continue;
+            }
+            methoden.push(MethodenInfo {
+                name: m.name.clone(),
+                parameter: m.parameter.iter().map(|p| p.typ).collect(),
+                rueckgabe: m.rueckgabe,
+                klasse: nummer,
+                platz: None,
+            });
+        }
+        self.typ_umgebung = aussen;
+        self.fassung = aussen_fassung;
+        self.typen.klassen[nummer as usize].felder = felder;
+        self.typen.klassen[nummer as usize].methoden = methoden;
+        k.name = voller_name;
+        k.typ_parameter.clear();
+        self.offene_klassen.push((nummer, k, umgebung));
+        Typ::Klasse(nummer)
+    }
+
+    /// Die Struktur, die aus einer Vorlage mit diesen Typen entsteht.
+    fn struktur_fassung(&mut self, name: &str, typen: Vec<Typ>, pos: Position) -> Typ {
+        let schluessel = (name.to_string(), typen.clone());
+        if let Some(nummer) = self.struktur_fassungen.get(&schluessel) {
+            return Typ::Struktur(*nummer);
+        }
+        let s = self.struktur_vorlagen[name].clone();
+        if !self.typen_anzahl_passt(name, &s.typ_parameter, typen.len(), pos) {
+            return Typ::Fehler;
+        }
+        let nummer = self.typen.strukturen.len() as u32;
+        let voller_name = self.fassungs_name(name, &typen);
+        self.typen.strukturen.push(StrukturInfo { name: voller_name.clone(), felder: Vec::new() });
+        self.struktur_fassungen.insert(schluessel, nummer);
+        self.struktur_aus.insert(nummer, (name.to_string(), typen.clone()));
+
+        let umgebung: HashMap<String, Typ> = s.typ_parameter.iter().cloned().zip(typen).collect();
+        let aussen = std::mem::replace(&mut self.typ_umgebung, umgebung);
+        let aussen_fassung = self.fassung.replace(voller_name.clone());
+        let mut felder: Vec<(String, Typ)> = Vec::new();
+        for feld in &s.felder {
+            let mut typ = self.typ_aus(&feld.angabe);
+            if felder.iter().any(|(alt, _)| *alt == feld.name) {
+                let meldung = format!("Des Föd '{}' gibt's in '{name}' scho.", feld.name);
+                self.melde(feld.pos, meldung);
+                continue;
+            }
+            if self.enthaelt(typ, nummer, 0) {
+                let meldung = format!(
+                    "De {} '{voller_name}' kaun si ned söwa enthoitn, de warat unendlich groß. Nimm a {} dafia.",
+                    self.wort(Schluessel::Struct),
+                    self.wort(Schluessel::List)
+                );
+                self.melde(feld.pos, meldung);
+                typ = Typ::Fehler;
+            }
+            felder.push((feld.name.clone(), typ));
+        }
+        self.typ_umgebung = aussen;
+        self.fassung = aussen_fassung;
+        self.typen.strukturen[nummer as usize].felder = felder;
+        Typ::Struktur(nummer)
+    }
+
+    /// Die Funktion, die aus einer Vorlage mit diesen Typen entsteht. Gibt ihren Namen zurück.
+    fn funktions_fassung(&mut self, name: &str, typen: Vec<Typ>) -> String {
+        let schluessel = (name.to_string(), typen.clone());
+        if let Some(fertig) = self.funktions_fassungen.get(&schluessel) {
+            return fertig.clone();
+        }
+        let mut f = self.funktions_vorlagen[name].clone();
+        let voller_name = self.fassungs_name(name, &typen);
+        self.funktions_fassungen.insert(schluessel, voller_name.clone());
+        let umgebung: HashMap<String, Typ> = f.typ_parameter.iter().cloned().zip(typen).collect();
+        let aussen = std::mem::replace(&mut self.typ_umgebung, umgebung.clone());
+        let aussen_fassung = self.fassung.replace(voller_name.clone());
+        for parameter in &mut f.parameter {
+            parameter.typ = self.typ_aus(&parameter.angabe);
+        }
+        f.rueckgabe = f.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| self.typ_aus(angabe));
+        self.typ_umgebung = aussen;
+        self.fassung = aussen_fassung;
+        f.name = voller_name.clone();
+        f.typ_parameter.clear();
+        self.signaturen.insert(
+            voller_name.clone(),
+            Signatur { parameter: f.parameter.iter().map(|x| x.typ).collect(), rueckgabe: f.rueckgabe },
+        );
+        self.offene_funktionen.push((f, umgebung));
+        voller_name
+    }
+
+    /// Liest aus einem Typ, wie er hingeschrieben ist, und dem Typ eines
+    /// Werts ab, wofür die offenen Namen stehen müssen: `LISTN VON T` und
+    /// eine `LISTN VON ZOI` ergibt `T` = `ZOI`. Wer zuerst kommt, gilt.
+    fn gleiche_ab(&self, angabe: &TypAngabe, typ: Typ, offen: &[String], gefunden: &mut HashMap<String, Typ>) {
+        match angabe {
+            TypAngabe::Name { name, .. } if offen.contains(name) => {
+                if !matches!(typ, Typ::Nix | Typ::Fehler) && self.fertig(typ) {
+                    gefunden.entry(name.clone()).or_insert(typ);
+                }
+            }
+            TypAngabe::Liste(innen) => {
+                if let Some(element) = self.typen.element(typ) {
+                    self.gleiche_ab(innen, element, offen, gefunden);
+                }
+            }
+            // Wo VIELLEICHT T verlangt ist, passt auch ein T selbst.
+            TypAngabe::Vielleicht { innen, .. } => {
+                self.gleiche_ab(innen, self.typen.innen(typ).unwrap_or(typ), offen, gefunden);
+            }
+            TypAngabe::OderFehler { wert: Some(wert), .. } => {
+                self.gleiche_ab(wert, self.typen.wert_von(typ).unwrap_or(typ), offen, gefunden);
+            }
+            TypAngabe::Funktion { parameter, rueckgabe, .. } => {
+                if let Some(f) = self.typen.funktions_typ(typ) {
+                    for (a, t) in parameter.iter().zip(&f.parameter) {
+                        self.gleiche_ab(a, *t, offen, gefunden);
+                    }
+                    if let Some(rueckgabe) = rueckgabe {
+                        self.gleiche_ab(rueckgabe, f.rueckgabe, offen, gefunden);
+                    }
+                }
+            }
+            TypAngabe::Generisch { name, argumente, .. } => {
+                let aus = match typ {
+                    Typ::Klasse(n) => self.klasse_aus.get(&n),
+                    Typ::Struktur(n) => self.struktur_aus.get(&n),
+                    _ => None,
+                };
+                if let Some((vorlage, typen)) = aus
+                    && vorlage == name
+                {
+                    for (a, t) in argumente.iter().zip(typen) {
+                        self.gleiche_ab(a, *t, offen, gefunden);
+                    }
+                }
+            }
+            TypAngabe::Verzeichnis { schluessel, wert, .. } => {
+                if let Some((k, v)) = self.typen.verzeichnis(typ) {
+                    self.gleiche_ab(schluessel, k, offen, gefunden);
+                    self.gleiche_ab(wert, v, offen, gefunden);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Bestimmt aus den Werten eines Aufrufs, wofür die offenen Typen einer
+    /// Vorlage stehen. Meldet, wenn einer offen bleibt.
+    fn typen_ablesen(
+        &mut self,
+        name: &str,
+        offen: &[String],
+        angaben: &[TypAngabe],
+        typen: &[Typ],
+        pos: Position,
+    ) -> Option<Vec<Typ>> {
+        let mut gefunden = HashMap::new();
+        for (angabe, typ) in angaben.iter().zip(typen) {
+            self.gleiche_ab(angabe, *typ, offen, &mut gefunden);
+        }
+        if let Some(fehlt) = offen.iter().find(|o| !gefunden.contains_key(*o)) {
+            let meldung = format!(
+                "Bei '{name}' waaß i ned, wos '{fehlt}' sei soll: Aus de Werte in da Klammer geht's ned hervua."
+            );
+            self.melde(pos, meldung);
+            return None;
+        }
+        Some(offen.iter().map(|o| gefunden[o]).collect())
+    }
+
+    /// `Stapel()` oder `Paar(1, "a")`, wo der Name eine Vorlage ist: Die Typen
+    /// werden aus den Werten abgelesen.
+    fn vorlage_bauen(&mut self, ausdruck: &mut Ausdruck) -> Typ {
+        let pos = ausdruck.pos;
+        let AusdruckArt::Aufruf { name, argumente } = &mut ausdruck.art else { unreachable!() };
+        let name = name.clone();
+        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        if typen.contains(&Typ::Fehler) {
+            return Typ::Fehler;
+        }
+        // Was in der Klammer steht, sind die Felder der Reihe nach (bei Klassen die ohne eigenen Wert).
+        let (offen, angaben) = match (self.klassen_vorlagen.get(&name), self.struktur_vorlagen.get(&name)) {
+            (Some(k), _) => (
+                k.typ_parameter.clone(),
+                k.felder.iter().filter(|f| f.standard.is_none()).map(|f| f.angabe.clone()).collect::<Vec<_>>(),
+            ),
+            (_, Some(s)) => (s.typ_parameter.clone(), s.felder.iter().map(|f| f.angabe.clone()).collect()),
+            _ => unreachable!("nur für Vorlagen aufgerufen"),
+        };
+        let mut gefunden = HashMap::new();
+        for (angabe, typ) in angaben.iter().zip(&typen) {
+            self.gleiche_ab(angabe, *typ, &offen, &mut gefunden);
+        }
+        if let Some(fehlt) = offen.iter().find(|o| !gefunden.contains_key(*o)) {
+            let meldung = format!(
+                "Bei '{name}' waaß i ned, wos '{fehlt}' sei soll. Schreib's dazua: {name} {} ...(...)",
+                self.wort(Schluessel::From)
+            );
+            self.melde(pos, meldung);
+            return Typ::Fehler;
+        }
+        let gewaehlt: Vec<Typ> = offen.iter().map(|o| gefunden[o]).collect();
+        if self.klassen_vorlagen.contains_key(&name) {
+            match self.klassen_fassung(&name, gewaehlt, pos) {
+                Typ::Klasse(nummer) => self.neu(ausdruck, nummer, Some(typen)),
+                _ => Typ::Fehler,
+            }
+        } else {
+            match self.struktur_fassung(&name, gewaehlt, pos) {
+                Typ::Struktur(nummer) => self.bau(ausdruck, nummer, Some(typen)),
+                _ => Typ::Fehler,
+            }
+        }
+    }
+
+    /// `Stapel VON ZOI(...)`: ein neuer Wert, dessen Typ dabeisteht.
+    fn erzeug(&mut self, ausdruck: &mut Ausdruck) -> Typ {
+        let pos = ausdruck.pos;
+        let AusdruckArt::Erzeug { angabe, mut argumente } = std::mem::replace(&mut ausdruck.art, AusdruckArt::Nix)
+        else {
+            unreachable!()
+        };
+        let typ = self.typ_aus(&angabe);
+        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        let name = self.typ_wort(typ);
+        match typ {
+            Typ::Klasse(nummer) => {
+                ausdruck.art = AusdruckArt::Aufruf { name, argumente };
+                self.neu(ausdruck, nummer, Some(typen))
+            }
+            Typ::Struktur(nummer) => {
+                ausdruck.art = AusdruckArt::Aufruf { name, argumente };
+                self.bau(ausdruck, nummer, Some(typen))
+            }
+            Typ::Fehler => Typ::Fehler,
+            _ => {
+                let meldung = format!("{} kaun ma so ned aulegn.", self.typ_name(typ).replacen("a ", "A ", 1));
+                self.melde(pos, meldung);
+                Typ::Fehler
+            }
+        }
     }
 
     fn wort(&self, schluessel: Schluessel) -> &str {
@@ -325,14 +733,23 @@ impl Pruefer<'_> {
         match angabe {
             TypAngabe::Einfach(typ) => *typ,
             TypAngabe::Name { name, pos } => {
+                // In einer Vorlage: wofür der Name gerade steht.
+                if let Some(typ) = self.typ_umgebung.get(name) {
+                    return *typ;
+                }
                 if let Some(nummer) = self.struktur_nummern.get(name) {
                     return Typ::Struktur(*nummer);
                 }
                 if let Some(nummer) = self.klassen_nummern.get(name) {
                     return Typ::Klasse(*nummer);
                 }
+                let vorlage = self.klassen_vorlagen.contains_key(name) || self.struktur_vorlagen.contains_key(name);
                 let meldung = match self.wb.festes_wort(name) {
                     Some(schluessel) => format!("Des haaßt {}, ned {}!", self.wort(schluessel), name),
+                    None if vorlage => format!(
+                        "'{name}' is a Vorlog, do ghört dazua, wovon: {name} {} ...",
+                        self.wort(Schluessel::From)
+                    ),
                     None => format!(
                         "An Typ '{name}' kenn i ned. Gibt's a {} oda a {} mit dem Nom?",
                         self.wort(Schluessel::Struct),
@@ -380,7 +797,31 @@ impl Pruefer<'_> {
                     self.typen.funktion_von(parameter, rueckgabe)
                 }
             }
-            TypAngabe::Generisch { pos, .. } | TypAngabe::Verzeichnis { pos, .. } => {
+            TypAngabe::Generisch { name, argumente, pos } => {
+                let typen: Vec<Typ> = argumente.iter().map(|a| self.typ_aus(a)).collect();
+                if typen.contains(&Typ::Fehler) {
+                    Typ::Fehler
+                } else if self.klassen_vorlagen.contains_key(name) {
+                    self.klassen_fassung(name, typen, *pos)
+                } else if self.struktur_vorlagen.contains_key(name) {
+                    self.struktur_fassung(name, typen, *pos)
+                } else {
+                    let bekannt = self.struktur_nummern.contains_key(name) || self.klassen_nummern.contains_key(name);
+                    let meldung = if bekannt {
+                        format!(
+                            "'{name}' is ka Vorlog, do ghört ka {} dahinta. (A Vorlog schaut so aus: {} {name} {} T)",
+                            self.wort(Schluessel::From),
+                            self.wort(Schluessel::Class),
+                            self.wort(Schluessel::From)
+                        )
+                    } else {
+                        format!("A Vorlog '{name}' kenn i ned.")
+                    };
+                    self.melde(*pos, meldung);
+                    Typ::Fehler
+                }
+            }
+            TypAngabe::Verzeichnis { pos, .. } => {
                 self.melde(*pos, "Des kummt no.");
                 Typ::Fehler
             }
@@ -435,9 +876,14 @@ impl Pruefer<'_> {
         // Welche Definition zu welcher Nummer gehört (doppelte Namen fallen weg).
         let mut gueltig: Vec<&StrukturDef> = Vec::new();
         for s in definitionen {
-            if self.struktur_nummern.contains_key(&s.name) {
+            if self.struktur_nummern.contains_key(&s.name) || self.struktur_vorlagen.contains_key(&s.name) {
                 let meldung = format!("De {} '{}' gibt's scho. Zwamoi geht ned.", self.wort(Schluessel::Struct), s.name);
                 self.melde(s.pos, meldung);
+                continue;
+            }
+            // Eine Vorlage bekommt selbst keine Nummer; erst ihre Fassungen.
+            if !s.typ_parameter.is_empty() {
+                self.struktur_vorlagen.insert(s.name.clone(), s.clone());
                 continue;
             }
             self.struktur_nummern.insert(s.name.clone(), gueltig.len() as u32);
@@ -500,11 +946,12 @@ impl Pruefer<'_> {
     /// der sie im Programm steht; eine doppelte bleibt leer und wird gemeldet.
     fn klassen_namen(&mut self, definitionen: &[KlassenDef]) {
         for (nummer, k) in definitionen.iter().enumerate() {
-            self.typen.klassen.push(KlassenInfo { name: k.name.clone(), ..KlassenInfo::default() });
-            if self.klassen_nummern.contains_key(&k.name) {
+            let vorlage = !k.typ_parameter.is_empty();
+            self.typen.klassen.push(KlassenInfo { name: k.name.clone(), vorlage, ..KlassenInfo::default() });
+            if self.klassen_nummern.contains_key(&k.name) || self.klassen_vorlagen.contains_key(&k.name) {
                 let meldung = format!("De {} '{}' gibt's scho. Zwamoi geht ned.", self.wort(Schluessel::Class), k.name);
                 self.melde(k.pos, meldung);
-            } else if self.struktur_nummern.contains_key(&k.name) {
+            } else if self.struktur_nummern.contains_key(&k.name) || self.struktur_vorlagen.contains_key(&k.name) {
                 let meldung = format!(
                     "'{}' gibt's scho ois {}, des kaun ned a no a {} sei.",
                     k.name,
@@ -512,6 +959,17 @@ impl Pruefer<'_> {
                     self.wort(Schluessel::Class)
                 );
                 self.melde(k.pos, meldung);
+            } else if vorlage {
+                // Eine Vorlage erbt nicht und vererbt nicht: Jede Fassung steht für sich.
+                if let Some((_, pos)) = &k.eltern {
+                    let meldung = format!(
+                        "A Vorlog ({} ... {} ...) kaun ned erbn.",
+                        self.wort(Schluessel::Class),
+                        self.wort(Schluessel::From)
+                    );
+                    self.melde(*pos, meldung);
+                }
+                self.klassen_vorlagen.insert(k.name.clone(), k.clone());
             } else {
                 self.klassen_nummern.insert(k.name.clone(), nummer as u32);
             }
@@ -549,7 +1007,9 @@ impl Pruefer<'_> {
                 }
                 Some(eltern) => self.typen.klassen[n].eltern = Some(eltern),
                 None => {
-                    let meldung = if self.struktur_nummern.contains_key(eltern_name) {
+                    let meldung = if self.klassen_vorlagen.contains_key(eltern_name) {
+                        format!("Von ana Vorlog wia '{eltern_name}' kaun ma ned erbn.")
+                    } else if self.struktur_nummern.contains_key(eltern_name) {
                         format!(
                             "'{eltern_name}' is a {}, erbn kaun ma nur von ana {}.",
                             self.wort(Schluessel::Struct),
@@ -730,11 +1190,15 @@ impl Pruefer<'_> {
 
     /// `Gegner("Hansi", 5)`: ein neues Objekt. Angegeben werden die Felder,
     /// die keinen eigenen Wert haben, der Reihe nach (die geerbten zuerst).
-    fn neu(&mut self, ausdruck: &mut Ausdruck, nummer: u32) -> Typ {
+    fn neu(&mut self, ausdruck: &mut Ausdruck, nummer: u32, geprueft: Option<Vec<Typ>>) -> Typ {
         let AusdruckArt::Aufruf { name, argumente } = &mut ausdruck.art else { unreachable!() };
         let name = name.clone();
         let mut argumente = std::mem::take(argumente);
-        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        // Sind die Werte schon geprüft (bei Vorlagen), kein zweites Mal.
+        let typen: Vec<Typ> = match geprueft {
+            Some(typen) => typen,
+            None => argumente.iter_mut().map(|a| self.ausdruck(a)).collect(),
+        };
         let felder: Vec<KlassenFeldInfo> =
             self.typen.klassen[nummer as usize].felder.iter().filter(|f| !f.hat_standard).cloned().collect();
         if felder.len() != argumente.len() {
@@ -1608,10 +2072,13 @@ impl Pruefer<'_> {
         // Heißt die "Funktion" wie eine Struktur oder Klasse, wird ein neuer Wert gebaut.
         if let AusdruckArt::Aufruf { name, .. } = &ausdruck.art {
             if let Some(&nummer) = self.struktur_nummern.get(name) {
-                return self.bau(ausdruck, nummer);
+                return self.bau(ausdruck, nummer, None);
             }
             if let Some(&nummer) = self.klassen_nummern.get(name) {
-                return self.neu(ausdruck, nummer);
+                return self.neu(ausdruck, nummer, None);
+            }
+            if self.klassen_vorlagen.contains_key(name) || self.struktur_vorlagen.contains_key(name) {
+                return self.vorlage_bauen(ausdruck);
             }
             // Heißt so eine Variable, in der eine Funktion steckt, wird die aufgerufen.
             let name = name.clone();
@@ -1627,6 +2094,9 @@ impl Pruefer<'_> {
                 let funktion = Box::new(Ausdruck::neu(AusdruckArt::Variable { name, id: 0 }, pos));
                 ausdruck.art = AusdruckArt::WertAufruf { funktion, argumente };
             }
+        }
+        if matches!(ausdruck.art, AusdruckArt::Erzeug { .. }) {
+            return self.erzeug(ausdruck);
         }
         // Was erst nach dem Blick in den Ausdruck umgebaut werden kann.
         let mut ist_funktions_wert = false;
@@ -1653,6 +2123,15 @@ impl Pruefer<'_> {
                         } else {
                             self.typen.funktion_von(parameter, rueckgabe)
                         }
+                    }
+                    None if self.funktions_vorlagen.contains_key(&name) => {
+                        let meldung = format!(
+                            "'{name}' is a Vorlog: Ois Wert geht de ned, weu ned feststeht, mit wöchn Typen. \
+                             Pack den Aufruf in a {} ohne Nom.",
+                            self.wort(Schluessel::Function)
+                        );
+                        self.melde(pos, meldung);
+                        Typ::Fehler
                     }
                     None => {
                         self.unbekannte_variable(&name, pos);
@@ -1703,8 +2182,35 @@ impl Pruefer<'_> {
             }
             AusdruckArt::Aufruf { name, argumente } => {
                 let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
-                let name = name.clone();
-                self.aufruf(&name, argumente, &typen, pos)
+                // Eine Vorlage: Aus den Werten ergibt sich, welche Fassung gemeint ist.
+                if let Some(vorlage) = self.funktions_vorlagen.get(name.as_str()) {
+                    let offen = vorlage.typ_parameter.clone();
+                    let angaben: Vec<TypAngabe> = vorlage.parameter.iter().map(|p| p.angabe.clone()).collect();
+                    let vorlagen_name = name.clone();
+                    if typen.contains(&Typ::Fehler) {
+                        Typ::Fehler
+                    } else if angaben.len() != typen.len() {
+                        let meldung = format!(
+                            "'{vorlagen_name}' wü {} hom, du gibst eam {}.",
+                            anzahl(angaben.len()),
+                            anzahl(typen.len())
+                        );
+                        self.melde(pos, meldung);
+                        Typ::Fehler
+                    } else {
+                        match self.typen_ablesen(&vorlagen_name, &offen, &angaben, &typen, pos) {
+                            Some(gewaehlt) => {
+                                let fassung = self.funktions_fassung(&vorlagen_name, gewaehlt);
+                                *name = fassung.clone();
+                                self.aufruf(&fassung, argumente, &typen, pos)
+                            }
+                            None => Typ::Fehler,
+                        }
+                    }
+                } else {
+                    let name = name.clone();
+                    self.aufruf(&name, argumente, &typen, pos)
+                }
             }
             AusdruckArt::Eingebaut { funktion, argumente } => {
                 let funktion = *funktion;
@@ -1910,10 +2416,7 @@ impl Pruefer<'_> {
                 let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
                 self.wert_aufruf(funktion, f_typ, argumente, &typen, pos)
             }
-            AusdruckArt::Erzeug { .. } => {
-                self.melde(pos, "Des kummt no.");
-                Typ::Fehler
-            }
+            AusdruckArt::Erzeug { .. } => unreachable!("oben erledigt"),
             AusdruckArt::OdaHoid { links, rechts } => {
                 let mut l = self.ausdruck(links);
                 if matches!(links.art, AusdruckArt::Sicher { .. }) {
@@ -2097,11 +2600,14 @@ impl Pruefer<'_> {
     }
 
     /// `Punkt(1.5, 2.0)`: ein neuer Wert der Struktur, die Felder der Reihe nach.
-    fn bau(&mut self, ausdruck: &mut Ausdruck, nummer: u32) -> Typ {
+    fn bau(&mut self, ausdruck: &mut Ausdruck, nummer: u32, geprueft: Option<Vec<Typ>>) -> Typ {
         let AusdruckArt::Aufruf { name, argumente } = &mut ausdruck.art else { unreachable!() };
         let name = name.clone();
         let mut argumente = std::mem::take(argumente);
-        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        let typen: Vec<Typ> = match geprueft {
+            Some(typen) => typen,
+            None => argumente.iter_mut().map(|a| self.ausdruck(a)).collect(),
+        };
         let felder = self.typen.strukturen[nummer as usize].felder.clone();
         if felder.len() != argumente.len() {
             let hat = match felder.len() {

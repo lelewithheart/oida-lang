@@ -1,0 +1,47 @@
+STRUKTUR Punkt
+    x ZOI
+PASST SCHO
+STRUKTUR Knotn VON T
+    wert T
+    weida_gehts Knotn VON T
+PASST SCHO
+KLASSE Wesen
+    name KETTN
+PASST SCHO
+KLASSE Stopl VON T
+    drin LISTN VON T = []
+    FUNKTIAUN drauf(wos T)
+        HAU EINE(SÖWA.drin, wos) OIDA
+    PASST SCHO
+PASST SCHO
+KLASSE Erbin VON T ERBT VON Wesen
+PASST SCHO
+KLASSE Kind ERBT VON Stopl
+PASST SCHO
+FUNKTIAUN erstes VON T(liste LISTN VON T) GIBT ZRUCK T
+    GIB ZRUCK liste[0] OIDA
+PASST SCHO
+FUNKTIAUN größtes VON T(liste LISTN VON T, ersotz T) GIBT ZRUCK T
+    SOG AU bestes = ersotz OIDA
+    FIA JEDE x IN liste TUA
+        WENN bestes < x DAUN
+            bestes = x OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK bestes OIDA
+PASST SCHO
+SCHREIB(erstes(5)) OIDA
+SCHREIB(erstes([1], 2)) OIDA
+SCHREIB(erstes([])) OIDA
+SCHREIB(größtes([Punkt(1)], Punkt(0))) OIDA
+SCHREIB(größtes([1, 2], "drei")) OIDA
+SOG AU a = Stopl() OIDA
+SOG AU b = Stopl VON ZOI UND KETTN() OIDA
+SOG AU c Stopl = Stopl VON ZOI() OIDA
+SOG AU d = Punkt VON ZOI(1) OIDA
+SOG AU e = Gibtsned VON ZOI() OIDA
+SOG AU f = erstes OIDA
+SOG AU g = Knotn VON ZOI(1, NIX) OIDA
+SOG AU s = Stopl VON ZOI() OIDA
+s.drauf("ans") OIDA
+SOG AU t Stopl VON KETTN = s OIDA
