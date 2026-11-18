@@ -16,6 +16,7 @@ FUNKTIAUN ton_roh(art KETTN, von_höhe KOMMAZOI, bis_höhe KOMMAZOI, dauer KOMMA
 # Macht so viele Sekunden Pause. Töne laufen dabei weiter; hört das Programm
 # auf, hören auch sie auf.
 FUNKTIAUN wart(sekunden KOMMAZOI) VON DRAUSSN "oida_warten" OIDA
+FUNKTIAUN ton_roh_um(wann KOMMAZOI, art KETTN, von_höhe KOMMAZOI, bis_höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI) VON DRAUSSN "oida_ton_um" OIDA
 
 # Die Lautstärke für alle Töne zusammen: 0 ist stumm, 1 normal.
 FUNKTIAUN lautstärke(wert KOMMAZOI) VON DRAUSSN "oida_ton_laut" OIDA
@@ -39,4 +40,28 @@ PASST SCHO
 # Ein Rauschen, etwa für einen Treffer oder eine Explosion.
 FUNKTIAUN rauschn(dauer KOMMAZOI, laut KOMMAZOI)
     ton_roh("rauschn", 0, 0, dauer, laut) OIDA
+PASST SCHO
+
+# ------------------------------------------------------- Töne nach der Uhr
+# Für Musik: Die Töne haben eine eigene Uhr, die ganz gleichmäßig läuft
+# (sobald der erste Ton gespielt wurde). ton_um plant einen Ton für einen
+# Zeitpunkt auf dieser Uhr; liegt er schon in der Vergangenheit, kommt der
+# Ton sofort. So bleibt ein Takt genau, auch wenn das Programm einmal ruckelt:
+#
+#     SOG AU jetzt = ton_zeit() OIDA
+#     ton_um(jetzt + 0.0, "eckig", 262, 0.2, 0.3) OIDA
+#     ton_um(jetzt + 0.25, "eckig", 330, 0.2, 0.3) OIDA
+#     ton_um(jetzt + 0.5, "eckig", 392, 0.2, 0.3) OIDA
+
+# Die Uhr der Töne, in Sekunden.
+FUNKTIAUN ton_zeit() GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_ton_zeit" OIDA
+
+# Ein Ton, der anfängt, wenn die Uhr der Töne bei `wann` steht. Als Art geht auch "rauschn".
+FUNKTIAUN ton_um(wann KOMMAZOI, art KETTN, höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
+    ton_roh_um(wann, art, höhe, höhe, dauer, laut) OIDA
+PASST SCHO
+
+# Dasselbe für einen Ton, der von einer Höhe zur anderen gleitet.
+FUNKTIAUN ton_gleitend_um(wann KOMMAZOI, art KETTN, von_höhe KOMMAZOI, bis_höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
+    ton_roh_um(wann, art, von_höhe, bis_höhe, dauer, laut) OIDA
 PASST SCHO

@@ -420,6 +420,20 @@ impl Parser<'_> {
                     self.erwarte_oida()?;
                     programm.importe.push(Import { ziel, bibliothek, pos });
                 }
+                TokenArt::Schluessel(Schluessel::Const) => {
+                    // FIX name [typ] = wert OIDA
+                    let pos = self.weiter().pos;
+                    let (name, _) = self.name("den festn Wert")?;
+                    let angabe = if self.aktuell().art != TokenArt::Gleich && self.kann_typ_anfangen() {
+                        Some(self.typ_angabe()?)
+                    } else {
+                        None
+                    };
+                    self.erwarte(TokenArt::Gleich, "a '='")?;
+                    let wert = self.ausdruck()?;
+                    self.erwarte_oida()?;
+                    programm.konstanten.push(Konstante { name, angabe, wert, pos });
+                }
                 TokenArt::Schluessel(Schluessel::Function) => {
                     let funktion = self.funktion()?;
                     programm.funktionen.push(funktion);
@@ -556,6 +570,16 @@ impl Parser<'_> {
                     return Err(Fehler::neu(
                         token.pos,
                         format!("{} ghört gaunz noch außn, am bestn gaunz obn in de Datei.", self.wort(Schluessel::Import)),
+                    ));
+                }
+                TokenArt::Schluessel(Schluessel::Const) => {
+                    return Err(Fehler::neu(
+                        token.pos,
+                        format!(
+                            "{} ghört gaunz noch außn und güt daun überoi. Do herin nimmst {}.",
+                            self.wort(Schluessel::Const),
+                            self.wort(Schluessel::Declare)
+                        ),
                     ));
                 }
                 _ => anweisungen.push(self.anweisung()?),
@@ -1309,6 +1333,18 @@ mod tests {
         assert_eq!(ausdruck("f(1, g(), \"a\")"), "f(1, g(), \"a\")");
         assert_eq!(ausdruck("KETTN(3) + ZOI(2.5)"), "(Kettn(3) + Zoi(2.5))");
         assert_eq!(ausdruck("WOAHR ODA STIMMT NED"), "(true ODA false)");
+    }
+
+    #[test]
+    fn feste_werte() {
+        let p = parse("FIX A = 3 OIDA FIX B KOMMAZOI = A * 2 OIDA SCHREIB(B) OIDA");
+        assert_eq!(p.konstanten.len(), 2);
+        assert_eq!(p.konstanten[0].name, "A");
+        assert!(matches!(p.konstanten[1].angabe, Some(TypAngabe::Einfach(Typ::Kommazoi))));
+        assert_eq!(klammern(&p.konstanten[1].wert), "(A * 2)");
+        assert_eq!(p.haupt.len(), 1);
+        let f = fehler("WENN WOAHR DAUN FIX A = 3 OIDA PASST SCHO");
+        assert_eq!(f.meldung, "FIX ghört gaunz noch außn und güt daun überoi. Do herin nimmst SOG AU.");
     }
 
     #[test]

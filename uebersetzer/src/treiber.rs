@@ -155,18 +155,20 @@ fn lade_alles(
             return Err(vec![Fehler::neu(
                 erste.pos,
                 format!(
-                    "In ana Datei, de mit {} dazuaghoit wird, derfn nur {}, {} und {} stehn. \
+                    "In ana Datei, de mit {} dazuaghoit wird, derfn nur {}, {}, {} und {} stehn. \
                      Wos glei laufn soll, ghört in de Datei, de übersetzt wird.",
                     wb.wort(S::Import),
                     wb.wort(S::Function),
                     wb.wort(S::Class),
-                    wb.wort(S::Struct)
+                    wb.wort(S::Struct),
+                    wb.wort(S::Const)
                 ),
             )]);
         }
         for weiter in teil.importe {
             offen.push_back((weiter, naechster_ordner.clone(), von));
         }
+        programm.konstanten.extend(teil.konstanten);
         programm.strukturen.extend(teil.strukturen);
         programm.klassen.extend(teil.klassen);
         programm.funktionen.extend(teil.funktionen);

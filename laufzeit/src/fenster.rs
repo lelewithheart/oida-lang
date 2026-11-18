@@ -42,6 +42,7 @@ const IID_DWRITE_FABRIK: Guid = Guid(0xb859ee5a, 0xd838, 0x4b5b, [0xa2, 0xe8, 0x
 const FREIGEBEN: usize = 2;
 // ID2D1Factory
 const FABRIK_PFAD: usize = 10; // CreatePathGeometry
+const FABRIK_STRICH: usize = 11; // CreateStrokeStyle
 const FABRIK_FENSTER_ZIEL: usize = 14; // CreateHwndRenderTarget
 const FABRIK_DC_ZIEL: usize = 16; // CreateDCRenderTarget
 // ID2D1RenderTarget
@@ -49,6 +50,7 @@ const ZIEL_PINSEL: usize = 8; // CreateSolidColorBrush
 const ZIEL_LINIE: usize = 15; // DrawLine
 const ZIEL_RECHTECK_RAND: usize = 16; // DrawRectangle
 const ZIEL_RECHTECK: usize = 17; // FillRectangle
+const ZIEL_RUND_RAND: usize = 18; // DrawRoundedRectangle
 const ZIEL_RUND: usize = 19; // FillRoundedRectangle
 const ZIEL_ELLIPSE_RAND: usize = 20; // DrawEllipse
 const ZIEL_ELLIPSE: usize = 21; // FillEllipse
@@ -269,6 +271,8 @@ struct Fenster {
     deckung: f32,
     lage: Lage,
     gemerkt: Vec<Lage>,
+    /// Gestrichelte Ränder und Linien: Länge von Strich und Lücke (0, 0: durchgezogen).
+    strich: (f32, f32),
     /// Zwischen `fensta_offn()` und dem nächsten `fensta_offn()` wird gezeichnet.
     im_bild: bool,
     zu: bool,
@@ -488,6 +492,7 @@ pub unsafe extern "C" fn oida_g_auf(titel: *const TextKopf, breite: i64, hoehe: 
             deckung: 1.0,
             lage: Lage::GERADE,
             gemerkt: Vec::new(),
+            strich: (0.0, 0.0),
             im_bild: false,
             zu: false,
             bilder: 0,
@@ -842,6 +847,45 @@ pub extern "C" fn oida_g_lage_zurueck() {
 
 // ------------------------------------------------------------------ Zeichnen
 
+/// `gstrichlt(strich, lückn)`: Ränder und Linien werden ab jetzt gestrichelt,
+/// mit Strichen und Lücken dieser Länge. Mit (0, 0) wieder durchgezogen.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_g_strich(strich: f64, luecke: f64) {
+    let gut = |w: f64| if w.is_finite() { w.clamp(0.0, 100_000.0) as f32 } else { 0.0 };
+    fenster().strich = (gut(strich), gut(luecke));
+}
+
+/// Der Stil für einen Rand der Dicke `dicke`: null (durchgezogen) oder ein
+/// Strichmuster, das der Aufrufer nach dem Zeichnen wieder freigibt.
+unsafe fn strich_stil(f: &mut Fenster, dicke: f32) -> Zeiger {
+    let (strich, luecke) = f.strich;
+    if strich <= 0.0 || luecke <= 0.0 || dicke <= 0.0 {
+        return std::ptr::null_mut();
+    }
+    #[repr(C)]
+    struct Angaben {
+        anfang: u32,
+        ende: u32,
+        strich_ende: u32,
+        ecke: u32,
+        spitze: f32,
+        muster: u32,
+        versatz: f32,
+    }
+    // Muster 5: eigenes. Direct2D misst Strich und Lücke in Vielfachen der Dicke.
+    let angaben = Angaben { anfang: 0, ende: 0, strich_ende: 0, ecke: 0, spitze: 10.0, muster: 5, versatz: 0.0 };
+    let laengen = [strich / dicke, luecke / dicke];
+    unsafe {
+        let anlegen: unsafe extern "system" fn(Zeiger, *const Angaben, *const f32, u32, *mut Zeiger) -> i32 =
+            methode(f.fabrik, FABRIK_STRICH);
+        let mut stil = std::ptr::null_mut();
+        if anlegen(f.fabrik, &angaben, laengen.as_ptr(), 2, &mut stil) < 0 {
+            return std::ptr::null_mut();
+        }
+        stil
+    }
+}
+
 /// `hintagrund()`: füllt das ganze Fenster mit der aktuellen Farbe.
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_hintergrund() {
@@ -871,7 +915,34 @@ pub extern "C" fn oida_g_rechteck_rand(x: f64, y: f64, breite: f64, hoehe: f64, 
         let p = pinsel(f);
         let rand: unsafe extern "system" fn(Zeiger, *const Rechteck, Zeiger, f32, Zeiger) =
             methode(f.ziel, ZIEL_RECHTECK_RAND);
-        rand(f.ziel, &flaeche, p, dicke as f32, std::ptr::null_mut());
+        let stil = strich_stil(f, dicke as f32);
+        rand(f.ziel, &flaeche, p, dicke as f32, stil);
+        freigeben(stil);
+    }
+}
+
+#[repr(C)]
+struct Rund {
+    flaeche: Rechteck,
+    radius_x: f32,
+    radius_y: f32,
+}
+
+/// Der Rand von einem Rechteck mit runden Ecken.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_g_rechteck_rund_rand(x: f64, y: f64, breite: f64, hoehe: f64, radius: f64, dicke: f64) {
+    let f = zeichnen();
+    let rund = Rund {
+        flaeche: Rechteck { links: x as f32, oben: y as f32, rechts: (x + breite) as f32, unten: (y + hoehe) as f32 },
+        radius_x: radius as f32,
+        radius_y: radius as f32,
+    };
+    unsafe {
+        let p = pinsel(f);
+        let rand: unsafe extern "system" fn(Zeiger, *const Rund, Zeiger, f32, Zeiger) = methode(f.ziel, ZIEL_RUND_RAND);
+        let stil = strich_stil(f, dicke as f32);
+        rand(f.ziel, &rund, p, dicke as f32, stil);
+        freigeben(stil);
     }
 }
 
@@ -879,12 +950,6 @@ pub extern "C" fn oida_g_rechteck_rand(x: f64, y: f64, breite: f64, hoehe: f64, 
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_g_rechteck_rund(x: f64, y: f64, breite: f64, hoehe: f64, radius: f64) {
     let f = zeichnen();
-    #[repr(C)]
-    struct Rund {
-        flaeche: Rechteck,
-        radius_x: f32,
-        radius_y: f32,
-    }
     let rund = Rund {
         flaeche: Rechteck { links: x as f32, oben: y as f32, rechts: (x + breite) as f32, unten: (y + hoehe) as f32 },
         radius_x: radius as f32,
@@ -924,7 +989,9 @@ pub extern "C" fn oida_g_kreis_rand(x: f64, y: f64, radius: f64, dicke: f64) {
         let p = pinsel(f);
         let rand: unsafe extern "system" fn(Zeiger, *const Ellipse, Zeiger, f32, Zeiger) =
             methode(f.ziel, ZIEL_ELLIPSE_RAND);
-        rand(f.ziel, &form, p, dicke as f32, std::ptr::null_mut());
+        let stil = strich_stil(f, dicke as f32);
+        rand(f.ziel, &form, p, dicke as f32, stil);
+        freigeben(stil);
     }
 }
 
@@ -934,14 +1001,9 @@ pub extern "C" fn oida_g_linie(x1: f64, y1: f64, x2: f64, y2: f64, dicke: f64) {
     unsafe {
         let p = pinsel(f);
         let linie: unsafe extern "system" fn(Zeiger, Punkt, Punkt, Zeiger, f32, Zeiger) = methode(f.ziel, ZIEL_LINIE);
-        linie(
-            f.ziel,
-            Punkt { x: x1 as f32, y: y1 as f32 },
-            Punkt { x: x2 as f32, y: y2 as f32 },
-            p,
-            dicke as f32,
-            std::ptr::null_mut(),
-        );
+        let stil = strich_stil(f, dicke as f32);
+        linie(f.ziel, Punkt { x: x1 as f32, y: y1 as f32 }, Punkt { x: x2 as f32, y: y2 as f32 }, p, dicke as f32, stil);
+        freigeben(stil);
     }
 }
 
@@ -975,7 +1037,9 @@ unsafe fn form(f: &mut Fenster, punkte: &[Punkt], fuellen: bool, geschlossen: bo
             } else {
                 let zeichne: unsafe extern "system" fn(Zeiger, Zeiger, Zeiger, f32, Zeiger) =
                     methode(f.ziel, ZIEL_FORM_RAND);
-                zeichne(f.ziel, pfad, p, dicke, std::ptr::null_mut());
+                let stil = strich_stil(f, dicke);
+                zeichne(f.ziel, pfad, p, dicke, stil);
+                freigeben(stil);
             }
         }
         freigeben(pfad);
@@ -1095,7 +1159,8 @@ unsafe fn schrift_format(f: &mut Fenster) -> Zeiger {
 
 /// `text_links`, `text_mittig`, `text_rechts`: schreibt mit der aktuellen
 /// Farbe und Schrift. `ausrichtung` 0: (x, y) ist links oben; 1: die Mitte;
-/// 2: rechts oben.
+/// 2: rechts oben; 3: links, auf halber Höhe; 4: rechts, auf halber Höhe;
+/// 5: unten in der Mitte; 6: oben in der Mitte.
 ///
 /// # Safety
 /// `text` muss ein gültiger Text sein.
@@ -1121,6 +1186,26 @@ pub unsafe extern "C" fn oida_g_text(x: f64, y: f64, text: *const TextKopf, ausr
                 hoch(format, 0);
                 Rechteck { links: x - WEIT, oben: y, rechts: x, unten: y + WEIT }
             }
+            3 => {
+                quer(format, 0);
+                hoch(format, 2);
+                Rechteck { links: x, oben: y - WEIT, rechts: x + WEIT, unten: y + WEIT }
+            }
+            4 => {
+                quer(format, 1);
+                hoch(format, 2);
+                Rechteck { links: x - WEIT, oben: y - WEIT, rechts: x, unten: y + WEIT }
+            }
+            5 => {
+                quer(format, 2);
+                hoch(format, 1);
+                Rechteck { links: x - WEIT, oben: y - WEIT, rechts: x + WEIT, unten: y }
+            }
+            6 => {
+                quer(format, 2);
+                hoch(format, 0);
+                Rechteck { links: x - WEIT, oben: y, rechts: x + WEIT, unten: y + WEIT }
+            }
             _ => {
                 quer(format, 0);
                 hoch(format, 0);
@@ -1130,7 +1215,8 @@ pub unsafe extern "C" fn oida_g_text(x: f64, y: f64, text: *const TextKopf, ausr
         let p = pinsel(f);
         let schreiben: unsafe extern "system" fn(Zeiger, *const u16, u32, Zeiger, *const Rechteck, Zeiger, u32, u32) =
             methode(f.ziel, ZIEL_TEXT);
-        schreiben(f.ziel, zeichen.as_ptr(), zeichen.len() as u32, format, &flaeche, p, 0, 0);
+        // Die 4 lässt bunte Zeichen (Emoji) bunt.
+        schreiben(f.ziel, zeichen.as_ptr(), zeichen.len() as u32, format, &flaeche, p, 4, 0);
     }
 }
 

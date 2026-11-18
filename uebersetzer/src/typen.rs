@@ -109,6 +109,10 @@ struct Pruefer<'a> {
     fertige_klassen: Vec<(u32, KlassenDef)>,
     /// Die Fassung, die gerade geprüft wird (für Meldungen).
     fassung: Option<String>,
+    /// Die festen Werte (FIX), fertig geprüft, und die, die noch niemand gebraucht hat.
+    konstanten: HashMap<String, Ausdruck>,
+    konstanten_offen: HashMap<String, Konstante>,
+    konstanten_in_arbeit: Vec<(String, Position)>,
 }
 
 /// Das Wort, unter dem eine eingebaute Funktion im Wörterbuch steht.
@@ -225,10 +229,25 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         fertige_funktionen: Vec::new(),
         fertige_klassen: Vec::new(),
         fassung: None,
+        konstanten: HashMap::new(),
+        konstanten_offen: HashMap::new(),
+        konstanten_in_arbeit: Vec::new(),
     };
 
     p.strukturen(&programm.strukturen, &programm.klassen);
     p.klassen(&mut programm.klassen);
+
+    // Die festen Werte. Geprüft wird jeder, wenn er zum ersten Mal gebraucht
+    // wird: So ist die Reihenfolge egal, auch über Dateien hinweg.
+    let namen: Vec<(String, Position)> = programm.konstanten.iter().map(|k| (k.name.clone(), k.pos)).collect();
+    for k in std::mem::take(&mut programm.konstanten) {
+        if p.konstanten_offen.contains_key(&k.name) {
+            let meldung = format!("An festn Wert '{}' gibt's scho. Zwamoi geht ned.", k.name);
+            p.melde(k.pos, meldung);
+        } else {
+            p.konstanten_offen.insert(k.name.clone(), k);
+        }
+    }
 
     // Alle Funktionen kennenlernen, damit die Reihenfolge egal ist.
     for f in &mut programm.funktionen {
@@ -292,6 +311,10 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
     p.sicher.clear();
     for a in &mut programm.haupt {
         p.anweisung(a);
+    }
+    // Auch die festen Werte, die niemand gebraucht hat, sollen stimmen.
+    for (name, _) in &namen {
+        p.konstante(name);
     }
 
     // Jetzt die Fassungen der Vorlagen, die dabei gebraucht wurden. Beim
@@ -1538,6 +1561,87 @@ impl Pruefer<'_> {
         f.rueckgabe
     }
 
+    /// Der feste Wert mit diesem Namen (`FIX name = ...`), fertig geprüft.
+    /// Wer ihn braucht, setzt eine Kopie davon an die Stelle des Namens.
+    fn konstante(&mut self, name: &str) -> Option<Ausdruck> {
+        if let Some(stelle) = self.konstanten_in_arbeit.iter().position(|(n, _)| n == name) {
+            // Er wird gerade geprüft und braucht sich dabei selbst (vielleicht über andere).
+            let (_, pos) = self.konstanten_in_arbeit[stelle];
+            let meldung = format!(
+                "Da feste Wert '{name}' braucht si söwa zum Ausrechnen. Des geht si nie aus."
+            );
+            if !self.fehler.iter().any(|f| f.pos == pos && f.meldung == meldung) {
+                self.melde(pos, meldung);
+            }
+            return Some(Ausdruck { art: AusdruckArt::Nix, pos, typ: Typ::Fehler });
+        }
+        if let Some(wert) = self.konstanten.get(name) {
+            return Some(wert.clone());
+        }
+        let mut k = self.konstanten_offen.remove(name)?;
+        let pos = k.pos;
+        self.konstanten_in_arbeit.push((name.to_string(), pos));
+        // Ein fester Wert sieht nichts von dort, wo er gebraucht wird: keine Variablen, kein SÖWA.
+        let bereiche = std::mem::replace(&mut self.bereiche, vec![HashMap::new()]);
+        let lambdas = std::mem::take(&mut self.lambdas);
+        let sicher = std::mem::take(&mut self.sicher);
+        let typ_umgebung = std::mem::take(&mut self.typ_umgebung);
+        let (funktion, selbst, methoden_klasse) = (self.funktion.take(), self.selbst.take(), self.methoden_klasse.take());
+        let (fassung, probier_erlaubt) = (self.fassung.take(), std::mem::take(&mut self.probier_erlaubt));
+        let vorher = self.fehler.len();
+
+        let mut typ = self.ausdruck(&mut k.wert);
+        if let Some(angabe) = &k.angabe {
+            let ziel = self.typ_aus(angabe);
+            if typ != Typ::Fehler && ziel != Typ::Fehler && !self.anpassen(&mut k.wert, ziel) {
+                let meldung = format!(
+                    "'{name}' soi {} sei, do steht oba {}.",
+                    self.typ_name(ziel),
+                    self.typ_name(typ)
+                );
+                self.melde(k.wert.pos, meldung);
+            }
+            typ = k.wert.typ;
+        }
+        let wort = self.wort(Schluessel::Const).to_string();
+        if self.fehler.len() == vorher && typ != Typ::Fehler {
+            if !matches!(typ, Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn) {
+                let meldung = format!(
+                    "Mit {wort} geht nur {}, {}, {} oda {}. '{name}' warat {}.",
+                    self.typ_name(Typ::Zoi),
+                    self.typ_name(Typ::Kommazoi),
+                    self.typ_name(Typ::Jona),
+                    self.typ_name(Typ::Kettn),
+                    self.typ_name(typ)
+                );
+                self.melde(pos, meldung);
+            } else if let Some(stelle) = nicht_fest(&k.wert) {
+                let meldung = format!(
+                    "Wos mit {wort} augsogt wird, muaß scho beim Übersetzn feststehn: Zoin, Texte, Rechnen und aundare {wort}-Werte. Des do steht erst beim Laufn fest."
+                );
+                self.melde(stelle, meldung);
+            }
+        }
+        if self.fehler.len() != vorher {
+            k.wert.typ = Typ::Fehler;
+        }
+
+        self.bereiche = bereiche;
+        self.lambdas = lambdas;
+        self.sicher = sicher;
+        self.typ_umgebung = typ_umgebung;
+        (self.funktion, self.selbst, self.methoden_klasse) = (funktion, selbst, methoden_klasse);
+        (self.fassung, self.probier_erlaubt) = (fassung, probier_erlaubt);
+        self.konstanten_in_arbeit.pop();
+        self.konstanten.insert(name.to_string(), k.wert.clone());
+        Some(k.wert)
+    }
+
+    /// Gibt es an dieser Stelle eine Variable mit dem Namen (sie verdeckt einen festen Wert)?
+    fn ist_variable(&self, name: &str) -> bool {
+        self.bereiche.iter().any(|b| b.contains_key(name))
+    }
+
     fn unbekannte_variable(&mut self, name: &str, pos: Position) {
         let meldung =
             format!("'{name}' kenn i ned. Host des mit {} augsogt?", self.wort(Schluessel::Declare));
@@ -1641,6 +1745,21 @@ impl Pruefer<'_> {
                 }
             }
             AnweisungArt::Zuweisung { ziel, op, wert } => {
+                if let AusdruckArt::Variable { name, .. } = &ziel.art
+                    && !self.ist_variable(name)
+                    && (self.konstanten.contains_key(name)
+                        || self.konstanten_offen.contains_key(name)
+                        || self.konstanten_in_arbeit.iter().any(|(n, _)| n == name))
+                {
+                    let meldung = format!(
+                        "'{name}' is {}, des bleibt, wia's is. Wos si ändern soi, sogst mit {} au.",
+                        self.wort(Schluessel::Const),
+                        self.wort(Schluessel::Declare)
+                    );
+                    self.melde(ziel.pos, meldung);
+                    self.ausdruck(wert);
+                    return;
+                }
                 self.probier_erlaubt = true;
                 let wert_typ = self.ausdruck(wert);
                 let mut ziel_typ = self.ausdruck(ziel);
@@ -2149,6 +2268,16 @@ impl Pruefer<'_> {
             && (matches!(links.art, AusdruckArt::Nix) || matches!(rechts.art, AusdruckArt::Nix))
         {
             return self.ist_nix(ausdruck);
+        }
+        // Ein fester Wert: Seine Rechnung kommt an die Stelle des Namens.
+        if let AusdruckArt::Variable { name, .. } = &ausdruck.art
+            && !self.ist_variable(name)
+        {
+            let name = name.clone();
+            if let Some(wert) = self.konstante(&name) {
+                *ausdruck = Ausdruck { pos, ..wert };
+                return ausdruck.typ;
+            }
         }
         // Heißt die "Funktion" wie eine Struktur oder Klasse, wird ein neuer Wert gebaut.
         if let AusdruckArt::Aufruf { name, .. } = &ausdruck.art {
@@ -3008,6 +3137,37 @@ fn ziel_text(ausdruck: &Ausdruck) -> String {
 }
 
 /// Packt einen Ausdruck in eine Umwandlung ein.
+/// Die erste Stelle in einem festen Wert, die erst beim Laufen feststeht
+/// (eine Eingabe, der Zufall, ein Aufruf ...), oder `None`.
+fn nicht_fest(ausdruck: &Ausdruck) -> Option<Position> {
+    match &ausdruck.art {
+        AusdruckArt::Zoi(_) | AusdruckArt::Kommazoi(_) | AusdruckArt::Jona(_) | AusdruckArt::Text(_) => None,
+        AusdruckArt::Unaer { innen, .. } | AusdruckArt::Umwandlung { innen, .. } => nicht_fest(innen),
+        AusdruckArt::Binaer { links, rechts, .. } => nicht_fest(links).or_else(|| nicht_fest(rechts)),
+        AusdruckArt::Eingebaut { funktion, argumente }
+            if matches!(
+                funktion,
+                Eingebaut::Wurzel
+                    | Eingebaut::Hoch
+                    | Eingebaut::Betrag
+                    | Eingebaut::Min
+                    | Eingebaut::Max
+                    | Eingebaut::Sinus
+                    | Eingebaut::Kosinus
+                    | Eingebaut::Winkel
+                    | Eingebaut::Exp
+                    | Eingebaut::Abrunden
+                    | Eingebaut::Aufrunden
+                    | Eingebaut::Runden
+                    | Eingebaut::Laenge
+            ) =>
+        {
+            argumente.iter().find_map(nicht_fest)
+        }
+        _ => Some(ausdruck.pos),
+    }
+}
+
 fn einpacken(ausdruck: &mut Ausdruck, ziel: Typ) {
     let pos = ausdruck.pos;
     let alt = std::mem::replace(ausdruck, Ausdruck::neu(AusdruckArt::Zoi(0), pos));

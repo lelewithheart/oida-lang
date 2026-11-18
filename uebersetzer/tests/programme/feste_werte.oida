@@ -1,0 +1,64 @@
+# Feste Werte: einmal ganz außen angesagt, gelten sie überall, auch in
+# Funktionen, Methoden, Funktionen ohne Namen und in dazugeholten Dateien.
+
+BRAUCH "teile/festes.oida" OIDA
+
+FIX BREITE = 960 OIDA
+FIX HÖHE = 640 OIDA
+FIX FLÄCHE = BREITE * HÖHE OIDA                 # aus anderen festen Werten gerechnet
+FIX HOIBE KOMMAZOI = BREITE / 2 OIDA            # ganze Zahlen: 480, als KOMMAZOI 480.0
+FIX TITL = "Mei Spü" OIDA
+FIX LAUT = WOAHR OIDA
+FIX GRUASS = "Servas, " + TITL + "!" OIDA
+FIX VIERTL_KREIS = PI / 2 OIDA
+FIX SCHRÄG = WURZL(BREITE * BREITE + HÖHE * HÖHE) OIDA
+# Die Reihenfolge ist egal: ERSTA braucht ZWEITA, das erst danach kommt.
+FIX ERSTA = ZWEITA + 1 OIDA
+FIX ZWEITA = 41 OIDA
+
+FUNKTIAUN mitte_x() GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK HOIBE OIDA
+PASST SCHO
+
+KLASSE Kugl
+    x KOMMAZOI
+
+    FUNKTIAUN is_drin() GIBT ZRUCK JONA
+        GIB ZRUCK MEI.x >= 0 UND MEI.x < BREITE OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN doppelt VON T(wert T, mal ZOI) GIBT ZRUCK LISTN VON T
+    SOG AU aus LISTN VON T = [] OIDA
+    FIA i VON 1 BIS mal * FAKTOR TUA
+        HAU EINE(aus, wert) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+SCHREIB(BREITE, HÖHE, FLÄCHE, HOIBE, TITL, LAUT) OIDA
+SCHREIB(GRUASS, LÄNGN(GRUASS)) OIDA
+SCHREIB(RUNDN(VIERTL_KREIS * 1000), RUNDN(SCHRÄG), ERSTA) OIDA
+SCHREIB(mitte_x(), Kugl(100.0).is_drin(), Kugl(1000.0).is_drin()) OIDA
+
+# Aus der anderen Datei, und von dort aus gerechnet
+SCHREIB(FAKTOR, rand_obstand(), doppelt("jo", 1)) OIDA
+
+# In einer Funktion ohne Namen
+SOG AU skalier = FUNKTIAUN(x KOMMAZOI) => x * FAKTOR + BREITE OIDA
+SCHREIB(skalier(1.5)) OIDA
+
+# Eine Variable mit demselben Namen verdeckt den festen Wert, aber nur dort.
+FUNKTIAUN vadeckt(BREITE ZOI) GIBT ZRUCK ZOI
+    SOG AU HÖHE = 5 OIDA
+    HÖHE += 1 OIDA
+    GIB ZRUCK BREITE * HÖHE OIDA
+PASST SCHO
+SCHREIB(vadeckt(2), BREITE, HÖHE) OIDA
+
+# Texte aus festen Werten werden wie alle Texte freigegeben.
+SOG AU zamm = "" OIDA
+FIA i VON 1 BIS 3 TUA
+    zamm += GRUASS + " " OIDA
+PASST SCHO
+SCHREIB(zamm) OIDA

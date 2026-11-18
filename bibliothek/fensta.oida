@@ -49,6 +49,7 @@ FUNKTIAUN hintagrund() VON DRAUSSN "oida_g_hintergrund" OIDA
 FUNKTIAUN rechteck(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI) VON DRAUSSN "oida_g_rechteck" OIDA
 FUNKTIAUN rechteck_rand(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_rechteck_rand" OIDA
 FUNKTIAUN rechteck_rund(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, radius KOMMAZOI) VON DRAUSSN "oida_g_rechteck_rund" OIDA
+FUNKTIAUN rechteck_rund_rand(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, radius KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_rechteck_rund_rand" OIDA
 # (x, y) ist die Mitte.
 FUNKTIAUN ellipsn(x KOMMAZOI, y KOMMAZOI, radius_x KOMMAZOI, radius_y KOMMAZOI) VON DRAUSSN "oida_g_ellipse" OIDA
 FUNKTIAUN kreis_rand(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_kreis_rand" OIDA
@@ -59,6 +60,14 @@ FUNKTIAUN vieleck(punkte LISTN VON KOMMAZOI) VON DRAUSSN "oida_g_vieleck" OIDA
 FUNKTIAUN linienzug(punkte LISTN VON KOMMAZOI, dicke KOMMAZOI, zua JONA) VON DRAUSSN "oida_g_linienzug" OIDA
 # Ein Stück Kreislinie zwischen zwei Winkeln (0 zeigt nach rechts, weiter im Uhrzeigersinn).
 FUNKTIAUN bogn(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI, von_winkl KOMMAZOI, bis_winkl KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_bogen" OIDA
+
+# Ränder und Linien sind ab jetzt gestrichelt: so lang der Strich, so lang die Lücke.
+FUNKTIAUN gstrichlt(strich KOMMAZOI, lückn KOMMAZOI) VON DRAUSSN "oida_g_strich" OIDA
+
+# ... und ab jetzt wieder durchgezogen.
+FUNKTIAUN durchzogn()
+    gstrichlt(0, 0) OIDA
+PASST SCHO
 
 FUNKTIAUN kreis(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI)
     ellipsn(x, y, radius, radius) OIDA
@@ -95,6 +104,26 @@ PASST SCHO
 # Schreibt so, dass (x, y) die rechte obere Ecke vom Text ist.
 FUNKTIAUN text_rechts(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
     text_roh(x, y, inhalt, 2) OIDA
+PASST SCHO
+
+# Der Text fängt bei x an, y ist seine halbe Höhe (gut neben einem Balken oder Bild).
+FUNKTIAUN text_links_mitte(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
+    text_roh(x, y, inhalt, 3) OIDA
+PASST SCHO
+
+# Der Text hört bei x auf, y ist seine halbe Höhe.
+FUNKTIAUN text_rechts_mitte(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
+    text_roh(x, y, inhalt, 4) OIDA
+PASST SCHO
+
+# Der Text steht mittig über dem Punkt (x, y).
+FUNKTIAUN text_drüba(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
+    text_roh(x, y, inhalt, 5) OIDA
+PASST SCHO
+
+# Der Text hängt mittig unter dem Punkt (x, y).
+FUNKTIAUN text_drunta(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
+    text_roh(x, y, inhalt, 6) OIDA
 PASST SCHO
 
 # ------------------------------------------- verschieben, drehen, vergrößern

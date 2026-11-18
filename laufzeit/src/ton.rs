@@ -43,6 +43,8 @@ struct Stimme {
     /// Wie viele Werte der Ton dauert und wie viele davon schon gespielt sind.
     dauer: usize,
     stelle: usize,
+    /// So viele Werte lang wartet der Ton noch, bevor er anfängt.
+    wartet: usize,
     laut: f32,
     /// Wo in der Schwingung der Ton gerade ist (0 bis 1).
     phase: f64,
@@ -56,6 +58,8 @@ static GESAMT: AtomicU32 = AtomicU32::new(0x3f80_0000); // 1.0
 /// Wie viele Stücke Windows angenommen hat, und wie viele davon nicht still waren.
 pub(crate) static ANGENOMMEN: AtomicU64 = AtomicU64::new(0);
 pub(crate) static MIT_TON: AtomicU64 = AtomicU64::new(0);
+/// Die Uhr der Töne: wie viele Werte schon gemischt sind.
+static GEMISCHT: AtomicU64 = AtomicU64::new(0);
 
 /// Rechnet alle Stimmen zusammen und schreibt das nächste Stück in `puffer`.
 /// Stimmen, die zu Ende sind, fallen aus der Liste.
@@ -63,6 +67,10 @@ fn mische(stimmen: &mut Vec<Stimme>, puffer: &mut [i16], gesamt: f32) {
     let mut summe = vec![0f32; puffer.len()];
     for s in stimmen.iter_mut() {
         for wert in summe.iter_mut() {
+            if s.wartet > 0 {
+                s.wartet -= 1;
+                continue;
+            }
             if s.stelle >= s.dauer {
                 break;
             }
@@ -88,9 +96,11 @@ fn mische(stimmen: &mut Vec<Stimme>, puffer: &mut [i16], gesamt: f32) {
                     s.zufall as f64 / u32::MAX as f64 * 2.0 - 1.0
                 }
             };
-            // Ganz kurz einblenden (sonst knackt es), dann gleichmäßig leiser bis zum Ende.
-            let einblenden = (s.stelle as f64 / (0.004 * RATE)).min(1.0);
-            let huelle = einblenden * (1.0 - anteil);
+            // Ganz kurz einblenden (sonst knackt es), dann leiser bis zum Ende: am Anfang
+            // schnell, dann immer langsamer, wie eine angeschlagene Saite (und wie
+            // exponentialRampToValueAtTime im Browser, bis auf ein Tausendstel).
+            let einblenden = (s.stelle as f64 / (0.002 * RATE)).min(1.0);
+            let huelle = einblenden * 0.001f64.powf(anteil);
             *wert += (schwingung * huelle) as f32 * s.laut;
             s.phase = (s.phase + hoehe / RATE).fract();
             s.stelle += 1;
@@ -205,6 +215,7 @@ fn ausgabe() {
                 let gesamt = f32::from_bits(GESAMT.load(Ordering::Relaxed));
                 if let Ok(mut stimmen) = STIMMEN.lock() {
                     mische(&mut stimmen, &mut daten[i], gesamt);
+                    GEMISCHT.fetch_add(STUECK as u64, Ordering::Relaxed);
                 }
                 kopf.merker &= !FERTIG;
                 if schreiben(geraet, kopf, kopf_groesse) == 0 {
@@ -238,6 +249,27 @@ fn art_von(name: &[u8]) -> Option<Art> {
 /// `art` muss ein gültiger Text sein.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn oida_ton(art: *const TextKopf, von: f64, bis: f64, dauer: f64, laut: f64) {
+    unsafe { neue_stimme(art, von, bis, dauer, laut, None) };
+}
+
+/// Wie [`oida_ton`], aber der Ton fängt erst an, wenn die Uhr der Töne
+/// (`ton_zeit()`) bei `wann` steht. So lässt sich Musik auf den Punkt genau
+/// vorausplanen, egal wie gleichmäßig das Programm selbst läuft.
+///
+/// # Safety
+/// `art` muss ein gültiger Text sein.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_ton_um(wann: f64, art: *const TextKopf, von: f64, bis: f64, dauer: f64, laut: f64) {
+    unsafe { neue_stimme(art, von, bis, dauer, laut, Some(wann)) };
+}
+
+/// `ton_zeit()`: die Uhr der Töne in Sekunden. Sie läuft, sobald der erste Ton gespielt wurde.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_ton_zeit() -> f64 {
+    GEMISCHT.load(Ordering::Relaxed) as f64 / RATE
+}
+
+unsafe fn neue_stimme(art: *const TextKopf, von: f64, bis: f64, dauer: f64, laut: f64, wann: Option<f64>) {
     let name = unsafe { bytes(art) };
     let Some(art) = art_von(name) else {
         super::leeren();
@@ -255,17 +287,24 @@ pub unsafe extern "C" fn oida_ton(art: *const TextKopf, von: f64, bis: f64, daue
     if dauer == 0 || !von.is_finite() || !bis.is_finite() {
         return;
     }
-    let stimme = Stimme {
+    let mut stimme = Stimme {
         art,
         von: von.clamp(0.0, 20000.0),
         bis: bis.clamp(0.0, 20000.0),
         dauer,
         stelle: 0,
+        wartet: 0,
         laut: laut.clamp(0.0, 1.0) as f32,
         phase: 0.0,
         zufall: 0x9E37_79B9 ^ (dauer as u32).wrapping_mul(2654435761),
     };
     if let Ok(mut stimmen) = STIMMEN.lock() {
+        // Unter der Sperre steht die Uhr still: Der Abstand zum Zeitpunkt stimmt auf den Wert genau.
+        if let Some(wann) = wann.filter(|w| w.is_finite()) {
+            let ziel = (wann.clamp(0.0, 1e9) * RATE) as u64;
+            // Mehr als eine Minute im Voraus plant niemand; so ein Wert ist ein Versehen.
+            stimme.wartet = ziel.saturating_sub(GEMISCHT.load(Ordering::Relaxed)).min(60 * RATE as u64) as usize;
+        }
         if stimmen.len() >= HOECHSTENS {
             stimmen.remove(0);
         }
@@ -298,7 +337,7 @@ mod tests {
     use super::*;
 
     fn stimme(art: Art, von: f64, bis: f64, sekunden: f64, laut: f32) -> Stimme {
-        Stimme { art, von, bis, dauer: (sekunden * RATE) as usize, stelle: 0, laut, phase: 0.0, zufall: 12345 }
+        Stimme { art, von, bis, dauer: (sekunden * RATE) as usize, stelle: 0, wartet: 0, laut, phase: 0.0, zufall: 12345 }
     }
 
     #[test]
@@ -364,6 +403,32 @@ mod tests {
         mische(&mut stimmen, &mut rauschen, 1.0);
         let verschieden: std::collections::HashSet<i16> = rauschen[300..].iter().copied().collect();
         assert!(verschieden.len() > 100);
+    }
+
+    #[test]
+    fn ein_ton_kann_warten() {
+        // Der Ton fängt erst nach 600 Werten an: davor ist es still, danach nicht.
+        let mut stimmen = vec![Stimme { wartet: 600, ..stimme(Art::Eckig, 441.0, 441.0, 0.05, 0.5) }];
+        let mut puffer = [0i16; 1024];
+        mische(&mut stimmen, &mut puffer, 1.0);
+        assert!(puffer[..600].iter().all(|w| *w == 0));
+        assert!(puffer[700..].iter().any(|w| w.abs() > 3000));
+        // Er dauert trotzdem seine ganze Länge (2205 Werte), nur später.
+        mische(&mut stimmen, &mut puffer, 1.0);
+        assert_eq!(stimmen.len(), 1);
+        mische(&mut stimmen, &mut puffer, 1.0);
+        assert!(stimmen.is_empty());
+    }
+
+    #[test]
+    fn leiser_wie_im_browser() {
+        // Nach der halben Dauer ist die Hülle bei Wurzel aus einem Tausendstel (rund 0,03).
+        let mut stimmen = vec![stimme(Art::Eckig, 100.0, 100.0, 0.1, 1.0)];
+        let mut puffer = vec![0i16; 4410];
+        mische(&mut stimmen, &mut puffer, 1.0);
+        let hoehe = |i: usize| (puffer[i] as f64 / 32000.0).atanh().abs();
+        assert!((hoehe(2205) - 0.0316).abs() < 0.003, "{}", hoehe(2205));
+        assert!(hoehe(300) > 0.5);
     }
 
     #[test]

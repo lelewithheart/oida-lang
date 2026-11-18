@@ -1,0 +1,9 @@
+# Feste Werte in einer dazugeholten Datei gelten im ganzen Programm.
+
+FIX FAKTOR = 3 OIDA
+FIX RAND = 16 OIDA
+
+# BREITE steht in der Datei, die diese hier dazuholt.
+FUNKTIAUN rand_obstand() GIBT ZRUCK ZOI
+    GIB ZRUCK BREITE - 2 * RAND OIDA
+PASST SCHO

@@ -36,6 +36,8 @@ OIDA      = OIDA
 
 # --- Variablen --------------------------------------------------------------
 DECLARE   = SOG AU, DEKLARIER
+# --- Feste Werte, ganz außen:  FIX SCHWERKRAFT = 9.81 OIDA  (gilt überall, auch in Funktionen)
+CONST     = FIX
 
 # --- Verzweigung und Schleife -----------------------------------------------
 IF        = WENN, WAUN

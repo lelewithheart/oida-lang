@@ -630,11 +630,23 @@ pub struct Import {
     pub pos: Position,
 }
 
+/// `FIX SCHWERKRAFT = 9.81 OIDA`: ein fester Wert, der überall gilt, auch in
+/// Funktionen und in anderen Dateien. Die Typprüfung setzt ihn überall ein,
+/// wo sein Name steht; danach gibt es ihn nicht mehr.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Konstante {
+    pub name: String,
+    pub angabe: Option<TypAngabe>,
+    pub wert: Ausdruck,
+    pub pos: Position,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Programm {
     /// Was mit BRAUCH dazugeholt wird. Der Treiber lädt die Dateien und hängt
     /// ihren Inhalt hier an, bevor die Typprüfung beginnt.
     pub importe: Vec<Import>,
+    pub konstanten: Vec<Konstante>,
     pub strukturen: Vec<StrukturDef>,
     /// Die Klassen. Ihre Stelle hier ist ihre Nummer in [`Typen::klassen`].
     pub klassen: Vec<KlassenDef>,
