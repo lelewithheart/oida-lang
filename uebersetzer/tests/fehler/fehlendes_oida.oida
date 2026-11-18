@@ -1,0 +1,4 @@
+# Nach der zweiten Anweisung fehlt das OIDA.
+SOG AU alter = 17 OIDA
+SOG AU name = "Franz"
+SCHREIB(name, alter) OIDA

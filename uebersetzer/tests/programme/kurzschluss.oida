@@ -1,0 +1,12 @@
+# UND und ODA rechnen die rechte Seite nur aus, wenn sie gebraucht wird.
+
+FUNKTIAUN laut(wert JONA) GIBT ZRUCK JONA
+    SCHREIB("laut wurde gefragt:", wert) OIDA
+    GIB ZRUCK wert OIDA
+PASST SCHO
+
+SCHREIB(FOISCH UND laut(WOAHR)) OIDA
+SCHREIB(WOAHR UND laut(WOAHR)) OIDA
+SCHREIB(WOAHR ODA laut(FOISCH)) OIDA
+SCHREIB(FOISCH ODA laut(FOISCH)) OIDA
+SCHREIB(NED (laut(WOAHR) UND laut(FOISCH)) ODA laut(WOAHR)) OIDA

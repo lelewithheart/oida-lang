@@ -1,0 +1,16 @@
+# FizzBuzz auf Österreichisch:
+# durch 3 teilbar -> Fizz, durch 5 teilbar -> Buzz, durch beides -> FizzBuzz
+
+SOG AU i = 1 OIDA
+SOLONG i <= 15 TUA
+    WENN i % 15 = 0 DAUN
+        SCHREIB("FizzBuzz") OIDA
+    SUNST WENN i % 3 = 0 DAUN
+        SCHREIB("Fizz") OIDA
+    SUNST WENN i % 5 = 0 DAUN
+        SCHREIB("Buzz") OIDA
+    SUNST
+        SCHREIB(i) OIDA
+    PASST SCHO
+    i = i + 1 OIDA
+PASST SCHO

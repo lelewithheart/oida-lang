@@ -1,0 +1,2 @@
+# Zeilenenden einheitlich halten, damit die erwarteten Ausgaben der Tests überall gleich sind.
+* text=auto eol=lf

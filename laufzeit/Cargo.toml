@@ -1,0 +1,10 @@
+[package]
+name = "oida-laufzeit"
+description = "Laufzeitbibliothek, die in jedes OIDA-Programm gelinkt wird"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "oida_laufzeit"
+crate-type = ["staticlib"]

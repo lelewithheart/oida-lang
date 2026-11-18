@@ -1,0 +1,33 @@
+/* Alle vier Typen auf einmal:
+   ZOI (ganze Zahl), KOMMAZOI (Kommazahl), JONA (wahr/falsch), KETTN (Text) */
+
+FUNKTIAUN schnitt(a ZOI, b ZOI, c ZOI) GIBT ZRUCK KOMMAZOI
+    # KOMMAZOI(...) macht aus der ganzen Zahl eine Kommazahl,
+    # sonst würde beim Teilen der Rest wegfallen.
+    GIB ZRUCK KOMMAZOI(a + b + c) / 3 OIDA
+PASST SCHO
+
+FUNKTIAUN urteil(wert KOMMAZOI) GIBT ZRUCK KETTN
+    WENN wert < 1.5 DAUN
+        GIB ZRUCK "Streber" OIDA
+    SUNST WENN wert <= 4.0 DAUN
+        GIB ZRUCK "passt scho" OIDA
+    PASST SCHO
+    GIB ZRUCK "des wird eng" OIDA
+PASST SCHO
+
+FUNKTIAUN zeugnis(name KETTN, a ZOI, b ZOI, c ZOI)
+    SOG AU s = schnitt(a, b, c) OIDA
+    SOG AU positiv = a < 5 UND b < 5 UND c < 5 OIDA
+    SCHREIB(name + ":", s, "-", urteil(s) + ",", "positiv:", positiv) OIDA
+PASST SCHO
+
+zeugnis("Franz", 1, 1, 2) OIDA
+zeugnis("Resi", 2, 3, 4) OIDA
+zeugnis("Schurli", 5, 4, 5) OIDA
+
+SOG AU text = "17" OIDA
+SOG AU alter = ZOI(text) + 1 OIDA
+SCHREIB("Nächstes Jahr bin i " + KETTN(alter) + ".") OIDA
+SCHREIB("7 / 2 =", 7 / 2, "und 7 % 2 =", 7 % 2, "und 7 / 2.0 =", 7 / 2.0) OIDA
+SCHREIB(NED WOAHR ODA 3 > 2, "Apfel" < "Birn", 2 = 2.0) OIDA

@@ -1,0 +1,15 @@
+[package]
+name = "oida"
+description = "Compiler der Programmiersprache OIDA"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[lib]
+name = "oida_uebersetzer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "oida"
+path = "src/main.rs"

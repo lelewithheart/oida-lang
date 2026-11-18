@@ -1,0 +1,154 @@
+//! Der Syntaxbaum (AST) eines OIDA-Programms.
+
+use crate::fehler::Position;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Typ {
+    /// Ganze Zahl mit 64 Bit.
+    Zoi,
+    /// Kommazahl (64 Bit).
+    Kommazoi,
+    /// Wahrheitswert.
+    Jona,
+    /// Text.
+    Kettn,
+    /// Kein Wert (Funktion ohne Rückgabe; vor der Typprüfung auch "noch unbekannt").
+    Nix,
+    /// Hier ist schon ein Fehler gemeldet worden; verhindert Folgefehler.
+    Fehler,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaerOp {
+    Minus,
+    Ned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaerOp {
+    Plus,
+    Minus,
+    Mal,
+    Durch,
+    Rest,
+    Gleich,
+    Ungleich,
+    Kleiner,
+    KleinerGleich,
+    Groesser,
+    GroesserGleich,
+    Und,
+    Oda,
+}
+
+impl BinaerOp {
+    /// So wie man es im Quelltext schreibt (für Meldungen). UND und ODA
+    /// kommen aus dem Wörterbuch und werden woanders eingesetzt.
+    pub fn zeichen(self) -> &'static str {
+        match self {
+            BinaerOp::Plus => "+",
+            BinaerOp::Minus => "-",
+            BinaerOp::Mal => "*",
+            BinaerOp::Durch => "/",
+            BinaerOp::Rest => "%",
+            BinaerOp::Gleich => "==",
+            BinaerOp::Ungleich => "!=",
+            BinaerOp::Kleiner => "<",
+            BinaerOp::KleinerGleich => "<=",
+            BinaerOp::Groesser => ">",
+            BinaerOp::GroesserGleich => ">=",
+            BinaerOp::Und => "UND",
+            BinaerOp::Oda => "ODA",
+        }
+    }
+
+    pub fn ist_vergleich(self) -> bool {
+        matches!(
+            self,
+            BinaerOp::Gleich
+                | BinaerOp::Ungleich
+                | BinaerOp::Kleiner
+                | BinaerOp::KleinerGleich
+                | BinaerOp::Groesser
+                | BinaerOp::GroesserGleich
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Ausdruck {
+    pub art: AusdruckArt,
+    pub pos: Position,
+    /// Wird von der Typprüfung ausgefüllt.
+    pub typ: Typ,
+}
+
+impl Ausdruck {
+    pub fn neu(art: AusdruckArt, pos: Position) -> Ausdruck {
+        Ausdruck { art, pos, typ: Typ::Nix }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AusdruckArt {
+    Zoi(i64),
+    Kommazoi(f64),
+    Jona(bool),
+    Text(String),
+    /// `id` ist die Nummer der Variable, die Typprüfung trägt sie ein.
+    Variable { name: String, id: usize },
+    Unaer { op: UnaerOp, innen: Box<Ausdruck> },
+    Binaer { op: BinaerOp, links: Box<Ausdruck>, rechts: Box<Ausdruck> },
+    Aufruf { name: String, argumente: Vec<Ausdruck> },
+    /// `ZOI(x)`, `KETTN(x)` ... oder von der Typprüfung eingefügt (ZOI -> KOMMAZOI).
+    Umwandlung { ziel: Typ, innen: Box<Ausdruck> },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Anweisung {
+    pub art: AnweisungArt,
+    pub pos: Position,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AnweisungArt {
+    /// `SOG AU name [TYP] = wert OIDA`
+    Deklaration { name: String, typ: Option<Typ>, wert: Ausdruck, id: usize },
+    /// `name = wert OIDA`
+    Zuweisung { name: String, wert: Ausdruck, id: usize },
+    /// `WENN bedingung DAUN ... [SUNST ...] PASST SCHO`
+    Wenn { bedingung: Ausdruck, dann: Vec<Anweisung>, sunst: Vec<Anweisung> },
+    /// `SOLONG bedingung TUA ... PASST SCHO`
+    Solong { bedingung: Ausdruck, rumpf: Vec<Anweisung> },
+    /// `GIB ZRUCK [wert] OIDA`
+    GibZruck { wert: Option<Ausdruck> },
+    /// `SCHREIB(a, b, ...) OIDA`
+    Schreib { argumente: Vec<Ausdruck> },
+    /// Ein Ausdruck als Anweisung, z.B. ein Funktionsaufruf.
+    Ausdruck(Ausdruck),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Parameter {
+    pub name: String,
+    pub typ: Typ,
+    pub pos: Position,
+    /// Nummer der Variable, die Typprüfung trägt sie ein.
+    pub id: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Funktion {
+    pub name: String,
+    pub parameter: Vec<Parameter>,
+    pub rueckgabe: Typ,
+    pub rumpf: Vec<Anweisung>,
+    pub pos: Position,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Programm {
+    pub funktionen: Vec<Funktion>,
+    /// Die Anweisungen außerhalb von Funktionen: das Hauptprogramm.
+    pub haupt: Vec<Anweisung>,
+}

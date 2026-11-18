@@ -1,0 +1,4 @@
+SOG AU x = 5 OIDA
+IF x > 3 THEN
+    SCHREIB("groß") OIDA
+END

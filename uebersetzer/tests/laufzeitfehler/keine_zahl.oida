@@ -1,0 +1,3 @@
+SOG AU eingabe = "siebzehn" OIDA
+SCHREIB(ZOI("17")) OIDA
+SCHREIB(ZOI(eingabe)) OIDA

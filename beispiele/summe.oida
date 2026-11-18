@@ -1,0 +1,20 @@
+# Eine Schleife, die zusammenzählt: 1 + 2 + ... + 100
+
+SOG AU summe = 0 OIDA
+SOG AU i = 1 OIDA
+SOLONG i <= 100 TUA
+    summe = summe + i OIDA
+    i = i + 1 OIDA
+PASST SCHO
+SCHREIB("Summe von 1 bis 100:", summe) OIDA
+
+# Dasselbe nur mit den geraden Zahlen
+SOG AU gerade = 0 OIDA
+i = 0 OIDA
+SOLONG i <= 100 TUA
+    WENN i % 2 = 0 DAUN
+        gerade = gerade + i OIDA
+    PASST SCHO
+    i = i + 1 OIDA
+PASST SCHO
+SCHREIB("Nur die geraden:", gerade) OIDA

@@ -1,0 +1,4 @@
+SOG AU n = 0 OIDA
+SCHREIB("vorher") OIDA
+SCHREIB(10 / n) OIDA
+SCHREIB("nachher") OIDA

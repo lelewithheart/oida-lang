@@ -1,0 +1,9 @@
+# Rust-Bauordner
+/target/
+
+# Was der OIDA-Compiler erzeugt
+*.exe
+*.ll
+
+# Kopie vom OIDA-SQL-Projekt (hat ein eigenes Repository)
+/oida-sql/

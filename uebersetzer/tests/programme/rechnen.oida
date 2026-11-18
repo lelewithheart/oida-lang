@@ -1,0 +1,24 @@
+# Rechnen, Vergleichen und Umwandeln mit allen Typen.
+
+SCHREIB(1 + 2 * 3, (1 + 2) * 3, 10 - 4 - 3, -7 / 2, -7 % 2, 7 % -2) OIDA
+SCHREIB(1.5 + 1, 10 / 4.0, 2.0 * 3, 1.0 / 3.0, 5.5 % 2, -(1.5)) OIDA
+SCHREIB(1 / 0.0, -1 / 0.0) OIDA
+
+# Ganze Zahlen laufen über, ohne dass das Programm abstürzt.
+SOG AU gross = 9223372036854775807 OIDA
+SOG AU klein = gross + 1 OIDA
+SCHREIB(klein, klein / -1, klein % -1) OIDA
+
+SCHREIB(ZOI(3.99), ZOI(-3.99), ZOI(WOAHR), ZOI(FOISCH), ZOI("  42 "), ZOI(7)) OIDA
+SCHREIB(KOMMAZOI(7), KOMMAZOI("2.5") * 2, KOMMAZOI(gross)) OIDA
+SCHREIB(KETTN(1.0) + KETTN(WOAHR) + KETTN(-5) + KETTN("x")) OIDA
+SCHREIB(ZOI(1000000000000000000000.0 * 1000000000000000000000.0)) OIDA
+
+SCHREIB(1 < 2, 2 <= 2, 3 > 4, 4 >= 5, 1 = 1, 1 == 2, 1 != 2, 1 <> 1) OIDA
+SCHREIB(1.5 < 2, 2 = 2.0, WOAHR = WOAHR, WOAHR != FOISCH, STIMMT, STIMMT NED, SCHMARRN) OIDA
+SCHREIB("a" = "a", "a" != "b", "Zebra" < "apfel", "" < "a", "b" >= "b", "ab" > "abc") OIDA
+
+# Typ dazuschreiben: aus der 3 wird eine KOMMAZOI.
+SOG AU halb KOMMAZOI = 3 OIDA
+halb = halb / 2 OIDA
+SCHREIB(halb) OIDA

@@ -1,0 +1,16 @@
+# Fakultät, rekursiv gerechnet: 5! = 5 * 4 * 3 * 2 * 1
+
+FUNKTIAUN fakultaet(n ZOI) GIBT ZRUCK ZOI
+    WENN n <= 1 DAUN
+        GIB ZRUCK 1 OIDA
+    PASST SCHO
+    GIB ZRUCK n * fakultaet(n - 1) OIDA
+PASST SCHO
+
+SOG AU i = 1 OIDA
+SOLONG i <= 10 TUA
+    SCHREIB(KETTN(i) + "! =", fakultaet(i)) OIDA
+    i = i + 1 OIDA
+PASST SCHO
+
+SCHREIB("20! =", fakultaet(20)) OIDA

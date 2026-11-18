@@ -1,0 +1,11 @@
+FUNKTIAUN doppelt(x ZOI) GIBT ZRUCK ZOI
+    WENN x > 0 DAUN
+        GIB ZRUCK x * 2 OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN name() GIBT ZRUCK KETTN
+    GIB ZRUCK 5 OIDA
+PASST SCHO
+
+SCHREIB(doppelt("drei"), doppelt(1, 2)) OIDA

@@ -1,0 +1,88 @@
+# Blöcke, Schleifen, Funktionen, Namen mit Umlauten.
+
+SOG AU x = 1 OIDA
+WENN WOAHR DAUN
+    SOG AU x = "innen" OIDA     # gilt nur in diesem Block
+    SCHREIB(x) OIDA
+PASST SCHO
+SCHREIB(x) OIDA
+
+# Verschachtelte Schleifen: kleines Einmaleins
+SOG AU i = 1 OIDA
+SOLONG i <= 3 TUA
+    SOG AU zeile = "" OIDA
+    SOG AU j = 1 OIDA
+    SOLONG j <= 3 TUA
+        zeile = zeile + KETTN(i * j) + ";" OIDA
+        j = j + 1 OIDA
+    PASST SCHO
+    SCHREIB(zeile) OIDA
+    i = i + 1 OIDA
+PASST SCHO OIDA
+
+# GIB ZRUCK mitten aus einer Schleife
+FUNKTIAUN erster_teiler(n ZOI) GIBT ZRUCK ZOI
+    SOG AU t = 2 OIDA
+    SOLONG t * t <= n TUA
+        WENN n % t = 0 DAUN
+            GIB ZRUCK t OIDA
+        PASST SCHO
+        t = t + 1 OIDA
+    PASST SCHO
+    GIB ZRUCK n OIDA
+PASST SCHO
+SCHREIB(erster_teiler(91), erster_teiler(97)) OIDA
+
+FUNKTIAUN fib(n ZOI) GIBT ZRUCK ZOI
+    WENN n < 2 DAUN GIB ZRUCK n OIDA PASST SCHO
+    GIB ZRUCK fib(n - 1) + fib(n - 2) OIDA
+PASST SCHO
+SCHREIB(fib(30)) OIDA
+
+# Zwei Funktionen, die einander aufrufen; ungerade steht erst weiter unten.
+FUNKTIAUN gerade(n ZOI) GIBT ZRUCK JONA
+    WENN n = 0 DAUN GIB ZRUCK WOAHR OIDA PASST SCHO
+    GIB ZRUCK ungerade(n - 1) OIDA
+PASST SCHO
+FUNKTIAUN ungerade(n ZOI) GIBT ZRUCK JONA
+    WENN n = 0 DAUN GIB ZRUCK FOISCH OIDA PASST SCHO
+    GIB ZRUCK gerade(n - 1) OIDA
+PASST SCHO
+SCHREIB(gerade(10), ungerade(10)) OIDA
+
+FUNKTIAUN nix_tuan()
+    GIB ZRUCK OIDA
+    SCHREIB("des kummt nie") OIDA
+PASST SCHO
+nix_tuan() OIDA
+
+# Parameter kann man in der Funktion ändern, außen bleibt alles gleich.
+FUNKTIAUN runter(n ZOI) GIBT ZRUCK KETTN
+    SOG AU aus = "" OIDA
+    SOLONG n > 0 TUA
+        aus = aus + KETTN(n) OIDA
+        n = n - 1 OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+SOG AU drei = 3 OIDA
+SCHREIB(runter(drei), drei) OIDA
+
+FUNKTIAUN grüß(wen KETTN) GIBT ZRUCK KETTN
+    GIB ZRUCK "Grüß di, " + wen + "!" OIDA
+PASST SCHO
+SOG AU größe = 180 OIDA
+SCHREIB(grüß("Resi"), größe) OIDA
+
+# Diese Namen gibt es in C schon; in OIDA dürfen sie trotzdem vorkommen.
+FUNKTIAUN main() GIBT ZRUCK ZOI
+    GIB ZRUCK 7 OIDA
+PASST SCHO
+FUNKTIAUN printf(a ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK a + main() OIDA
+PASST SCHO
+SCHREIB(printf(1)) OIDA
+
+SCHREIB() OIDA
+SCHREIB("äöüß €", 'einfach "so"', "Zeile1\nZeile2\tTab \\ Ende") OIDA
+wenn x = 1 daun schreib("klein geht a") oida passt scho

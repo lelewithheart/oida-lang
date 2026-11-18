@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["uebersetzer", "laufzeit"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# Mit diesem Profil wird die Laufzeitbibliothek gebaut, die in jedes
+# OIDA-Programm gelinkt wird (siehe uebersetzer/build.rs).
+[profile.laufzeit]
+inherits = "release"
+opt-level = 3
+codegen-units = 1
+panic = "abort"
+debug = false

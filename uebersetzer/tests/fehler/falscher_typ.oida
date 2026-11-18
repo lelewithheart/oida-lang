@@ -1,0 +1,3 @@
+SOG AU alter = 17 OIDA
+alter = "siebzehn" OIDA
+SOG AU satz = "I bin " + alter OIDA

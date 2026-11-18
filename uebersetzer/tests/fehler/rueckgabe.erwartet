@@ -1,0 +1,5 @@
+:1:1: De FUNKTIAUN 'doppelt' muass a ZOI zruckgebn, oba ned jeda Weg hört mit GIB ZRUCK auf.
+:8:15: De FUNKTIAUN 'name' gibt a KETTN zruck, ned a ZOI.
+:11:17: 'doppelt' wü ois 1. Wert a ZOI, du gibst eam a KETTN.
+:11:26: 'doppelt' wü an Wert hom, du gibst eam 2 Werte.
+Na, des wird nix: 4 Fehler.

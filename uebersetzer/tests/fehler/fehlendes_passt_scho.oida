@@ -1,0 +1,4 @@
+SOG AU i = 0 OIDA
+SOLONG i < 3 TUA
+    i = i + 1 OIDA
+SCHREIB(i) OIDA

@@ -1,0 +1,65 @@
+# ============================================================================
+#  OIDA  -  Wörterbuch der Programmiersprache
+# ============================================================================
+#
+#  Links steht das feste Wort, das der Compiler kennt.
+#  Rechts schreibst du dein Wort hin:
+#
+#      IF = WENN
+#
+#  Regeln (dieselben wie bei OIDA-SQL):
+#   - Rechts leer lassen  ->  es gilt das Wort von links.
+#   - Mehrere Varianten mit Beistrich:      IF = WENN, WAUN
+#   - Rechts dürfen mehrere Wörter stehen:  DECLARE = SOG AU
+#     (bei mehreren Wörtern gewinnt immer der längste Treffer)
+#   - Groß-/Kleinschreibung ist bei diesen Wörtern egal (wenn = WENN = Wenn).
+#   - Zeilen mit # am Anfang sind Kommentare.
+#   - Ein Wort darf nur bei EINEM festen Wort stehen
+#     (sonst meldet der Compiler einen Fehler und sagt dir, welches).
+#   - Die Wörter links darfst du nicht ändern, nur die rechts.
+#
+#  Was hier als Wort steht, kannst du nicht mehr als Namen für eine Variable
+#  oder Funktion verwenden.
+#
+#  Welche Datei gilt, zeigt dir:  oida --woerter
+#  Diese Datei als UTF-8 speichern (wegen Ö, Ä, Ü, ß).
+#
+# ============================================================================
+
+
+# --- Ende einer Anweisung ---------------------------------------------------
+OIDA      = OIDA
+
+# --- Variablen --------------------------------------------------------------
+DECLARE   = SOG AU, DEKLARIER
+
+# --- Verzweigung und Schleife -----------------------------------------------
+IF        = WENN, WAUN
+THEN      = DAUN
+ELSE      = SUNST, ANSUNSTN
+WHILE     = SOLONG
+DO        = TUA, MOCH
+END       = PASST SCHO
+
+# --- Funktionen -------------------------------------------------------------
+FUNCTION  = FUNKTIAUN
+RETURNS   = GIBT ZRUCK
+RETURN    = GIB ZRUCK
+
+# --- Ausgabe ----------------------------------------------------------------
+PRINT     = SCHREIB
+
+# --- Bedingungen ------------------------------------------------------------
+AND       = UND
+OR        = ODA
+NOT       = NED
+
+# --- Werte ------------------------------------------------------------------
+TRUE      = WOAHR, STIMMT
+FALSE     = FOISCH, SCHMARRN, STIMMT NED
+
+# --- Datentypen -------------------------------------------------------------
+INT       = ZOI
+FLOAT     = KOMMAZOI
+BOOLEAN   = JONA, WOAHRFOISCH
+TEXT      = KETTN, TEXTL
