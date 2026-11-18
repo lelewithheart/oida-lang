@@ -575,6 +575,9 @@ pub struct Funktion {
     pub selbst_id: usize,
     /// `FUNKTIAUN erster VON T(...)`: die Namen der Typen, die erst beim Aufruf feststehen.
     pub typ_parameter: Vec<String>,
+    /// `... VON DRAUSSN "oida_x" OIDA`: Die Funktion hat keinen Rumpf, sie
+    /// steckt unter diesem Namen in der Laufzeit. Nur in der mitgelieferten Bibliothek.
+    pub aussen: Option<String>,
 }
 
 /// Ein Feld in `STRUKTUR ... PASST SCHO`.

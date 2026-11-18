@@ -2306,8 +2306,57 @@ enum FunktionsArt<'a> {
     Lambda { nummer: usize, fang: &'a [Fang] },
 }
 
+/// Der Typ, wie ihn eine Funktion der Laufzeit bekommt (`rueckgabe` falsch)
+/// oder zurückgibt. Ein Wahrheitswert reist als ganzes Byte, wie `bool` in C
+/// und Rust; LLVM will den Hinweis darauf beim Parameter hinter dem Typ, bei
+/// der Rückgabe davor.
+fn aussen_typ(typ: Typ, rueckgabe: bool) -> String {
+    match (typ, rueckgabe) {
+        (Typ::Jona, true) => "zeroext i1".to_string(),
+        (Typ::Jona, false) => "i1 zeroext".to_string(),
+        _ => ir_typ(typ),
+    }
+}
+
+/// `FUNKTIAUN f(...) VON DRAUSSN "oida_x"`: Die OIDA-Funktion ruft nur die
+/// Funktion der Laufzeit auf. Texte und Listen sind ihr dabei geliehen;
+/// danach lässt die OIDA-Funktion sie los, wie jede Funktion ihre Parameter.
+fn baue_aussen(modul: &mut Modul, f: &Funktion, symbol: &str) -> String {
+    let typen = modul.typen;
+    let rt = ir_typ(f.rueckgabe);
+    if modul.werte_gebaut.insert(format!("draussen:{symbol}")) {
+        let parameter: Vec<String> = f.parameter.iter().map(|p| aussen_typ(p.typ, false)).collect();
+        let _ = writeln!(
+            modul.zusatz,
+            "declare {} @{symbol}({})\n",
+            aussen_typ(f.rueckgabe, true),
+            parameter.join(", ")
+        );
+    }
+    let kopf: Vec<String> = f.parameter.iter().enumerate().map(|(i, p)| format!("{} %p{i}", ir_typ(p.typ))).collect();
+    let werte: Vec<String> =
+        f.parameter.iter().enumerate().map(|(i, p)| format!("{} %p{i}", aussen_typ(p.typ, false))).collect();
+    let mut code = String::new();
+    let aufruf = format!("call {} @{symbol}({})", aussen_typ(f.rueckgabe, true), werte.join(", "));
+    if f.rueckgabe == Typ::Nix {
+        let _ = writeln!(code, "  {aufruf}");
+    } else {
+        let _ = writeln!(code, "  %r = {aufruf}");
+    }
+    for (i, p) in f.parameter.iter().enumerate() {
+        if let Some(befehl) = lass_befehl(typen, p.typ, &format!("%p{i}")) {
+            let _ = writeln!(code, "  {befehl}");
+        }
+    }
+    let ende = if f.rueckgabe == Typ::Nix { "ret void".to_string() } else { format!("ret {rt} %r") };
+    format!("define internal {rt} {}({}) {{\nstart:\n{code}  {ende}\n}}\n\n", funktions_name(&f.name), kopf.join(", "))
+}
+
 /// Erzeugt den Code einer Funktion.
 fn baue_funktion(modul: &mut Modul, f: &Funktion, art: FunktionsArt) -> String {
+    if let Some(symbol) = &f.aussen {
+        return baue_aussen(modul, f, symbol);
+    }
     let typen = modul.typen;
     let mut bau = FunktionsBau::neu(modul);
     bau.rueckgabe = f.rueckgabe;

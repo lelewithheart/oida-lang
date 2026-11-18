@@ -1,0 +1,42 @@
+# OIDA-Bibliothek: Töne.            Dazuholen mit:  BRAUCH ton OIDA
+#
+# Erzeugte Klänge, wie man sie für ein Spiel braucht: ein Piepser beim
+# Schießen, ein Rauschen bei einem Treffer. Jeder Ton wird von selbst leiser
+# und hört auf; mehrere können gleichzeitig laufen. Die Funktionen kommen
+# sofort zurück, der Ton läuft nebenher.
+#
+#   Höhe:       in Hertz. 440 ist das a, 880 dasselbe eine Oktave höher.
+#   Dauer:      in Sekunden.
+#   Lautstärke: 0 (stumm) bis 1.
+#   Art:        "sinus" (weich), "eckig" (wie ein altes Videospiel), "säge"
+#               (scharf), "dreieck" (zwischen weich und eckig), "rauschn"
+
+FUNKTIAUN ton_roh(art KETTN, von_höhe KOMMAZOI, bis_höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI) VON DRAUSSN "oida_ton" OIDA
+
+# Macht so viele Sekunden Pause. Töne laufen dabei weiter; hört das Programm
+# auf, hören auch sie auf.
+FUNKTIAUN wart(sekunden KOMMAZOI) VON DRAUSSN "oida_warten" OIDA
+
+# Die Lautstärke für alle Töne zusammen: 0 ist stumm, 1 normal.
+FUNKTIAUN lautstärke(wert KOMMAZOI) VON DRAUSSN "oida_ton_laut" OIDA
+
+# Ein weicher Ton.
+FUNKTIAUN ton(höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
+    ton_roh("sinus", höhe, höhe, dauer, laut) OIDA
+PASST SCHO
+
+# Ein Ton mit einer bestimmten Art von Schwingung.
+FUNKTIAUN ton_art(art KETTN, höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
+    ton_roh(art, höhe, höhe, dauer, laut) OIDA
+PASST SCHO
+
+# Ein Ton, der von einer Höhe zur anderen gleitet: von hoch nach tief klingt
+# wie ein Schuss, von tief nach hoch wie etwas, das man aufsammelt.
+FUNKTIAUN ton_gleitend(art KETTN, von_höhe KOMMAZOI, bis_höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
+    ton_roh(art, von_höhe, bis_höhe, dauer, laut) OIDA
+PASST SCHO
+
+# Ein Rauschen, etwa für einen Treffer oder eine Explosion.
+FUNKTIAUN rauschn(dauer KOMMAZOI, laut KOMMAZOI)
+    ton_roh("rauschn", 0, 0, dauer, laut) OIDA
+PASST SCHO

@@ -1,0 +1,66 @@
+# Zeichnet jede Art von Form einmal. Der Test lässt das Programm in Bilder
+# statt in ein Fenster zeichnen und schaut sich einzelne Bildpunkte an.
+
+BRAUCH fensta OIDA
+BRAUCH mathe OIDA
+
+fensta_auf("Formen", 400, 300) OIDA
+SCHREIB(fensta_breite(), fensta_höhe()) OIDA
+
+SOG AU büd = 0 OIDA
+SOLONG fensta_offn() TUA
+    büd += 1 OIDA
+    foab(20, 30, 60) OIDA
+    hintagrund() OIDA
+
+    # Gefüllte Formen, jede in ihrer Farbe.
+    foab(255, 0, 0) OIDA
+    rechteck(20, 20, 60, 40) OIDA
+    foab(0, 255, 0) OIDA
+    kreis(150, 40, 25) OIDA
+    foab_hex("#0000ff") OIDA
+    dreieck(200, 60, 260, 60, 230, 15) OIDA
+    foab_hex("#ff0") OIDA
+    rechteck_rund(280, 20, 80, 40, 12) OIDA
+    foab(255, 0, 255) OIDA
+    ellipsn(60, 110, 40, 15) OIDA
+    foab(0, 255, 255) OIDA
+    vieleck([120.0, 90.0, 180.0, 90.0, 195.0, 130.0, 150.0, 140.0, 105.0, 130.0]) OIDA
+
+    # Nur der Rand: Die Mitte bleibt, wie sie war.
+    foab(255, 255, 255) OIDA
+    rechteck_rand(220, 90, 60, 40, 4) OIDA
+    kreis_rand(330, 110, 25, 6) OIDA
+    linie(20, 160, 380, 160, 3) OIDA
+    linienzug([20.0, 180.0, 60.0, 200.0, 20.0, 220.0], 2, WOAHR) OIDA
+    bogn(120, 200, 20, 0, PI, 4) OIDA
+
+    # Halb durchsichtig über etwas anderem.
+    foab(255, 0, 0) OIDA
+    rechteck(180, 180, 40, 40) OIDA
+    deckung(0.5) OIDA
+    foab(0, 0, 255) OIDA
+    rechteck(200, 180, 40, 40) OIDA
+    deckung(1) OIDA
+
+    # Verschoben, gedreht und vergrößert; danach ist alles wieder wie vorher.
+    lage_merkn() OIDA
+    schiab(320, 200) OIDA
+    drah(in_bogn(90)) OIDA
+    vergrößa(2) OIDA
+    foab(255, 128, 0) OIDA
+    rechteck(0, 0, 20, 5) OIDA
+    lage_zruck() OIDA
+    foab(128, 128, 128) OIDA
+    rechteck(380, 280, 20, 20) OIDA
+
+    # Text in drei Ausrichtungen. Im zweiten Bild steht die Nummer dabei.
+    foab(255, 255, 255) OIDA
+    schrift(18) OIDA
+    text_links(20, 240, "Servas") OIDA
+    schrift_fett(24) OIDA
+    text_mittig(200, 270, "Büd " + KETTN(büd)) OIDA
+    schrift(14) OIDA
+    text_rechts(380, 240, "rechts") OIDA
+PASST SCHO
+SCHREIB(büd, zeit() > 0, büd_zeit() > 0) OIDA

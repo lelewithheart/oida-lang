@@ -219,6 +219,8 @@ impl Leser<'_> {
                     match self.nimm() {
                         Some('n') => inhalt.push('\n'),
                         Some('t') => inhalt.push('\t'),
+                        // Wagenrücklauf: steht in Dateien von Windows vor jedem Zeilenende.
+                        Some('r') => inhalt.push('\r'),
                         Some('\\') => inhalt.push('\\'),
                         Some('"') => inhalt.push('"'),
                         Some('\'') => inhalt.push('\''),
@@ -226,7 +228,7 @@ impl Leser<'_> {
                             // Merken und den Text trotzdem zu Ende lesen.
                             self.fehler.push(Fehler::neu(
                                 stelle,
-                                format!("\\{c} kenn i ned. Es gibt nur \\n, \\t, \\\\, \\\" und \\'."),
+                                format!("\\{c} kenn i ned. Es gibt nur \\n, \\t, \\r, \\\\, \\\" und \\'."),
                             ));
                         }
                         None => {

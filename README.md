@@ -34,9 +34,12 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.7.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.8.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
-mehreren Dateien und eine mitgelieferte Bibliothek sind da.
+mehreren Dateien und eine mitgelieferte Bibliothek sind da. Neu: ein eigenes
+[Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen, mit Tasten und Maus, dazu
+[Töne](#töne) und [Dateien](#dateien); damit geht ein kleines Spiel
+([`beispiele/spui/sternfanga.oida`](beispiele/spui/sternfanga.oida)).
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -132,7 +135,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.7)
+## Die Sprache (v0.8)
 
 ### Typen
 
@@ -751,10 +754,191 @@ SCHREIB(sortiert(nur(zahlen, FUNKTIAUN(z ZOI) => z > 2), FUNKTIAUN(a ZOI, b ZOI)
 | `in_grad(bogn)`, `in_bogn(grad)` | Winkel umrechnen |
 | `zufoi_zwischn(untn, obn)` | zufällige `KOMMAZOI` in dem Bereich |
 
+Dazu kommen drei Teile, die mit Windows reden; sie haben unten eigene Abschnitte:
+**`BRAUCH dateien OIDA`**, **`BRAUCH fensta OIDA`** und **`BRAUCH ton OIDA`**.
+
 Weil alles im ganzen Programm gilt, kann eine eigene Funktion nicht so heißen wie eine aus einem
 Teil der Bibliothek, den man dazuholt. Eine Variable schon (`SOG AU summe = 0 OIDA` geht).
 
 Ein Beispiel mit zwei Dateien und der Bibliothek: [`beispiele/turnier.oida`](beispiele/turnier.oida).
+
+### Dateien
+
+Beim Lesen und Schreiben kann immer etwas schiefgehen. Darum geben diese Funktionen einen Wert
+`ODA FEHLA` zurück, und der Compiler lässt einen den Fehler nicht übersehen.
+
+```
+BRAUCH dateien OIDA
+
+PROBIER schreib_datei("gruass.txt", "Servas!\nPfiat di!\n")
+WONNS SCHIEFGEHT f
+    SCHREIB("Des woa nix:", f.meldung) OIDA
+PASST SCHO
+
+SOG AU zeilen = lies_zeilen("gruass.txt") ODA HOID [] OIDA
+SCHREIB(LÄNGN(zeilen), zeilen[0]) OIDA                        # 2 Servas!
+SCHREIB(lies_datei("gibts_ned.txt") ODA HOID "nix do") OIDA   # nix do
+
+PROBIER inhalt = lies_datei("gibts_ned.txt")
+    SCHREIB(inhalt) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA                                   # gibts_ned.txt: De gibt's ned.
+PASST SCHO
+```
+
+| Funktion | Ergebnis |
+|---|---|
+| `lies_datei(pfad)` | der ganze Inhalt als `KETTN ODA FEHLA` |
+| `lies_zeilen(pfad)` | die Zeilen als `LISTN VON KETTN ODA FEHLA`, ohne Zeilenenden |
+| `schreib_datei(pfad, inhalt)` | ersetzt den Inhalt; `NIX ODA FEHLA` |
+| `häng_au(pfad, inhalt)` | hängt hinten an (legt die Datei an, wenn es sie nicht gibt) |
+| `lösch_datei(pfad)` | löscht die Datei; `NIX ODA FEHLA` |
+| `gibts_datei(pfad)` | `JONA` |
+
+Dateien sind UTF-8. Ein Pfad ohne Ordner meint den Ordner, in dem das Programm gestartet wurde.
+
+### Ein Fenster: zeichnen, Tasten und Maus
+
+Mit `BRAUCH fensta OIDA` bekommt das Programm ein eigenes Fenster. Gezeichnet wird mit Direct2D,
+also von der Grafikkarte; das Programm bleibt eine einzelne `.exe` (das Spiel unten hat 420 KB).
+
+```
+BRAUCH fensta OIDA
+BRAUCH ton OIDA
+BRAUCH mathe OIDA
+
+fensta_auf("Boi", 800, 600) OIDA
+SOG AU x = 400.0 OIDA
+SOG AU y = 300.0 OIDA
+
+SOLONG fensta_offn() TUA
+    # Bewegen: 300 Bildpunkte in der Sekunde, auf jedem Rechner gleich schnell.
+    SOG AU weg = 300.0 * büd_zeit() OIDA
+    WENN taste("LINKS") DAUN x -= weg OIDA PASST SCHO
+    WENN taste("RECHTS") DAUN x += weg OIDA PASST SCHO
+    WENN taste("AUFFE") DAUN y -= weg OIDA PASST SCHO
+    WENN taste("OBE") DAUN y += weg OIDA PASST SCHO
+    x = klemm(x, 30.0, fensta_breite() - 30.0) OIDA
+    y = klemm(y, 30.0, fensta_höhe() - 30.0) OIDA
+    WENN taste_neich("LAA") DAUN
+        ton_gleitend("eckig", 880.0, 220.0, 0.15, 0.5) OIDA
+    PASST SCHO
+    WENN taste("ESC") DAUN fensta_zua() OIDA PASST SCHO
+
+    # Zeichnen: zuerst alles übermalen, dann von hinten nach vorne.
+    foab(20, 20, 40) OIDA
+    hintagrund() OIDA
+    foab_hex("#ffc800") OIDA
+    kreis(x, y, 30) OIDA
+    foab(255, 255, 255) OIDA
+    schrift(20) OIDA
+    text_links(10, 10, "Pfeiltasten: bewegn, Leertaste: Ton, ESC: aus") OIDA
+PASST SCHO
+```
+
+`fensta_offn()` ist der Takt des Programms: Es zeigt, was seit dem letzten Aufruf gezeichnet
+wurde, wartet auf den Bildschirm (meist 60 Bilder in der Sekunde), schaut nach Tasten und Maus
+und beginnt ein neues Bild. Sobald jemand das Fenster zumacht, gibt es `FOISCH` zurück.
+
+Der Punkt (0, 0) ist links oben, x geht nach rechts, y nach unten, eine Einheit ist ein Bildpunkt.
+Winkel sind im Bogenmaß (`in_bogn(90)` aus `mathe` rechnet um). Wo eine `KOMMAZOI` verlangt ist,
+geht auch eine `ZOI`.
+
+| Fenster und Zeit | |
+|---|---|
+| `fensta_auf(titl, breite, höhe)` | macht das Fenster auf (eines pro Programm) |
+| `fensta_offn()` | siehe oben; gehört in die Bedingung der Schleife |
+| `fensta_zua()` | macht es zu: das nächste `fensta_offn()` gibt `FOISCH` |
+| `fensta_breite()`, `fensta_höhe()` | die Größe jetzt (man kann das Fenster größer ziehen) |
+| `zeit()` | Sekunden, seit das Fenster offen ist |
+| `büd_zeit()` | Sekunden, die das letzte Bild gedauert hat; damit rechnet man Bewegungen |
+
+| Farbe | |
+|---|---|
+| `foab(rot, grün, blau)` | die Farbe für alles, was danach kommt, je 0 bis 255 |
+| `foab_hex("#ff8800")` | wie im Web, auch kurz (`"#f80"`) und mit Deckung (`"#ff880080"`) |
+| `deckung(wert)` | 1 deckt ganz, 0 ist unsichtbar; gilt, bis man es ändert |
+
+| Zeichnen | |
+|---|---|
+| `hintagrund()` | füllt das ganze Fenster |
+| `rechteck(x, y, breite, höhe)` | gefüllt; (x, y) ist die linke obere Ecke |
+| `rechteck_rund(x, y, breite, höhe, radius)` | mit runden Ecken |
+| `rechteck_rand(x, y, breite, höhe, dicke)` | nur der Rand |
+| `kreis(x, y, radius)`, `ellipsn(x, y, radius_x, radius_y)` | gefüllt; (x, y) ist die Mitte |
+| `kreis_rand(x, y, radius, dicke)` | nur die Kreislinie |
+| `bogn(x, y, radius, von_winkl, bis_winkl, dicke)` | ein Stück Kreislinie (0 zeigt nach rechts, weiter im Uhrzeigersinn) |
+| `linie(x1, y1, x2, y2, dicke)` | |
+| `dreieck(x1, y1, x2, y2, x3, y3)` | gefüllt |
+| `vieleck(punkte)` | gefüllte Form durch die Punkte `[x, y, x, y, ...]` |
+| `linienzug(punkte, dicke, zua)` | Linien von Punkt zu Punkt; mit `zua = WOAHR` zurück zum ersten |
+
+| Text | |
+|---|---|
+| `schrift(größe)`, `schrift_fett(größe)` | die Schrift für alles, was danach kommt (Höhe in Bildpunkten) |
+| `text_links(x, y, inhalt)` | (x, y) ist die linke obere Ecke |
+| `text_mittig(x, y, inhalt)` | (x, y) ist die Mitte |
+| `text_rechts(x, y, inhalt)` | (x, y) ist die rechte obere Ecke |
+
+| Verschieben, drehen, vergrößern | |
+|---|---|
+| `schiab(dx, dy)` | alles danach ist verschoben (eine Kamera: `schiab(-kamera_x, -kamera_y)`) |
+| `drah(winkl)` | dreht um (0, 0); vorher dorthin schieben, worum es sich drehen soll |
+| `vergrößa(faktor)` | |
+| `lage_merkn()`, `lage_zruck()` | merkt sich die Lage und stellt sie wieder her; jedes neue Bild fängt gerade an |
+
+| Tasten und Maus | |
+|---|---|
+| `taste(name)` | ist die Taste gerade gedrückt? |
+| `taste_neich(name)` | ist sie seit dem letzten Bild neu gedrückt worden? (einmal pro Druck) |
+| `maus_x()`, `maus_y()` | wo die Maus im Fenster ist |
+| `maus_taste(knopf)`, `maus_taste_neich(knopf)` | 1 ist links, 2 rechts, 3 die Mitte |
+
+Tasten heißen `"A"` bis `"Z"`, `"0"` bis `"9"`, `"LINKS"`, `"RECHTS"`, `"AUFFE"`, `"OBE"`, `"LAA"`
+(Leertaste), `"ENTER"`, `"ESC"`, `"SHIFT"`, `"STRG"`, `"ALT"`, `"TAB"`, `"ZRUCK"`, `"F1"` bis `"F12"`.
+
+Ein ganzes Spiel mit Klassen, Gegnern, Funken, Tönen und einem Bestwert, der in einer Datei
+bleibt: [`beispiele/spui/sternfanga.oida`](beispiele/spui/sternfanga.oida).
+
+**Ohne Fenster testen.** Ein Programm mit Fenster lässt sich auch prüfen, ohne dass jemand
+davorsitzt. Dafür gibt es Umgebungsvariablen:
+
+| Variable | Wirkung |
+|---|---|
+| `OIDA_FENSTER_BILDER=<ordner>` | kein Fenster; jedes Bild landet als `bild_001.bmp`, ... im Ordner, die Zeit läuft in festen Schritten von 1/60 Sekunde |
+| `OIDA_FENSTER_BILD_JEDES=<n>` | nur jedes n-te Bild speichern |
+| `OIDA_FENSTER_ENDE=<n>` | nach n Bildern von selbst zumachen (auch mit echtem Fenster) |
+| `OIDA_FENSTER_TASTEN=RECHTS@10-50,LAA@20` | Tasten nach Drehbuch: `RECHTS` in den Bildern 10 bis 50, die Leertaste im Bild 20 |
+| `OIDA_SOMEN=<zahl>` | der Zufall fängt immer gleich an |
+| `OIDA_TON_AUS=1` | kein Ton |
+
+So spielen die Tests von OIDA das Beispielspiel durch und schauen einzelne Bildpunkte nach.
+
+### Töne
+
+`BRAUCH ton OIDA` macht Klänge, wie ein Spiel sie braucht. Sie werden errechnet, nicht aus
+Dateien gelesen. Jeder Ton wird von selbst leiser und hört auf, mehrere können zugleich laufen,
+und die Funktionen kommen sofort zurück.
+
+```
+BRAUCH ton OIDA
+
+ton(440.0, 0.3, 0.5) OIDA                              # ein weiches a
+wart(0.4) OIDA
+ton_gleitend("eckig", 880.0, 220.0, 0.2, 0.5) OIDA     # ein Schuss
+wart(0.3) OIDA
+rauschn(0.4, 0.5) OIDA                                 # ein Treffer
+wart(0.5) OIDA
+```
+
+| Funktion | |
+|---|---|
+| `ton(höhe, dauer, laut)` | ein weicher Ton; Höhe in Hertz (440 ist das a), Dauer in Sekunden, laut von 0 bis 1 |
+| `ton_art(art, höhe, dauer, laut)` | Art: `"sinus"`, `"eckig"`, `"säge"`, `"dreieck"`, `"rauschn"` |
+| `ton_gleitend(art, von_höhe, bis_höhe, dauer, laut)` | gleitet von einer Höhe zur anderen |
+| `rauschn(dauer, laut)` | ein Rauschen |
+| `lautstärke(wert)` | für alle Töne zusammen: 0 ist stumm, 1 normal |
+| `wart(sekunden)` | Pause; Töne laufen weiter. Hört das Programm auf, hören auch sie auf |
 
 ### Kommentare
 
@@ -849,6 +1033,7 @@ steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
 ```
 woerterbuch.txt        die Wörter der Sprache
 beispiele/             Beispielprogramme, jeweils mit der erwarteten Ausgabe (.erwartet)
+  spui/                  ein Spiel mit Fenster
 bibliothek/            die mitgelieferte Bibliothek, in OIDA geschrieben (wird in oida.exe eingebaut)
 uebersetzer/           der Compiler (Rust), ergibt oida.exe
   src/woerterbuch.rs     Wörterbuch lesen, längster Treffer gewinnt
@@ -865,12 +1050,21 @@ uebersetzer/           der Compiler (Rust), ergibt oida.exe
 laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt:
                        Ausgabe, Texte, Listen und Objekte samt Freigeben, Umwandlungen,
                        Fehler beim Laufen
+  src/dateien.rs         Dateien lesen und schreiben
+  src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus
+  src/ton.rs             Töne errechnen, mischen und an Windows geben
 vscode/                Erweiterung für VS Code
 leistung/              Leistungsvergleich mit anderen Sprachen
 ```
 
 Der Compiler schreibt LLVM-IR als Text und lässt `clang` den Rest machen (Optimieren,
 Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
+
+Fenster, Ton und Dateien stehen in der Bibliothek als Funktionen `VON DRAUSSN`:
+`FUNKTIAUN foab(rot ZOI, grün ZOI, blau ZOI) VON DRAUSSN "oida_g_farbe" OIDA` sagt, dass diese
+Funktion in der Laufzeit steckt. Das geht nur in der mitgelieferten Bibliothek, nicht im eigenen
+Programm. Die Teile von Windows dafür (Direct2D, DirectWrite, Ton) lädt ein Programm erst, wenn
+es sie braucht; eines ohne Fenster merkt nichts davon.
 
 
 ## Was OIDA noch nicht kann
@@ -882,10 +1076,12 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - Strukturen und Listen kann man nicht mit `=` vergleichen.
 - Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
-- Die Bibliothek ist klein: Listen, Texte, etwas Rechnen. Dateien lesen und schreiben fehlt noch.
+- Im Fenster fehlen noch: Bilder aus Dateien (PNG), Farbverläufe, gestrichelte Linien, getippter
+  Text als Eingabe, Mausrad, Gamepad, Vollbild und mehr als ein Fenster.
+- Töne werden nur errechnet; Tondateien abspielen geht nicht.
+- Dateien gehen nur als ganzer Text (UTF-8); Ordner auflisten oder anlegen geht nicht.
 - Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
 - Bei einem Verzeichnis geht als Schlüssel nur `ZOI` oder `KETTN`.
-- Keine Dateien, kein Fenster, keine Grafik.
 - Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0 und `ZOI("abc")` brechen das
   Programm weiterhin mit einer Meldung ab (für Texte gibt es stattdessen `ZOI AUS`).
 - Ganze Zahlen laufen bei mehr als 64 Bit still über.
@@ -910,7 +1106,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | fertig |
 | 5 | Vorlagen (Generics), Funktionen als Werte, das Verzeichnis (Schlüssel → Wert) | fertig |
 | 6 | Programme aus mehreren Dateien, Bibliothek in OIDA | fertig |
-| 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | offen |
+| 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | fertig |
 | 8 | Das Spiel nachbauen | offen |
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
 

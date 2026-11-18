@@ -25,6 +25,10 @@
 //! Compiler; er gibt die Größe bei jedem Aufruf mit. Lesen und Schreiben der
 //! Elemente macht der erzeugte Code selbst.
 
+mod dateien;
+mod fenster;
+mod ton;
+
 use std::alloc::{Layout, alloc, dealloc, handle_alloc_error};
 use std::cell::UnsafeCell;
 use std::cmp::Ordering;
@@ -923,6 +927,14 @@ pub extern "C" fn oida_ende() {
     leeren();
     if zustand().pruefen {
         eprintln!("OIDA: {} Texte, Listen und Objekte übrig", zustand().lebende_texte);
+    }
+    if std::env::var_os("OIDA_TON_PRUEFEN").is_some_and(|w| !w.is_empty()) {
+        use std::sync::atomic::Ordering;
+        eprintln!(
+            "OIDA: {} Tonstücke hot Windows gnumma, {} davon mit Ton",
+            ton::ANGENOMMEN.load(Ordering::Relaxed),
+            ton::MIT_TON.load(Ordering::Relaxed)
+        );
     }
 }
 

@@ -497,7 +497,11 @@ fn schnipsel(wb: &Woerterbuch) -> String {
         (
             w(Import).to_string(),
             w(Import).to_string(),
-            vec![format!("{} ${{1|listen,texte,mathe,\"datei.oida\"|}} {}", w(Import), w(Oida))],
+            vec![format!(
+                "{} ${{1|listen,texte,mathe,dateien,fensta,ton,\"datei.oida\"|}} {}",
+                w(Import),
+                w(Oida)
+            )],
             "Bibliothek oder eigene Datei dazuholen",
         ),
         (
@@ -531,6 +535,21 @@ fn schnipsel(wb: &Woerterbuch) -> String {
                 w(Oida)
             )],
             "Verzeichnis: zu einem Schlüssel einen Wert merken",
+        ),
+        (
+            "fensta".to_string(),
+            "fensta".to_string(),
+            vec![
+                format!("{} fensta {}", w(Import), w(Oida)),
+                String::new(),
+                format!("fensta_auf(\"${{1:Mei Programm}}\", ${{2:800}}, ${{3:600}}) {}", w(Oida)),
+                format!("{} fensta_offn() {}", w(While), w(Do)),
+                format!("\tfoab(20, 20, 40) {}", w(Oida)),
+                format!("\thintagrund() {}", w(Oida)),
+                "\t$0".into(),
+                w(End).to_string(),
+            ],
+            "Ein Fenster aufmachen und in einer Schleife zeichnen",
         ),
         (
             w(Print).to_string(),

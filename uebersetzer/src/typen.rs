@@ -1547,6 +1547,30 @@ impl Pruefer<'_> {
     // -------------------------------------------------------- Funktionen
 
     fn funktion(&mut self, f: &mut Funktion) {
+        if f.aussen.is_some() {
+            // Kein Rumpf zu prüfen. Nur die Typen müssen welche sein, die die Laufzeit versteht.
+            let einfach = |t: Typ| matches!(t, Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn);
+            let zahlen_liste = |t: Typ| matches!(self.typen.element(t), Some(Typ::Zoi | Typ::Kommazoi));
+            let parameter_gut = f.parameter.iter().all(|p| einfach(p.typ) || zahlen_liste(p.typ));
+            let rueckgabe_gut = f.rueckgabe == Typ::Nix
+                || einfach(f.rueckgabe)
+                || self.typen.innen(f.rueckgabe) == Some(Typ::Kettn);
+            if !parameter_gut || !rueckgabe_gut || self.methoden_klasse.is_some() {
+                let meldung = format!(
+                    "Noch draußn gehn nur {}, {}, {}, {} und {} von Zoin; zruck a no {} {}. In ana {} geht's gor ned.",
+                    self.wort(Schluessel::Int),
+                    self.wort(Schluessel::Float),
+                    self.wort(Schluessel::Boolean),
+                    self.wort(Schluessel::Text),
+                    self.wort(Schluessel::List),
+                    self.wort(Schluessel::Maybe),
+                    self.wort(Schluessel::Text),
+                    self.wort(Schluessel::Class)
+                );
+                self.melde(f.pos, meldung);
+            }
+            return;
+        }
         self.bereiche = vec![HashMap::new()];
         self.schleifen = 0;
         self.sicher.clear();

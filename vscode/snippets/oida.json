@@ -72,7 +72,7 @@
   },
   "BRAUCH": {
     "prefix": "brauch",
-    "body": ["BRAUCH ${1|listen,texte,mathe,\"datei.oida\"|} OIDA"],
+    "body": ["BRAUCH ${1|listen,texte,mathe,dateien,fensta,ton,\"datei.oida\"|} OIDA"],
     "description": "Bibliothek oder eigene Datei dazuholen"
   },
   "FUNKTIAUN VON T": {
@@ -84,6 +84,11 @@
     "prefix": "vazeichnis",
     "body": ["SOG AU ${1:name} = VAZEICHNIS VON ${2:KETTN} UND ${3:ZOI}() OIDA"],
     "description": "Verzeichnis: zu einem Schlüssel einen Wert merken"
+  },
+  "fensta": {
+    "prefix": "fensta",
+    "body": ["BRAUCH fensta OIDA", "", "fensta_auf(\"${1:Mei Programm}\", ${2:800}, ${3:600}) OIDA", "SOLONG fensta_offn() TUA", "\tfoab(20, 20, 40) OIDA", "\thintagrund() OIDA", "\t$0", "PASST SCHO"],
+    "description": "Ein Fenster aufmachen und in einer Schleife zeichnen"
   },
   "SCHREIB": {
     "prefix": "schreib",

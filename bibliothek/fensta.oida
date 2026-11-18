@@ -1,0 +1,125 @@
+# OIDA-Bibliothek: Fenster, Zeichnen, Tasten und Maus.     BRAUCH fensta OIDA
+#
+# So schaut ein Programm mit Fenster aus:
+#
+#     BRAUCH fensta OIDA
+#     fensta_auf("Mei Spü", 800, 600) OIDA
+#     SOLONG fensta_offn() TUA
+#         foab(20, 20, 40) OIDA
+#         hintagrund() OIDA
+#         foab(255, 200, 0) OIDA
+#         kreis(maus_x(), maus_y(), 30) OIDA
+#     PASST SCHO
+#
+# fensta_offn() zeigt, was seit dem letzten Mal gezeichnet wurde, und beginnt
+# ein neues Bild. Es gibt FOISCH zurück, sobald jemand das Fenster zumacht.
+#
+# Der Punkt (0, 0) ist links oben, x geht nach rechts, y nach unten. Eine
+# Einheit ist ein Bildpunkt. Winkel sind im Bogenmaß (siehe in_bogn in mathe).
+
+# ---------------------------------------------------------------- das Fenster
+
+FUNKTIAUN fensta_auf(titl KETTN, breite ZOI, höhe ZOI) VON DRAUSSN "oida_g_auf" OIDA
+FUNKTIAUN fensta_offn() GIBT ZRUCK JONA VON DRAUSSN "oida_g_offen" OIDA
+# Macht das Fenster zu: Das nächste fensta_offn() gibt FOISCH zurück.
+FUNKTIAUN fensta_zua() VON DRAUSSN "oida_g_zu" OIDA
+FUNKTIAUN fensta_breite() GIBT ZRUCK ZOI VON DRAUSSN "oida_g_breite" OIDA
+FUNKTIAUN fensta_höhe() GIBT ZRUCK ZOI VON DRAUSSN "oida_g_hoehe" OIDA
+
+# Sekunden, seit das Fenster aufgegangen ist.
+FUNKTIAUN zeit() GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_g_zeit" OIDA
+# Sekunden, die das letzte Bild gedauert hat. Damit rechnet man Bewegungen:
+# x += tempo * büd_zeit()  ist auf jedem Rechner gleich schnell.
+FUNKTIAUN büd_zeit() GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_g_bild_zeit" OIDA
+
+# ---------------------------------------------------------------------- Farbe
+
+# Die Farbe für alles, was danach gezeichnet wird: rot, grün, blau, je 0 bis 255.
+FUNKTIAUN foab(rot ZOI, grün ZOI, blau ZOI) VON DRAUSSN "oida_g_farbe" OIDA
+# Wie im Web: foab_hex("#ff8800"), kurz "#f80", mit Deckung "#ff880080".
+FUNKTIAUN foab_hex(code KETTN) VON DRAUSSN "oida_g_farbe_hex" OIDA
+# 1 ist ganz deckend, 0 unsichtbar. Gilt, bis man es wieder ändert.
+FUNKTIAUN deckung(wert KOMMAZOI) VON DRAUSSN "oida_g_deckung" OIDA
+
+# ------------------------------------------------------------------- Zeichnen
+
+# Füllt das ganze Fenster mit der aktuellen Farbe.
+FUNKTIAUN hintagrund() VON DRAUSSN "oida_g_hintergrund" OIDA
+# (x, y) ist die linke obere Ecke.
+FUNKTIAUN rechteck(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI) VON DRAUSSN "oida_g_rechteck" OIDA
+FUNKTIAUN rechteck_rand(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_rechteck_rand" OIDA
+FUNKTIAUN rechteck_rund(x KOMMAZOI, y KOMMAZOI, breite KOMMAZOI, höhe KOMMAZOI, radius KOMMAZOI) VON DRAUSSN "oida_g_rechteck_rund" OIDA
+# (x, y) ist die Mitte.
+FUNKTIAUN ellipsn(x KOMMAZOI, y KOMMAZOI, radius_x KOMMAZOI, radius_y KOMMAZOI) VON DRAUSSN "oida_g_ellipse" OIDA
+FUNKTIAUN kreis_rand(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_kreis_rand" OIDA
+FUNKTIAUN linie(x1 KOMMAZOI, y1 KOMMAZOI, x2 KOMMAZOI, y2 KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_linie" OIDA
+# Eine gefüllte Form durch die Punkte x, y, x, y ...: vieleck([0.0, 0.0, 50.0, 0.0, 25.0, 40.0])
+FUNKTIAUN vieleck(punkte LISTN VON KOMMAZOI) VON DRAUSSN "oida_g_vieleck" OIDA
+# Linien von Punkt zu Punkt; mit zua = WOAHR zurück zum ersten.
+FUNKTIAUN linienzug(punkte LISTN VON KOMMAZOI, dicke KOMMAZOI, zua JONA) VON DRAUSSN "oida_g_linienzug" OIDA
+# Ein Stück Kreislinie zwischen zwei Winkeln (0 zeigt nach rechts, weiter im Uhrzeigersinn).
+FUNKTIAUN bogn(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI, von_winkl KOMMAZOI, bis_winkl KOMMAZOI, dicke KOMMAZOI) VON DRAUSSN "oida_g_bogen" OIDA
+
+FUNKTIAUN kreis(x KOMMAZOI, y KOMMAZOI, radius KOMMAZOI)
+    ellipsn(x, y, radius, radius) OIDA
+PASST SCHO
+
+FUNKTIAUN dreieck(x1 KOMMAZOI, y1 KOMMAZOI, x2 KOMMAZOI, y2 KOMMAZOI, x3 KOMMAZOI, y3 KOMMAZOI)
+    vieleck([x1, y1, x2, y2, x3, y3]) OIDA
+PASST SCHO
+
+# ----------------------------------------------------------------------- Text
+
+FUNKTIAUN schrift_roh(größe KOMMAZOI, fett JONA) VON DRAUSSN "oida_g_schrift" OIDA
+FUNKTIAUN text_roh(x KOMMAZOI, y KOMMAZOI, inhalt KETTN, ausrichtung ZOI) VON DRAUSSN "oida_g_text" OIDA
+
+# Die Schrift für alles, was danach geschrieben wird. Die Größe ist die Höhe in Bildpunkten.
+FUNKTIAUN schrift(größe KOMMAZOI)
+    schrift_roh(größe, FOISCH) OIDA
+PASST SCHO
+
+FUNKTIAUN schrift_fett(größe KOMMAZOI)
+    schrift_roh(größe, WOAHR) OIDA
+PASST SCHO
+
+# Schreibt so, dass (x, y) die linke obere Ecke vom Text ist.
+FUNKTIAUN text_links(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
+    text_roh(x, y, inhalt, 0) OIDA
+PASST SCHO
+
+# Schreibt so, dass (x, y) die Mitte vom Text ist.
+FUNKTIAUN text_mittig(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
+    text_roh(x, y, inhalt, 1) OIDA
+PASST SCHO
+
+# Schreibt so, dass (x, y) die rechte obere Ecke vom Text ist.
+FUNKTIAUN text_rechts(x KOMMAZOI, y KOMMAZOI, inhalt KETTN)
+    text_roh(x, y, inhalt, 2) OIDA
+PASST SCHO
+
+# ------------------------------------------- verschieben, drehen, vergrößern
+
+# Alles, was danach gezeichnet wird, ist um (dx, dy) verschoben. So macht man
+# eine Kamera: schiab(-kamera_x, -kamera_y), dann die Welt zeichnen.
+FUNKTIAUN schiab(dx KOMMAZOI, dy KOMMAZOI) VON DRAUSSN "oida_g_schieb" OIDA
+# Dreht um den Punkt (0, 0); vorher dorthin schieben, worum sich etwas drehen soll.
+FUNKTIAUN drah(winkl KOMMAZOI) VON DRAUSSN "oida_g_dreh" OIDA
+FUNKTIAUN vergrößa(faktor KOMMAZOI) VON DRAUSSN "oida_g_gross" OIDA
+# Merkt sich, wie gerade verschoben, gedreht und vergrößert ist ...
+FUNKTIAUN lage_merkn() VON DRAUSSN "oida_g_lage_merken" OIDA
+# ... und stellt es wieder her. Mit jedem neuen Bild ist alles wieder gerade.
+FUNKTIAUN lage_zruck() VON DRAUSSN "oida_g_lage_zurueck" OIDA
+
+# ------------------------------------------------------------ Tasten und Maus
+
+# Ist die Taste gerade gedrückt? Namen: ein Buchstabe oder eine Ziffer ("A", "7"),
+# "LINKS", "RECHTS", "AUFFE", "OBE", "LAA" (Leertaste), "ENTER", "ESC", "SHIFT",
+# "STRG", "ALT", "TAB", "ZRUCK", "F1" bis "F12".
+FUNKTIAUN taste(name KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_g_taste" OIDA
+# Ist die Taste seit dem letzten Bild neu gedrückt worden? (Für "einmal schießen pro Druck".)
+FUNKTIAUN taste_neich(name KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_g_taste_neu" OIDA
+FUNKTIAUN maus_x() GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_g_maus_x" OIDA
+FUNKTIAUN maus_y() GIBT ZRUCK KOMMAZOI VON DRAUSSN "oida_g_maus_y" OIDA
+# Knopf 1 ist links, 2 rechts, 3 die Mitte.
+FUNKTIAUN maus_taste(knopf ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_g_maus" OIDA
+FUNKTIAUN maus_taste_neich(knopf ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_g_maus_neu" OIDA

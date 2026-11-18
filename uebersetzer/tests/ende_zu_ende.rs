@@ -79,6 +79,12 @@ fn uebersetze(quelle: &Path, exe: &Path, optionen: &[&str]) {
 fn befehl(exe: &Path, quelle: Option<&Path>) -> Command {
     let mut befehl = Command::new(exe);
     befehl.env("OIDA_SOMEN", "1");
+    // Programme mit Tönen bleiben im Test stumm.
+    befehl.env("OIDA_TON_AUS", "1");
+    // Programme, die Dateien schreiben, tun das im Arbeitsordner des Tests, nicht im Projekt.
+    if let Some(ordner) = exe.parent() {
+        befehl.current_dir(ordner);
+    }
     match quelle.map(|q| q.with_extension("eingabe")).filter(|e| e.is_file()) {
         Some(eingabe) => befehl.stdin(fs::File::open(eingabe).unwrap()),
         None => befehl.stdin(Stdio::null()),
@@ -256,4 +262,167 @@ fn datei_die_es_nicht_gibt() {
     let ergebnis = oida().arg("gibts_ned.oida").output().unwrap();
     assert_eq!(ergebnis.status.code(), Some(2));
     assert!(text(&ergebnis.stderr).starts_with("Heast! I kaun gibts_ned.oida ned lesn"), "{}", text(&ergebnis.stderr));
+}
+
+/// Ein Bild, wie es die Laufzeit beim Zeichnen ohne Fenster schreibt
+/// (BMP mit 32 Bit, die unterste Zeile steht zuerst in der Datei).
+struct Bild {
+    breite: usize,
+    hoehe: usize,
+    punkte: Vec<u8>,
+}
+
+impl Bild {
+    fn lies(datei: &Path) -> Bild {
+        let bytes = fs::read(datei).unwrap_or_else(|e| panic!("{}: {e}", datei.display()));
+        assert_eq!(&bytes[..2], b"BM", "{} ist kein BMP", datei.display());
+        let zahl = |ab: usize| u32::from_le_bytes(bytes[ab..ab + 4].try_into().unwrap()) as usize;
+        let (anfang, breite, hoehe) = (zahl(10), zahl(18), zahl(22));
+        assert_eq!(u16::from_le_bytes([bytes[28], bytes[29]]), 32);
+        Bild { breite, hoehe, punkte: bytes[anfang..].to_vec() }
+    }
+
+    /// Rot, Grün und Blau am Punkt (x, y); (0, 0) ist links oben.
+    fn farbe(&self, x: usize, y: usize) -> (u8, u8, u8) {
+        let stelle = ((self.hoehe - 1 - y) * self.breite + x) * 4;
+        (self.punkte[stelle + 2], self.punkte[stelle + 1], self.punkte[stelle])
+    }
+
+    /// Stimmt die Farbe am Punkt, bis auf Rundung?
+    #[track_caller]
+    fn pruefe(&self, x: usize, y: usize, soll: (u8, u8, u8), was: &str) {
+        let ist = self.farbe(x, y);
+        let nah = |a: u8, b: u8| a.abs_diff(b) <= 3;
+        assert!(nah(ist.0, soll.0) && nah(ist.1, soll.1) && nah(ist.2, soll.2), "{was} bei ({x}, {y}): {ist:?} statt {soll:?}");
+    }
+
+    /// Wie viele Punkte im Rechteck eine andere Farbe haben als `grund`.
+    fn andere(&self, x: std::ops::Range<usize>, y: std::ops::Range<usize>, grund: (u8, u8, u8)) -> usize {
+        y.flat_map(|y| x.clone().map(move |x| (x, y))).filter(|(x, y)| self.farbe(*x, *y) != grund).count()
+    }
+}
+
+#[test]
+fn fenster_zeichnet_die_richtigen_formen() {
+    // Das Programm zeichnet in Bilder statt in ein Fenster; hier werden einzelne Punkte nachgeschaut.
+    let arbeit = arbeitsordner("fenster");
+    let exe = arbeit.join("formen.exe");
+    uebersetze(&tests().join("fenster").join("formen.oida"), &exe, &[]);
+    let lauf = befehl(&exe, None)
+        .env("OIDA_FENSTER_BILDER", &arbeit)
+        .env("OIDA_FENSTER_ENDE", "2")
+        .env("OIDA_TEXTE_PRUEFEN", "1")
+        .output()
+        .unwrap();
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert_eq!(text(&lauf.stdout), "400 300\n2 WOAHR WOAHR\n");
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+
+    let bild = Bild::lies(&arbeit.join("bild_002.bmp"));
+    assert_eq!((bild.breite, bild.hoehe), (400, 300));
+    let grund = (20, 30, 60);
+    let weiss = (255, 255, 255);
+    bild.pruefe(5, 5, grund, "Hintergrund");
+    // Gefüllte Formen
+    bild.pruefe(50, 40, (255, 0, 0), "Rechteck");
+    bild.pruefe(85, 40, grund, "rechts vom Rechteck");
+    bild.pruefe(150, 40, (0, 255, 0), "Kreis");
+    bild.pruefe(150, 12, grund, "über dem Kreis");
+    bild.pruefe(230, 45, (0, 0, 255), "Dreieck");
+    bild.pruefe(205, 20, grund, "neben der Spitze vom Dreieck");
+    bild.pruefe(320, 40, (255, 255, 0), "rundes Rechteck");
+    bild.pruefe(281, 21, grund, "runde Ecke");
+    bild.pruefe(60, 110, (255, 0, 255), "Ellipse");
+    bild.pruefe(150, 110, (0, 255, 255), "Vieleck");
+    // Ränder: die Linie selbst, und innen bleibt der Hintergrund
+    bild.pruefe(220, 110, weiss, "Rand vom Rechteck");
+    bild.pruefe(250, 110, grund, "im Rechteck mit Rand");
+    bild.pruefe(330, 85, weiss, "Kreislinie");
+    bild.pruefe(330, 110, grund, "im Kreis mit Rand");
+    bild.pruefe(200, 160, weiss, "Linie");
+    bild.pruefe(200, 165, grund, "unter der Linie");
+    bild.pruefe(120, 220, weiss, "Bogen unten");
+    bild.pruefe(120, 180, grund, "wo der Bogen oben offen ist");
+    bild.pruefe(20, 200, weiss, "Linienzug, das Stück zurück zum Anfang");
+    // Halb durchsichtiges Blau über Rot und über dem Hintergrund
+    bild.pruefe(190, 200, (255, 0, 0), "Rot allein");
+    bild.pruefe(210, 200, (128, 0, 128), "Blau halb über Rot");
+    bild.pruefe(230, 200, (10, 15, 158), "Blau halb über dem Hintergrund");
+    // Verschoben nach (320, 200), um 90 Grad gedreht und verdoppelt: aus 20 x 5 wird ein Balken nach unten
+    bild.pruefe(315, 220, (255, 128, 0), "gedrehtes Rechteck");
+    bild.pruefe(315, 238, (255, 128, 0), "gedrehtes Rechteck, unten");
+    bild.pruefe(325, 220, grund, "rechts vom gedrehten Rechteck");
+    bild.pruefe(305, 220, grund, "links vom gedrehten Rechteck");
+    // Nach lage_zruck() ist alles wieder gerade
+    bild.pruefe(390, 290, (128, 128, 128), "Rechteck in der Ecke");
+    // Text: Wo er stehen soll, ist etwas; daneben nicht
+    assert!(bild.andere(20..90, 240..264, grund) > 100, "kein Text links");
+    assert_eq!(bild.andere(100..300, 240..252, grund), 0, "Text, wo keiner hingehört");
+    assert!(bild.andere(150..250, 256..284, grund) > 200, "kein Text in der Mitte");
+    assert!(bild.andere(330..380, 240..260, grund) > 60, "kein Text rechts");
+    assert_eq!(bild.andere(381..400, 240..260, grund), 0, "der rechte Text ragt über seine Kante");
+
+    // Das erste Bild unterscheidet sich nur dort, wo die Nummer steht.
+    let erstes = Bild::lies(&arbeit.join("bild_001.bmp"));
+    let mut anders = Vec::new();
+    for y in 0..300 {
+        for x in 0..400 {
+            if erstes.farbe(x, y) != bild.farbe(x, y) {
+                anders.push((x, y));
+            }
+        }
+    }
+    assert!(!anders.is_empty(), "beide Bilder sind gleich, obwohl die Nummer anders ist");
+    assert!(anders.iter().all(|(x, y)| (200..260).contains(x) && (255..290).contains(y)), "{anders:?}");
+}
+
+#[test]
+fn echtes_fenster_geht_auf_und_zu() {
+    // Hier geht für einen Augenblick wirklich ein Fenster auf. Geprüft wird,
+    // dass Windows mitspielt und das Programm sauber aufhört; was im Fenster
+    // zu sehen ist, prüft der Test davor am Bild.
+    if std::env::var_os("OIDA_TEST_OHNE_FENSTER").is_some() {
+        return;
+    }
+    let arbeit = arbeitsordner("fenster_echt");
+    let exe = arbeit.join("formen.exe");
+    uebersetze(&tests().join("fenster").join("formen.oida"), &exe, &[]);
+    let lauf = befehl(&exe, None).env("OIDA_FENSTER_ENDE", "5").env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert_eq!(text(&lauf.stdout), "400 300\n5 WOAHR WOAHR\n");
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+}
+
+#[test]
+fn spiel_laeuft_nach_drehbuch() {
+    // Das Beispielspiel, ohne Fenster und mit Tasten nach Drehbuch: nach
+    // rechts und dann hinauf zum Stern (der Zufall ist festgelegt).
+    let arbeit = arbeitsordner("spiel");
+    let exe = arbeit.join("sternfanga.exe");
+    uebersetze(&wurzel().join("beispiele").join("spui").join("sternfanga.oida"), &exe, &[]);
+    let spiel = |bilder: &str, tasten: &str| {
+        let lauf = befehl(&exe, None)
+            .env("OIDA_SOMEN", "3")
+            .env("OIDA_FENSTER_BILDER", &arbeit)
+            .env("OIDA_FENSTER_BILD_JEDES", "100")
+            .env("OIDA_FENSTER_ENDE", bilder)
+            .env("OIDA_FENSTER_TASTEN", tasten)
+            .env("OIDA_TEXTE_PRUEFEN", "1")
+            .output()
+            .unwrap();
+        assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+        assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+        text(&lauf.stdout)
+    };
+    // Ein Stern gefangen: 10 Punkte, und der Bestwert wird gespeichert.
+    assert_eq!(spiel("100", "RECHTS@1-62,AUFFE@63-82"), "Punkte: 10 - Bestes: 10\n");
+    assert_eq!(lies(&arbeit.join("sternfanga_bestes.txt")), "10");
+    let bild = Bild::lies(&arbeit.join("bild_100.bmp"));
+    assert_eq!((bild.breite, bild.hoehe), (800, 600));
+    bild.pruefe(700, 580, (13, 27, 42), "Hintergrund");
+    bild.pruefe(790, 5, (27, 38, 59), "Leiste oben");
+    // Beim nächsten Mal ist der Bestwert noch da, auch ohne etwas zu fangen.
+    assert_eq!(spiel("3", ""), "Punkte: 0 - Bestes: 10\n");
+    // Wer stehen bleibt, wird erwischt: Nach drei Treffern ist das Spiel aus, ESC beendet es.
+    assert_eq!(spiel("2000", "ESC@1990"), "Punkte: 0 - Bestes: 10\n");
 }

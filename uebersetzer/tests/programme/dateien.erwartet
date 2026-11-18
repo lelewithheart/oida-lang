@@ -1,0 +1,25 @@
+--- schreibn und lesn
+FOISCH
+vuaher -> geht ned: oida_test_datei.txt: De gibt's ned.
+gschriebn WOAHR
+danoch -> Servas!
+Zweite Zeile mit ä, ö und ü
+
+["Servas!", "Zweite Zeile mit ä, ö und ü", "dritte"] 42
+--- a Zoi merkn
+FEHLA("Aus "Servas!
+Zweite Zeile mit ä, ö und ü
+dritte" kaun i ka gaunze Zoi mochn.")
+60 30
+--- wos schiefgeht
+gibt's ned -> geht ned: den/ordner/gibts/ned.txt: De gibt's ned.
+den/ordner/gibts/ned.txt: De gibt's ned.
+["nix"] FEHLA("fehlt.txt: De gibt's ned.")
+--- vü Zeilen
+500 Zeile 1 Zeile 500 4392
+--- a Pfad, der erst ausgrechnet wird
+FOISCH oida_test_7.txt Inhalt 7 WOAHR 600
+oida_test_7.txt FOISCH oida_fest_1.txt Platz 0
+--- aufräuma
+weg FOISCH
+oida_test_datei.txt: De gibt's ned.

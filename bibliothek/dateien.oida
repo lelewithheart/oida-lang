@@ -1,0 +1,56 @@
+# OIDA-Bibliothek: Dateien.         Dazuholen mit:  BRAUCH dateien OIDA
+#
+# Beim Lesen und Schreiben kann immer etwas schiefgehen (die Datei gibt es
+# nicht, der Ordner ist gesperrt ...). Darum geben die Funktionen hier einen
+# Wert ODA an FEHLA zurück; siehe PROBIER und ODA HOID.
+
+BRAUCH texte OIDA
+
+# So reden diese Funktionen mit der Laufzeit; im eigenen Programm nimmt man die weiter unten.
+FUNKTIAUN datei_roh_lesn(pfad KETTN) GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN "oida_datei_lesen" OIDA
+FUNKTIAUN datei_roh_schreibn(pfad KETTN, inhalt KETTN, dazua JONA) GIBT ZRUCK JONA VON DRAUSSN "oida_datei_schreiben" OIDA
+FUNKTIAUN datei_roh_löschn(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_datei_loeschen" OIDA
+FUNKTIAUN datei_fehla() GIBT ZRUCK KETTN VON DRAUSSN "oida_datei_fehler" OIDA
+
+# Gibt es die Datei?
+FUNKTIAUN gibts_datei(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_datei_gibts" OIDA
+
+# Der ganze Inhalt einer Datei als Text.
+FUNKTIAUN lies_datei(pfad KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU inhalt = datei_roh_lesn(pfad) OIDA
+    WENN inhalt == NIX DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK inhalt OIDA
+PASST SCHO
+
+# Die Zeilen einer Datei, ohne die Zeilenenden.
+FUNKTIAUN lies_zeilen(pfad KETTN) GIBT ZRUCK LISTN VON KETTN ODA FEHLA
+    SOG AU inhalt = PROBIER lies_datei(pfad) OIDA
+    SOG AU zeilen = teil(ERSETZ(inhalt, "\r\n", "\n"), "\n") OIDA
+    # Hört die Datei mit einem Zeilenende auf, ist das Stück dahinter leer und zählt nicht.
+    WENN LÄNGN(zeilen) > 0 UND zeilen[LÄNGN(zeilen) - 1] == "" DAUN
+        HAU AUSSE(zeilen, LÄNGN(zeilen) - 1) OIDA
+    PASST SCHO
+    GIB ZRUCK zeilen OIDA
+PASST SCHO
+
+# Schreibt den Text in die Datei. Was vorher drin war, ist weg.
+FUNKTIAUN schreib_datei(pfad KETTN, inhalt KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED datei_roh_schreibn(pfad, inhalt, FOISCH) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Hängt den Text hinten an die Datei an (und legt sie an, wenn es sie nicht gibt).
+FUNKTIAUN häng_au(pfad KETTN, inhalt KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED datei_roh_schreibn(pfad, inhalt, WOAHR) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN lösch_datei(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED datei_roh_löschn(pfad) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO

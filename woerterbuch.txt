@@ -86,6 +86,8 @@ TRY       = PROBIER, PROBIERS
 CATCH     = WONNS SCHIEFGEHT, WENNS SCHIEFGEHT
 # --- Andere Dateien dazunehmen:  BRAUCH "gegner.oida" OIDA,  BRAUCH listen OIDA
 IMPORT    = BRAUCH, HOL EINA
+# --- Nur in der mitgelieferten Bibliothek: eine Funktion, die in der Laufzeit steckt
+EXTERN    = VON DRAUSSN
 # --- Funktionen -------------------------------------------------------------
 FUNCTION  = FUNKTIAUN
 RETURNS   = GIBT ZRUCK

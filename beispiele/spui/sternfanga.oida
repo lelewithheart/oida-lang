@@ -1,0 +1,288 @@
+# Sternfanga: ein kleines Spiel mit Fenster, Tasten, Ton und einem Speicherstand.
+#
+#   Pfeiltasten oder WASD   bewegen
+#   ENTER                   nach dem Ende noch einmal
+#   ESC                     aufhören
+#
+# Sterne fangen bringt Punkte. Mit jedem Stern kommt ein Verfolger dazu, und
+# wen einer erwischt, der verliert ein Leben.
+#
+#   oida beispiele\spui\sternfanga.oida --renn
+
+BRAUCH fensta OIDA
+BRAUCH ton OIDA
+BRAUCH mathe OIDA
+BRAUCH listen OIDA
+BRAUCH dateien OIDA
+
+# Alles, was am Spielfeld einen Platz und eine Größe hat.
+KLASSE Ding
+    x KOMMAZOI
+    y KOMMAZOI
+    radius KOMMAZOI
+
+    FUNKTIAUN trifft(wen Ding) GIBT ZRUCK JONA
+        GIB ZRUCK abstand(SÖWA.x, SÖWA.y, wen.x, wen.y) < SÖWA.radius + wen.radius OIDA
+    PASST SCHO
+
+    FUNKTIAUN moi()
+        kreis(SÖWA.x, SÖWA.y, SÖWA.radius) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Spiela ERBT VON Ding
+    tempo KOMMAZOI = 260.0
+    lebn ZOI = 3
+    punkte ZOI = 0
+    # Kurz nach einem Treffer kann einem nichts passieren.
+    schutz KOMMAZOI = 0.0
+
+    FUNKTIAUN moi()
+        # Während des Schutzes blinkt die Figur.
+        WENN SÖWA.schutz > 0 UND ZOI(SÖWA.schutz * 10) % 2 == 0 DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        foab_hex("#4fc3f7") OIDA
+        kreis(SÖWA.x, SÖWA.y, SÖWA.radius) OIDA
+        foab_hex("#0d1b2a") OIDA
+        kreis(SÖWA.x - 6, SÖWA.y - 4, 3) OIDA
+        kreis(SÖWA.x + 6, SÖWA.y - 4, 3) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Verfolga ERBT VON Ding
+    tempo KOMMAZOI
+
+    # Läuft auf das Ziel zu.
+    FUNKTIAUN noch(ziel Ding, dauer KOMMAZOI)
+        SOG AU weit = abstand(SÖWA.x, SÖWA.y, ziel.x, ziel.y) OIDA
+        WENN weit > 1 DAUN
+            SÖWA.x += (ziel.x - SÖWA.x) / weit * SÖWA.tempo * dauer OIDA
+            SÖWA.y += (ziel.y - SÖWA.y) / weit * SÖWA.tempo * dauer OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN moi()
+        foab_hex("#ef5350") OIDA
+        kreis(SÖWA.x, SÖWA.y, SÖWA.radius) OIDA
+        foab_hex("#b71c1c") OIDA
+        kreis_rand(SÖWA.x, SÖWA.y, SÖWA.radius, 3) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Stern ERBT VON Ding
+    FUNKTIAUN moi()
+        # Ein Stern mit fünf Zacken, der sich langsam dreht.
+        SOG AU punkte LISTN VON KOMMAZOI = [] OIDA
+        FIA i VON 0 BIS 9 TUA
+            SOG AU weit = SÖWA.radius OIDA
+            WENN i % 2 == 1 DAUN
+                weit = SÖWA.radius * 0.45 OIDA
+            PASST SCHO
+            SOG AU winkl = zeit() + i * PI / 5 OIDA
+            HAU EINE(punkte, SÖWA.x + SINUS(winkl) * weit) OIDA
+            HAU EINE(punkte, SÖWA.y - KOSINUS(winkl) * weit) OIDA
+        PASST SCHO
+        foab_hex("#ffd54f") OIDA
+        vieleck(punkte) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Ein Funke, der wegfliegt und verblasst.
+KLASSE Funkn
+    x KOMMAZOI
+    y KOMMAZOI
+    vx KOMMAZOI
+    vy KOMMAZOI
+    lebn KOMMAZOI = 0.6
+PASST SCHO
+
+KLASSE Spü
+    breite KOMMAZOI
+    höhe KOMMAZOI
+    spiela Spiela
+    stern Stern
+    verfolga LISTN VON Verfolga = []
+    funkn LISTN VON Funkn = []
+    bestes ZOI = 0
+    aus JONA = FOISCH
+
+    FUNKTIAUN neicha_stern()
+        SÖWA.stern.x = zufoi_zwischn(40, SÖWA.breite - 40) OIDA
+        SÖWA.stern.y = zufoi_zwischn(80, SÖWA.höhe - 40) OIDA
+    PASST SCHO
+
+    FUNKTIAUN neicha_verfolga()
+        # Kommt von einem zufälligen Rand herein und ist ein bisschen schneller als der letzte.
+        SOG AU x = zufoi_zwischn(0, SÖWA.breite) OIDA
+        SOG AU y = -30.0 OIDA
+        WENN ZUFOI(0, 1) == 1 DAUN
+            y = SÖWA.höhe + 30 OIDA
+        PASST SCHO
+        HAU EINE(SÖWA.verfolga, Verfolga(x, y, 14, 70.0 + LÄNGN(SÖWA.verfolga) * 12)) OIDA
+    PASST SCHO
+
+    FUNKTIAUN funkn_bei(x KOMMAZOI, y KOMMAZOI, wievü ZOI)
+        FIA i VON 1 BIS wievü TUA
+            SOG AU winkl = zufoi_zwischn(0, 2 * PI) OIDA
+            SOG AU tempo = zufoi_zwischn(60, 240) OIDA
+            HAU EINE(SÖWA.funkn, Funkn(x, y, KOSINUS(winkl) * tempo, SINUS(winkl) * tempo)) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN von_vuan()
+        SÖWA.spiela = Spiela(SÖWA.breite / 2, SÖWA.höhe / 2, 16) OIDA
+        SÖWA.verfolga = [] OIDA
+        SÖWA.funkn = [] OIDA
+        SÖWA.aus = FOISCH OIDA
+        SÖWA.neicha_stern() OIDA
+        SÖWA.neicha_verfolga() OIDA
+    PASST SCHO
+
+    # Ein Schritt vom Spiel: `dauer` Sekunden sind vergangen.
+    FUNKTIAUN weida_um(dauer KOMMAZOI)
+        SOG AU s = SÖWA.spiela OIDA
+
+        # Wohin die Tasten zeigen; schräg ist man nicht schneller als gerade.
+        SOG AU dx = 0.0 OIDA
+        SOG AU dy = 0.0 OIDA
+        WENN taste("LINKS") ODA taste("A") DAUN
+            dx -= 1 OIDA
+        PASST SCHO
+        WENN taste("RECHTS") ODA taste("D") DAUN
+            dx += 1 OIDA
+        PASST SCHO
+        WENN taste("AUFFE") ODA taste("W") DAUN
+            dy -= 1 OIDA
+        PASST SCHO
+        WENN taste("OBE") ODA taste("S") DAUN
+            dy += 1 OIDA
+        PASST SCHO
+        SOG AU weit = WURZL(dx * dx + dy * dy) OIDA
+        WENN weit > 0 DAUN
+            s.x = klemm(s.x + dx / weit * s.tempo * dauer, s.radius, SÖWA.breite - s.radius) OIDA
+            s.y = klemm(s.y + dy / weit * s.tempo * dauer, s.radius + 50, SÖWA.höhe - s.radius) OIDA
+        PASST SCHO
+        s.schutz = GRÖSSTA(0.0, s.schutz - dauer) OIDA
+
+        # Stern gefangen?
+        WENN s.trifft(SÖWA.stern) DAUN
+            s.punkte += 10 OIDA
+            SÖWA.funkn_bei(SÖWA.stern.x, SÖWA.stern.y, 14) OIDA
+            ton_gleitend("dreieck", 660, 1320, 0.18, 0.4) OIDA
+            SÖWA.neicha_stern() OIDA
+            SÖWA.neicha_verfolga() OIDA
+        PASST SCHO
+
+        # Die Verfolger laufen nach; wer trifft, kostet ein Leben und verschwindet.
+        SOG AU bleibn LISTN VON Verfolga = [] OIDA
+        FIA JEDE v IN SÖWA.verfolga TUA
+            v.noch(s, dauer) OIDA
+            WENN s.schutz <= 0 UND v.trifft(s) DAUN
+                s.lebn -= 1 OIDA
+                s.schutz = 1.5 OIDA
+                SÖWA.funkn_bei(v.x, v.y, 24) OIDA
+                rauschn(0.25, 0.5) OIDA
+                ton_gleitend("säge", 220, 55, 0.3, 0.4) OIDA
+            SUNST
+                HAU EINE(bleibn, v) OIDA
+            PASST SCHO
+        PASST SCHO
+        SÖWA.verfolga = bleibn OIDA
+        WENN LÄNGN(SÖWA.verfolga) == 0 DAUN
+            SÖWA.neicha_verfolga() OIDA
+        PASST SCHO
+
+        WENN s.lebn <= 0 DAUN
+            SÖWA.aus = WOAHR OIDA
+            SÖWA.bestes = GRÖSSTA(SÖWA.bestes, s.punkte) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN funkn_weida(dauer KOMMAZOI)
+        FIA JEDE f IN SÖWA.funkn TUA
+            f.x += f.vx * dauer OIDA
+            f.y += f.vy * dauer OIDA
+            f.lebn -= dauer OIDA
+        PASST SCHO
+        SÖWA.funkn = nur(SÖWA.funkn, FUNKTIAUN(f Funkn) => f.lebn > 0) OIDA
+    PASST SCHO
+
+    FUNKTIAUN moi()
+        foab_hex("#0d1b2a") OIDA
+        hintagrund() OIDA
+
+        SÖWA.stern.moi() OIDA
+        FIA JEDE v IN SÖWA.verfolga TUA
+            v.moi() OIDA
+        PASST SCHO
+        FIA JEDE f IN SÖWA.funkn TUA
+            deckung(klemm(f.lebn / 0.6, 0.0, 1.0)) OIDA
+            foab_hex("#ffecb3") OIDA
+            kreis(f.x, f.y, 3) OIDA
+        PASST SCHO
+        deckung(1) OIDA
+        SÖWA.spiela.moi() OIDA
+
+        # Die Leiste oben: Punkte, Leben als Herzerl, Bestwert.
+        foab_hex("#1b263b") OIDA
+        rechteck(0, 0, SÖWA.breite, 50) OIDA
+        foab_hex("#e0e1dd") OIDA
+        schrift_fett(22) OIDA
+        text_links(16, 11, "Punkte: " + KETTN(SÖWA.spiela.punkte)) OIDA
+        schrift(16) OIDA
+        text_rechts(SÖWA.breite - 16, 15, "Bestes: " + KETTN(SÖWA.bestes)) OIDA
+        foab_hex("#ef5350") OIDA
+        FIA i VON 1 BIS SÖWA.spiela.lebn TUA
+            kreis(SÖWA.breite / 2 - 40 + i * 20, 25, 7) OIDA
+        PASST SCHO
+
+        WENN SÖWA.aus DAUN
+            deckung(0.7) OIDA
+            foab(0, 0, 0) OIDA
+            rechteck(0, 0, SÖWA.breite, SÖWA.höhe) OIDA
+            deckung(1) OIDA
+            foab_hex("#ffd54f") OIDA
+            schrift_fett(48) OIDA
+            text_mittig(SÖWA.breite / 2, SÖWA.höhe / 2 - 30, "Aus is!") OIDA
+            foab_hex("#e0e1dd") OIDA
+            schrift(20) OIDA
+            text_mittig(SÖWA.breite / 2, SÖWA.höhe / 2 + 25, KETTN(SÖWA.spiela.punkte) + " Punkte - ENTER fia no amoi, ESC zum Aufhean") OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+SOG AU speicha = "sternfanga_bestes.txt" OIDA
+
+FUNKTIAUN bestes_lesn(wo KETTN) GIBT ZRUCK ZOI ODA FEHLA
+    SOG AU inhalt = PROBIER lies_datei(wo) OIDA
+    GIB ZRUCK PROBIER ZOI AUS(inhalt) OIDA
+PASST SCHO
+
+fensta_auf("Sternfanga", 800, 600) OIDA
+SOG AU spü = Spü(800, 600, Spiela(400, 300, 16), Stern(0, 0, 16)) OIDA
+# Gibt es noch keinen Speicherstand (oder steht Unsinn drin), fängt man bei 0 an.
+spü.bestes = bestes_lesn(speicha) ODA HOID 0 OIDA
+spü.von_vuan() OIDA
+
+SOLONG fensta_offn() TUA
+    WENN taste_neich("ESC") DAUN
+        fensta_zua() OIDA
+    PASST SCHO
+    WENN spü.aus DAUN
+        WENN taste_neich("ENTER") DAUN
+            spü.von_vuan() OIDA
+        PASST SCHO
+    SUNST
+        spü.weida_um(büd_zeit()) OIDA
+    PASST SCHO
+    spü.funkn_weida(büd_zeit()) OIDA
+    spü.moi() OIDA
+PASST SCHO
+
+spü.bestes = GRÖSSTA(spü.bestes, spü.spiela.punkte) OIDA
+PROBIER schreib_datei(speicha, KETTN(spü.bestes))
+WONNS SCHIEFGEHT f
+    SCHREIB("Des Beste kaun i ned speichern:", f.meldung) OIDA
+PASST SCHO
+SCHREIB("Punkte:", spü.spiela.punkte, "- Bestes:", spü.bestes) OIDA

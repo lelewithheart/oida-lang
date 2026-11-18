@@ -1,0 +1,33 @@
+# Töne. Im Test bleibt alles stumm (OIDA_TON_AUS); geprüft wird, dass das
+# Programm durchläuft. Zum Anhören: oida toene.oida --renn
+
+BRAUCH ton OIDA
+
+SCHREIB("Tonleiter") OIDA
+SOG AU höhen = [262, 294, 330, 349, 392, 440, 494, 523] OIDA
+FIA JEDE höhe IN höhen TUA
+    ton(höhe, 0.25, 0.5) OIDA
+    wart(0.15) OIDA
+PASST SCHO
+wart(0.3) OIDA
+
+SCHREIB("Schuss, Treffer, Münze") OIDA
+ton_gleitend("eckig", 900, 150, 0.15, 0.4) OIDA
+wart(0.25) OIDA
+rauschn(0.3, 0.5) OIDA
+ton_gleitend("säge", 200, 50, 0.3, 0.4) OIDA
+wart(0.45) OIDA
+ton_art("dreieck", 988, 0.08, 0.5) OIDA
+wart(0.08) OIDA
+ton_art("dreieck", 1319, 0.3, 0.5) OIDA
+wart(0.4) OIDA
+
+SCHREIB("Leise und nix") OIDA
+lautstärke(0.2) OIDA
+ton(440, 0.2, 1) OIDA
+wart(0.25) OIDA
+lautstärke(1) OIDA
+ton(440, 0, 1) OIDA
+ton(-5, 0.1, 1) OIDA
+wart(0) OIDA
+SCHREIB("fertig") OIDA

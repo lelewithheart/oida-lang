@@ -24,11 +24,30 @@ const SYSTEM_BIBLIOTHEKEN: [&str; 6] =
 
 /// Die mitgelieferte Bibliothek: in OIDA geschrieben und in den Compiler
 /// eingebaut. `BRAUCH listen OIDA` holt den Teil mit diesem Namen dazu.
-pub const BIBLIOTHEK: [(&str, &str); 3] = [
+pub const BIBLIOTHEK: [(&str, &str); 6] = [
     ("listen", include_str!("../../bibliothek/listen.oida")),
     ("texte", include_str!("../../bibliothek/texte.oida")),
     ("mathe", include_str!("../../bibliothek/mathe.oida")),
+    ("dateien", include_str!("../../bibliothek/dateien.oida")),
+    ("fensta", include_str!("../../bibliothek/fensta.oida")),
+    ("ton", include_str!("../../bibliothek/ton.oida")),
 ];
+
+/// Funktionen, die in der Laufzeit stecken (VON DRAUSSN), gibt es nur in
+/// der mitgelieferten Bibliothek: Zu einem eigenen Namen gäbe es dort nichts.
+fn ohne_draussen(programm: &Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehler>> {
+    let methoden = programm.klassen.iter().flat_map(|k| k.methoden.iter());
+    match programm.funktionen.iter().chain(methoden).find(|f| f.aussen.is_some()) {
+        Some(f) => Err(vec![Fehler::neu(
+            f.pos,
+            format!(
+                "{} geht nur in da Bibliothek, de mit OIDA mitkummt.",
+                wb.wort(crate::woerterbuch::Schluessel::Extern)
+            ),
+        )]),
+        None => Ok(()),
+    }
+}
 
 /// Eine Datei, aus der das Programm besteht. Ihre Stelle in der Liste ist
 /// die Nummer in [`Position::datei`]; die erste ist die Datei, die übersetzt wird.
@@ -64,6 +83,7 @@ fn lade_alles(
 ) -> Result<Programm, Vec<Fehler>> {
     let tokens = lexer::zerlegen(quelltext, wb).map_err(|f| vec![f])?;
     let mut programm = parser::parsen(tokens, wb).map_err(|f| vec![f])?;
+    ohne_draussen(&programm, wb)?;
     if programm.importe.is_empty() {
         return Ok(programm);
     }
@@ -127,6 +147,9 @@ fn lade_alles(
             token.ende.datei = nummer;
         }
         let teil = parser::parsen(tokens, woerter).map_err(hier)?;
+        if !import.bibliothek {
+            ohne_draussen(&teil, wb)?;
+        }
         if let Some(erste) = teil.haupt.first() {
             use crate::woerterbuch::Schluessel as S;
             return Err(vec![Fehler::neu(

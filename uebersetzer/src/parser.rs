@@ -335,6 +335,7 @@ impl Parser<'_> {
             pos,
             selbst_id: 0,
             typ_parameter: Vec::new(),
+            aussen: None,
         };
         if self.aktuell().art == TokenArt::Pfeil {
             let pfeil = self.weiter().pos;
@@ -517,9 +518,22 @@ impl Parser<'_> {
         let parameter = self.parameter()?;
         let rueckgabe_angabe = if self.nimm(Schluessel::Returns) { Some(self.typ_angabe()?) } else { None };
         let rueckgabe = rueckgabe_angabe.as_ref().map_or(Typ::Nix, einfacher_typ);
-        let rumpf = self.block()?;
-        self.erwarte_end(pos, Schluessel::Function)?;
-        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0, typ_parameter })
+        // ... VON DRAUSSN "oida_x" OIDA: kein Rumpf, die Funktion steckt in der Laufzeit.
+        let mut aussen = None;
+        let mut rumpf = Vec::new();
+        if self.nimm(Schluessel::Extern) {
+            let token = self.aktuell().clone();
+            let TokenArt::Text(symbol) = token.art else {
+                return Err(self.unerwartet("da Nom von da Funktion in da Laufzeit, in Anführungszeichn"));
+            };
+            self.weiter();
+            self.erwarte_oida()?;
+            aussen = Some(symbol);
+        } else {
+            rumpf = self.block()?;
+            self.erwarte_end(pos, Schluessel::Function)?;
+        }
+        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0, typ_parameter, aussen })
     }
 
     /// Anweisungen bis PASST SCHO, SUNST oder zum Ende der Datei.

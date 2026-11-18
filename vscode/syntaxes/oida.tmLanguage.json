@@ -18,6 +18,7 @@
     { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])WONNS\\s+SCHIEFGEHT(?![\\p{L}\\p{N}_])" },
     { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])WENNS\\s+SCHIEFGEHT(?![\\p{L}\\p{N}_])" },
     { "name": "entity.name.function.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])KOMMAZOI\\s+AUS(?![\\p{L}\\p{N}_])(?=\\s*\\()" },
+    { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])VON\\s+DRAUSSN(?![\\p{L}\\p{N}_])" },
     { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])PASST\\s+SCHO(?![\\p{L}\\p{N}_])" },
     { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])GIBT\\s+ZRUCK(?![\\p{L}\\p{N}_])" },
     { "name": "constant.language.boolean.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])STIMMT\\s+NED(?![\\p{L}\\p{N}_])" },

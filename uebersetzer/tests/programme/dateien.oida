@@ -1,0 +1,103 @@
+# Dateien lesen und schreiben. Die Testdatei liegt im Ordner, in dem das Programm läuft.
+
+BRAUCH dateien OIDA
+BRAUCH listen OIDA
+
+SOG AU pfad = "oida_test_datei.txt" OIDA
+
+FUNKTIAUN zeig(wos KETTN, ergebnis KETTN ODA FEHLA)
+    PROBIER inhalt = ergebnis
+        SCHREIB(wos, "->", inhalt) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(wos, "-> geht ned:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Liest eine Zahl aus einer Datei; jeder der zwei Schritte kann schiefgehen.
+FUNKTIAUN lies_zoi(wo KETTN) GIBT ZRUCK ZOI ODA FEHLA
+    SOG AU inhalt = PROBIER lies_datei(wo) OIDA
+    GIB ZRUCK PROBIER ZOI AUS(inhalt) OIDA
+PASST SCHO
+
+SCHREIB("--- schreibn und lesn") OIDA
+SCHREIB(gibts_datei(pfad)) OIDA
+zeig("vuaher", lies_datei(pfad)) OIDA
+PROBIER schreib_datei(pfad, "Servas!\nZweite Zeile mit ä, ö und ü\n")
+    SCHREIB("gschriebn", gibts_datei(pfad)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+zeig("danoch", lies_datei(pfad)) OIDA
+PROBIER häng_au(pfad, "dritte")
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+SCHREIB(lies_zeilen(pfad) ODA HOID [], LÄNGN(lies_datei(pfad) ODA HOID "")) OIDA
+
+SCHREIB("--- a Zoi merkn") OIDA
+SCHREIB(lies_zoi(pfad)) OIDA
+SOG AU bester = 0 OIDA
+FIA punkte VON 1 BIS 3 TUA
+    bester = lies_zoi(pfad) ODA HOID 0 OIDA
+    PROBIER schreib_datei(pfad, KETTN(bester + punkte * 10))
+    WONNS SCHIEFGEHT f
+        SCHREIB("des kummt ned:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(lies_zoi(pfad), bester) OIDA
+
+SCHREIB("--- wos schiefgeht") OIDA
+zeig("gibt's ned", lies_datei("den/ordner/gibts/ned.txt")) OIDA
+PROBIER schreib_datei("den/ordner/gibts/ned.txt", "x")
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+SCHREIB(lies_zeilen("a no ned do.txt") ODA HOID ["nix"], lies_zoi("fehlt.txt")) OIDA
+
+SCHREIB("--- vü Zeilen") OIDA
+SOG AU olle = "" OIDA
+FIA i VON 1 BIS 500 TUA
+    olle += "Zeile " + KETTN(i) + "\r\n" OIDA
+PASST SCHO
+PROBIER schreib_datei(pfad, olle)
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+SOG AU zeilen = lies_zeilen(pfad) ODA HOID [] OIDA
+SCHREIB(LÄNGN(zeilen), zeilen[0], zeilen[499], summe(mach(zeilen, FUNKTIAUN(z KETTN) => LÄNGN(z)))) OIDA
+
+# Ein Pfad, der erst beim Laufen entsteht, gehört nachher noch dem Programm:
+# Die Funktionen dürfen ihn nur ausborgen. Die vielen Texte danach würden
+# seinen Platz bekommen, wenn er zu früh freigegeben worden wäre.
+SCHREIB("--- a Pfad, der erst ausgrechnet wird") OIDA
+SOG AU nummer = 7 OIDA
+SOG AU eigena = "oida_test_" + KETTN(nummer) + ".txt" OIDA
+SOG AU scho_do = gibts_datei(eigena) OIDA
+PROBIER schreib_datei(eigena, "Inhalt " + KETTN(nummer))
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+SOG AU aundare LISTN VON KETTN = [] OIDA
+FIA i VON 1 BIS 300 TUA
+    HAU EINE(aundare, "oida_fest_" + KETTN(i % 10) + ".txt") OIDA
+    HAU EINE(aundare, "Platz " + KETTN(i % 10)) OIDA
+PASST SCHO
+SCHREIB(scho_do, eigena, lies_datei(eigena) ODA HOID "nix", gibts_datei(eigena), LÄNGN(aundare)) OIDA
+PROBIER lösch_datei(eigena)
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+SCHREIB(eigena, gibts_datei(eigena), aundare[0], aundare[599]) OIDA
+
+SCHREIB("--- aufräuma") OIDA
+PROBIER lösch_datei(pfad)
+    SCHREIB("weg", gibts_datei(pfad)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER lösch_datei(pfad)
+    SCHREIB("des kummt ned") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO

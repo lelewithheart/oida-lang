@@ -87,11 +87,13 @@ pub enum Schluessel {
     Map,
     // Andere Dateien dazunehmen
     Import,
+    /// Eine Funktion, die in der Laufzeit steckt (nur in der mitgelieferten Bibliothek)
+    Extern,
 }
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 70] = [
+    pub const ALLE: [(Schluessel, &'static str); 71] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -162,6 +164,7 @@ impl Schluessel {
         (Schluessel::ParseFloat, "PARSEFLOAT"),
         (Schluessel::Map, "MAP"),
         (Schluessel::Import, "IMPORT"),
+        (Schluessel::Extern, "EXTERN"),
     ];
 
     /// Ist das der Name einer eingebauten Funktion (LÄNGN, WURZL ...)?
