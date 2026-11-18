@@ -1,0 +1,1 @@
+Zwei Millionen Zeilen ausgeben. Misst die Ausgabe.

@@ -1,0 +1,24 @@
+# Mandelbrot-Menge auf 1000 x 1000 Punkten, höchstens 300 Schritte je Punkt. Misst Rechnen mit Kommazahlen.
+
+SOG AU summe = 0 OIDA
+SOG AU py = 0 OIDA
+SOLONG py < 1000 TUA
+    SOG AU y0 = -1.5 + py * 3.0 / 1000.0 OIDA
+    SOG AU px = 0 OIDA
+    SOLONG px < 1000 TUA
+        SOG AU x0 = -2.0 + px * 3.0 / 1000.0 OIDA
+        SOG AU x = 0.0 OIDA
+        SOG AU y = 0.0 OIDA
+        SOG AU i = 0 OIDA
+        SOLONG i < 300 UND x * x + y * y <= 4.0 TUA
+            SOG AU xt = x * x - y * y + x0 OIDA
+            y = 2.0 * x * y + y0 OIDA
+            x = xt OIDA
+            i = i + 1 OIDA
+        PASST SCHO
+        summe = summe + i OIDA
+        px = px + 1 OIDA
+    PASST SCHO
+    py = py + 1 OIDA
+PASST SCHO
+SCHREIB(summe) OIDA

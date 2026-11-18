@@ -295,6 +295,13 @@ Heast! Zeile 3: Durch nix kaun ma ned teilen.
 ```
 
 
+## Wie schnell ist das?
+
+Beim Rechnen so schnell wie C und Rust, bei Texten noch deutlich langsamer. Gemessen an sieben
+Programmen gegen C, Rust, Java, JavaScript und Python; Zahlen und Messweise stehen in
+[`leistung/`](leistung/README.md).
+
+
 ## Aufbau
 
 ```
@@ -315,6 +322,7 @@ uebersetzer/           der Compiler (Rust), ergibt oida.exe
 laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt:
                        Ausgabe, Texte, Umwandlungen, Fehler beim Laufen
 vscode/                Erweiterung für VS Code
+leistung/              Leistungsvergleich mit anderen Sprachen
 ```
 
 Der Compiler schreibt LLVM-IR als Text und lässt `clang` den Rest machen (Optimieren,

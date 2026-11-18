@@ -1,0 +1,23 @@
+# Längste Collatz-Folge für Startwerte unter 1 Million. Misst Schleifen, Verzweigungen und Rechnen mit ganzen Zahlen.
+
+SOG AU bester = 0 OIDA
+SOG AU laengste = 0 OIDA
+SOG AU start = 1 OIDA
+SOLONG start < 1000000 TUA
+    SOG AU n = start OIDA
+    SOG AU schritte = 0 OIDA
+    SOLONG n != 1 TUA
+        WENN n % 2 = 0 DAUN
+            n = n / 2 OIDA
+        SUNST
+            n = 3 * n + 1 OIDA
+        PASST SCHO
+        schritte = schritte + 1 OIDA
+    PASST SCHO
+    WENN schritte > laengste DAUN
+        laengste = schritte OIDA
+        bester = start OIDA
+    PASST SCHO
+    start = start + 1 OIDA
+PASST SCHO
+SCHREIB(bester, laengste) OIDA

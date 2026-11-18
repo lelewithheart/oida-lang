@@ -1,0 +1,1 @@
+Fibonacci-Zahl 40, rekursiv. Misst Funktionsaufrufe (rund 330 Millionen).

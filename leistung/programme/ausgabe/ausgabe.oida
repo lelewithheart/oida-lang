@@ -1,0 +1,7 @@
+# Zwei Millionen Zeilen ausgeben. Misst die Ausgabe.
+
+SOG AU i = 1 OIDA
+SOLONG i <= 2000000 TUA
+    SCHREIB(i, i * 3) OIDA
+    i = i + 1 OIDA
+PASST SCHO

@@ -1,0 +1,10 @@
+# Fibonacci-Zahl 40, rekursiv. Misst Funktionsaufrufe (rund 330 Millionen).
+
+FUNKTIAUN fib(n ZOI) GIBT ZRUCK ZOI
+    WENN n < 2 DAUN
+        GIB ZRUCK n OIDA
+    PASST SCHO
+    GIB ZRUCK fib(n - 1) + fib(n - 2) OIDA
+PASST SCHO
+
+SCHREIB(fib(40)) OIDA

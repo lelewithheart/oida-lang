@@ -1,0 +1,10 @@
+[package]
+name = "oida-messen"
+description = "Misst, wie schnell OIDA im Vergleich zu anderen Sprachen ist"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "messen"
+path = "src/main.rs"

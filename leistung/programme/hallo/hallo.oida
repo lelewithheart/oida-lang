@@ -1,0 +1,3 @@
+# Nur eine Zeile ausgeben. Misst, wie lange ein Programm zum Starten braucht.
+
+SCHREIB("Servas Welt!") OIDA

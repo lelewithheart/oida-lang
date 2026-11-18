@@ -1,0 +1,16 @@
+# Eine Million kurze Texte zusammenbauen und vergleichen. Misst Texte und den Speicher dafür.
+
+SOG AU kleiner = 0 OIDA
+SOG AU gleich = 0 OIDA
+SOG AU i = 1 OIDA
+SOLONG i <= 1000000 TUA
+    SOG AU s = "nr" + KETTN(i) + "!" OIDA
+    WENN s < "nr5" DAUN
+        kleiner = kleiner + 1 OIDA
+    PASST SCHO
+    WENN s = "nr777!" DAUN
+        gleich = gleich + 1 OIDA
+    PASST SCHO
+    i = i + 1 OIDA
+PASST SCHO
+SCHREIB(kleiner, gleich) OIDA

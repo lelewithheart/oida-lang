@@ -1,0 +1,22 @@
+# Primzahlen unter 2 Millionen zählen, durch Probeteilen. Misst Schleifen und Teilen mit Rest.
+
+FUNKTIAUN ist_prim(n ZOI) GIBT ZRUCK JONA
+    SOG AU t = 2 OIDA
+    SOLONG t * t <= n TUA
+        WENN n % t = 0 DAUN
+            GIB ZRUCK FOISCH OIDA
+        PASST SCHO
+        t = t + 1 OIDA
+    PASST SCHO
+    GIB ZRUCK WOAHR OIDA
+PASST SCHO
+
+SOG AU anzahl = 0 OIDA
+SOG AU n = 2 OIDA
+SOLONG n < 2000000 TUA
+    WENN ist_prim(n) DAUN
+        anzahl = anzahl + 1 OIDA
+    PASST SCHO
+    n = n + 1 OIDA
+PASST SCHO
+SCHREIB(anzahl) OIDA

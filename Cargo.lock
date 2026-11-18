@@ -9,3 +9,7 @@ version = "0.1.0"
 [[package]]
 name = "oida-laufzeit"
 version = "0.1.0"
+
+[[package]]
+name = "oida-messen"
+version = "0.1.0"

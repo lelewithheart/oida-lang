@@ -1,0 +1,1 @@
+Eine Million kurze Texte zusammenbauen und vergleichen. Misst Texte und den Speicher dafür.

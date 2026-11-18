@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["uebersetzer", "laufzeit"]
+members = ["uebersetzer", "laufzeit", "leistung/messen"]
 
 [workspace.package]
 version = "0.1.0"
