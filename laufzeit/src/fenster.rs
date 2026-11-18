@@ -18,13 +18,24 @@
 //! Schritten von 1/60 Sekunde, damit immer dasselbe herauskommt.
 //! `OIDA_FENSTER_ENDE=<n>` schließt das Fenster nach n Bildern von selbst.
 //! `OIDA_FENSTER_BILD_JEDES=<n>` speichert nur jedes n-te Bild.
+//! `OIDA_FENSTER_PRUEFEN=1` meldet am Ende, wie lang das Programm für ein Bild
+//! gebraucht hat (Rechnen und Zeichnen, ohne das Warten auf den Bildschirm).
 //! `OIDA_FENSTER_TASTEN=RECHTS@10-50,LAA@20` drückt Tasten nach Drehbuch:
 //! RECHTS in den Bildern 10 bis 50, die Leertaste nur im Bild 20. So lässt
 //! sich ein Spiel im Test spielen, ohne dass jemand an der Tastatur sitzt.
 
 use std::collections::HashMap;
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+
+/// Für `OIDA_FENSTER_PRUEFEN`: Bilder, und wie lang das Programm für sie
+/// gearbeitet hat (Summe und längstes, in Nanosekunden), dazu die Zeit fürs Anzeigen.
+pub(crate) static GEZAEHLTE_BILDER: AtomicU64 = AtomicU64::new(0);
+pub(crate) static ARBEIT_SUMME: AtomicU64 = AtomicU64::new(0);
+pub(crate) static ARBEIT_LAENGSTE: AtomicU64 = AtomicU64::new(0);
+pub(crate) static ARBEIT_UEBER: AtomicU64 = AtomicU64::new(0);
+pub(crate) static ANZEIGEN_SUMME: AtomicU64 = AtomicU64::new(0);
 
 use super::{ListenKopf, TextKopf, bytes};
 
@@ -47,6 +58,7 @@ const FABRIK_FENSTER_ZIEL: usize = 14; // CreateHwndRenderTarget
 const FABRIK_DC_ZIEL: usize = 16; // CreateDCRenderTarget
 // ID2D1RenderTarget
 const ZIEL_PINSEL: usize = 8; // CreateSolidColorBrush
+const ZIEL_NEBENZIEL: usize = 12; // CreateCompatibleRenderTarget
 const ZIEL_LINIE: usize = 15; // DrawLine
 const ZIEL_RECHTECK_RAND: usize = 16; // DrawRectangle
 const ZIEL_RECHTECK: usize = 17; // FillRectangle
@@ -56,11 +68,13 @@ const ZIEL_ELLIPSE_RAND: usize = 20; // DrawEllipse
 const ZIEL_ELLIPSE: usize = 21; // FillEllipse
 const ZIEL_FORM_RAND: usize = 22; // DrawGeometry
 const ZIEL_FORM: usize = 23; // FillGeometry
+const ZIEL_BILD: usize = 26; // DrawBitmap
 const ZIEL_TEXT: usize = 27; // DrawText
 const ZIEL_LAGE: usize = 30; // SetTransform
 const ZIEL_LEEREN: usize = 47; // Clear
 const ZIEL_ANFANG: usize = 48; // BeginDraw
 const ZIEL_ENDE: usize = 49; // EndDraw
+const NEBENZIEL_BILD: usize = 57; // ID2D1BitmapRenderTarget::GetBitmap
 // ID2D1HwndRenderTarget / ID2D1DCRenderTarget
 const FENSTER_ZIEL_GROESSE: usize = 58; // Resize
 const DC_ZIEL_BINDEN: usize = 57; // BindDC
@@ -264,6 +278,8 @@ struct Fenster {
     schrift_fabrik: Zeiger,
     /// Die Schriften, die schon angelegt sind: (Größe mal 4, fett) -> Format.
     schriften: HashMap<(u32, bool), Zeiger>,
+    /// Texte mit bunten Zeichen, fertig gezeichnet als Bild (siehe [`oida_g_text`]).
+    text_bilder: HashMap<TextSchluessel, TextBild>,
     schrift: (u32, bool),
     breite: i32,
     hoehe: i32,
@@ -285,6 +301,8 @@ struct Fenster {
     maus_neu: [bool; 4],
     anfang: Instant,
     letztes: Instant,
+    /// Wann `fensta_offn()` zuletzt zum Programm zurückgekehrt ist.
+    zurueck: Instant,
     bild_zeit: f64,
     zeit: f64,
     /// Nur beim Zeichnen in Bilder: Ordner, Speicher-DC, Bild von Windows und seine Punkte.
@@ -405,6 +423,10 @@ unsafe extern "system" fn fenster_funktion(hwnd: Zeiger, art: u32, w: usize, l: 
 /// Legt die Zeichenfläche und den Pinsel an (am Anfang, und wenn Windows sie verloren hat).
 unsafe fn ziel_anlegen(f: &mut Fenster) {
     unsafe {
+        // Die fertigen Text-Bilder gehören zur alten Zeichenfläche.
+        for (_, bild) in f.text_bilder.drain() {
+            freigeben(bild.bild);
+        }
         freigeben(f.pinsel);
         freigeben(f.ziel);
         f.pinsel = std::ptr::null_mut();
@@ -485,6 +507,7 @@ pub unsafe extern "C" fn oida_g_auf(titel: *const TextKopf, breite: i64, hoehe: 
             pinsel: std::ptr::null_mut(),
             schrift_fabrik,
             schriften: HashMap::new(),
+            text_bilder: HashMap::new(),
             schrift: (16 * 4, false),
             breite: breite as i32,
             hoehe: hoehe as i32,
@@ -504,6 +527,7 @@ pub unsafe extern "C" fn oida_g_auf(titel: *const TextKopf, breite: i64, hoehe: 
             maus_neu: [false; 4],
             anfang: jetzt,
             letztes: jetzt,
+            zurueck: jetzt,
             bild_zeit: 0.0,
             zeit: 0.0,
             bilder_ordner,
@@ -655,8 +679,18 @@ pub extern "C" fn oida_g_offen() -> bool {
     let f = fenster();
     unsafe {
         if f.im_bild {
+            // So lang hat das Programm für dieses Bild gerechnet und gezeichnet.
+            let eintritt = Instant::now();
+            let arbeit = eintritt.duration_since(f.zurueck).as_nanos() as u64;
+            GEZAEHLTE_BILDER.fetch_add(1, Ordering::Relaxed);
+            ARBEIT_SUMME.fetch_add(arbeit, Ordering::Relaxed);
+            ARBEIT_LAENGSTE.fetch_max(arbeit, Ordering::Relaxed);
+            if arbeit > 16_000_000 {
+                ARBEIT_UEBER.fetch_add(1, Ordering::Relaxed);
+            }
             let ende: unsafe extern "system" fn(Zeiger, *mut u64, *mut u64) -> i32 = methode(f.ziel, ZIEL_ENDE);
             let ergebnis = ende(f.ziel, std::ptr::null_mut(), std::ptr::null_mut());
+            ANZEIGEN_SUMME.fetch_add(eintritt.elapsed().as_nanos() as u64, Ordering::Relaxed);
             f.im_bild = false;
             f.bilder += 1;
             if f.bilder_ordner.is_some() && f.bilder % f.bild_jedes == 0 {
@@ -712,6 +746,7 @@ pub extern "C" fn oida_g_offen() -> bool {
         f.gemerkt.clear();
         f.lage = Lage::GERADE;
         lage_setzen(f);
+        f.zurueck = Instant::now();
     }
     true
 }
@@ -1157,10 +1192,99 @@ unsafe fn schrift_format(f: &mut Fenster) -> Zeiger {
     }
 }
 
-/// `text_links`, `text_mittig`, `text_rechts`: schreibt mit der aktuellen
+/// Ein Text, der schon einmal gezeichnet wurde: Text, Schrift, Farbe,
+/// Ausrichtung und Vergrößerung (in Zweiunddreißigsteln).
+type TextSchluessel = (Vec<u8>, (u32, bool), [u32; 4], u8, u32);
+
+struct TextBild {
+    bild: Zeiger,
+    breite: f32,
+    hoehe: f32,
+    /// Das Bild, in dem es zuletzt gebraucht wurde.
+    gebraucht: u64,
+}
+
+/// Hat der Text Zeichen, die Windows bunt zeichnet (Emoji) oder aus einer
+/// Ersatzschrift holt (Pfeile, Sterne ...)? Die sind so langsam (über eine
+/// Millisekunde pro Text), dass sich ein fertiges Bild lohnt.
+fn bunt(text: &str) -> bool {
+    text.chars().any(|z| z as u32 >= 0x2190)
+}
+
+/// Wie ein Text am Punkt (x, y) hängt: Ausrichtung quer und hoch für
+/// DirectWrite, und wo im Kasten um den Text der Punkt sitzt (0 = links/oben,
+/// 0,5 = Mitte, 1 = rechts/unten).
+fn ausrichtung_teile(ausrichtung: i64) -> (u32, u32, f32, f32) {
+    match ausrichtung {
+        1 => (2, 2, 0.5, 0.5),
+        2 => (1, 0, 1.0, 0.0),
+        3 => (0, 2, 0.0, 0.5),
+        4 => (1, 2, 1.0, 0.5),
+        5 => (2, 1, 0.5, 1.0),
+        6 => (2, 0, 0.5, 0.0),
+        _ => (0, 0, 0.0, 0.0),
+    }
+}
+
+/// Zeichnet den Text einmal in ein eigenes Bild, mit durchsichtigem Grund.
+/// Das Bild ist `massstab`-mal so fein wie seine Größe in Einheiten, damit
+/// der Text auch im vergrößerten Fenster scharf bleibt.
+unsafe fn text_bild_anlegen(f: &mut Fenster, zeichen: &[u16], format: Zeiger, massstab: f32) -> Option<TextBild> {
+    unsafe {
+        let groesse = f.schrift.0 as f32 / 4.0;
+        let zeilen = zeichen.iter().filter(|z| **z == 10).count() as f32 + 1.0;
+        // Großzügig geschätzt: Wie breit der Text wirklich ist, muss niemand wissen,
+        // weil er im Bild genauso ausgerichtet ist wie später am Punkt.
+        let breite_roh = (zeichen.len() as f32 * groesse * 1.3 + 2.0 * groesse).min(4096.0);
+        let hoehe_roh = (groesse * 1.5 * zeilen + groesse * 0.5).min(4096.0);
+        // Gerade Zahlen von Bildpunkten, damit auch die Mitte auf einem Punkt liegt.
+        let punkte = [
+            (2.0 * (breite_roh * massstab / 2.0).ceil()).clamp(2.0, 8192.0) as u32,
+            (2.0 * (hoehe_roh * massstab / 2.0).ceil()).clamp(2.0, 8192.0) as u32,
+        ];
+        let mass = [punkte[0] as f32 / massstab, punkte[1] as f32 / massstab];
+        let anlegen: unsafe extern "system" fn(Zeiger, *const [f32; 2], *const [u32; 2], Zeiger, u32, *mut Zeiger) -> i32 =
+            methode(f.ziel, ZIEL_NEBENZIEL);
+        let mut neben = std::ptr::null_mut();
+        if anlegen(f.ziel, &mass, &punkte, std::ptr::null_mut(), 0, &mut neben) < 0 || neben.is_null() {
+            return None;
+        }
+        let anfang: unsafe extern "system" fn(Zeiger) = methode(neben, ZIEL_ANFANG);
+        let leeren: unsafe extern "system" fn(Zeiger, *const Farbe) = methode(neben, ZIEL_LEEREN);
+        let neuer_pinsel: unsafe extern "system" fn(Zeiger, *const Farbe, Zeiger, *mut Zeiger) -> i32 =
+            methode(neben, ZIEL_PINSEL);
+        let schreiben: unsafe extern "system" fn(Zeiger, *const u16, u32, Zeiger, *const Rechteck, Zeiger, u32, u32) =
+            methode(neben, ZIEL_TEXT);
+        let ende: unsafe extern "system" fn(Zeiger, *mut u64, *mut u64) -> i32 = methode(neben, ZIEL_ENDE);
+        let hol_bild: unsafe extern "system" fn(Zeiger, *mut Zeiger) -> i32 = methode(neben, NEBENZIEL_BILD);
+
+        let mut pinsel = std::ptr::null_mut();
+        let mut bild = std::ptr::null_mut();
+        anfang(neben);
+        leeren(neben, &Farbe { r: 0.0, g: 0.0, b: 0.0, a: 0.0 });
+        if neuer_pinsel(neben, &f.farbe, std::ptr::null_mut(), &mut pinsel) >= 0 && !pinsel.is_null() {
+            let flaeche = Rechteck { links: 0.0, oben: 0.0, rechts: mass[0], unten: mass[1] };
+            schreiben(neben, zeichen.as_ptr(), zeichen.len() as u32, format, &flaeche, pinsel, 4, 0);
+        }
+        let gut = ende(neben, std::ptr::null_mut(), std::ptr::null_mut()) >= 0 && hol_bild(neben, &mut bild) >= 0;
+        freigeben(pinsel);
+        freigeben(neben);
+        if !gut || bild.is_null() {
+            freigeben(bild);
+            return None;
+        }
+        Some(TextBild { bild, breite: mass[0], hoehe: mass[1], gebraucht: f.bilder })
+    }
+}
+
+/// `text_links`, `text_mittig`, `text_rechts` ...: schreibt mit der aktuellen
 /// Farbe und Schrift. `ausrichtung` 0: (x, y) ist links oben; 1: die Mitte;
 /// 2: rechts oben; 3: links, auf halber Höhe; 4: rechts, auf halber Höhe;
 /// 5: unten in der Mitte; 6: oben in der Mitte.
+///
+/// Texte mit bunten Zeichen (Emoji) werden beim ersten Mal in ein Bild
+/// gezeichnet und danach nur noch als Bild hingelegt: Windows braucht für
+/// so einen Text über eine Millisekunde, für das Bild fast nichts.
 ///
 /// # Safety
 /// `text` muss ein gültiger Text sein.
@@ -1168,50 +1292,59 @@ unsafe fn schrift_format(f: &mut Fenster) -> Zeiger {
 pub unsafe extern "C" fn oida_g_text(x: f64, y: f64, text: *const TextKopf, ausrichtung: i64) {
     let f = zeichnen();
     unsafe {
-        let zeichen: Vec<u16> = String::from_utf8_lossy(bytes(text)).encode_utf16().collect();
+        let inhalt = String::from_utf8_lossy(bytes(text));
+        let zeichen: Vec<u16> = inhalt.encode_utf16().collect();
         let format = schrift_format(f);
+        let (quer_art, hoch_art, anteil_x, anteil_y) = ausrichtung_teile(ausrichtung);
         let quer: unsafe extern "system" fn(Zeiger, u32) -> i32 = methode(format, FORMAT_QUER);
         let hoch: unsafe extern "system" fn(Zeiger, u32) -> i32 = methode(format, FORMAT_HOCH);
+        quer(format, quer_art);
+        hoch(format, hoch_art);
         let (x, y) = (x as f32, y as f32);
+
+        if bunt(&inhalt) {
+            let lage = f.lage;
+            let massstab = ((lage.m11 * lage.m11 + lage.m12 * lage.m12).sqrt() * 32.0).round().clamp(1.0, 32.0 * 16.0);
+            let farbe = [f.farbe.r.to_bits(), f.farbe.g.to_bits(), f.farbe.b.to_bits(), f.farbe.a.to_bits()];
+            let schluessel: TextSchluessel = (bytes(text).to_vec(), f.schrift, farbe, ausrichtung.clamp(0, 6) as u8, massstab as u32);
+            if !f.text_bilder.contains_key(&schluessel) {
+                // Wird es zu viel, fliegt hinaus, was schon länger niemand gebraucht hat.
+                if f.text_bilder.len() >= 400 {
+                    let jetzt = f.bilder;
+                    f.text_bilder.retain(|_, bild| {
+                        let bleibt = bild.gebraucht + 300 >= jetzt;
+                        if !bleibt {
+                            freigeben(bild.bild);
+                        }
+                        bleibt
+                    });
+                }
+                if let Some(bild) = text_bild_anlegen(f, &zeichen, format, massstab / 32.0) {
+                    f.text_bilder.insert(schluessel.clone(), bild);
+                }
+            }
+            let jetzt = f.bilder;
+            if let Some(bild) = f.text_bilder.get_mut(&schluessel) {
+                bild.gebraucht = jetzt;
+                let (mut links, mut oben) = (x - anteil_x * bild.breite, y - anteil_y * bild.hoehe);
+                // Ohne Drehung genau auf die Bildpunkte gelegt, sonst wird der Text unscharf.
+                if lage.m12 == 0.0 && lage.m21 == 0.0 && lage.m11 > 0.0 && lage.m22 > 0.0 {
+                    links = ((links * lage.m11 + lage.dx).round() - lage.dx) / lage.m11;
+                    oben = ((oben * lage.m22 + lage.dy).round() - lage.dy) / lage.m22;
+                }
+                let flaeche = Rechteck { links, oben, rechts: links + bild.breite, unten: oben + bild.hoehe };
+                let zeichne: unsafe extern "system" fn(Zeiger, Zeiger, *const Rechteck, f32, u32, *const Rechteck) =
+                    methode(f.ziel, ZIEL_BILD);
+                zeichne(f.ziel, bild.bild, &flaeche, f.deckung, 1, std::ptr::null());
+                return;
+            }
+            // Hat das Bild nicht geklappt, wird der Text eben direkt gezeichnet.
+        }
+
         // Ein großzügiger Rahmen um den Punkt; Direct2D richtet den Text darin aus.
         const WEIT: f32 = 100_000.0;
-        let flaeche = match ausrichtung {
-            1 => {
-                quer(format, 2);
-                hoch(format, 2);
-                Rechteck { links: x - WEIT, oben: y - WEIT, rechts: x + WEIT, unten: y + WEIT }
-            }
-            2 => {
-                quer(format, 1);
-                hoch(format, 0);
-                Rechteck { links: x - WEIT, oben: y, rechts: x, unten: y + WEIT }
-            }
-            3 => {
-                quer(format, 0);
-                hoch(format, 2);
-                Rechteck { links: x, oben: y - WEIT, rechts: x + WEIT, unten: y + WEIT }
-            }
-            4 => {
-                quer(format, 1);
-                hoch(format, 2);
-                Rechteck { links: x - WEIT, oben: y - WEIT, rechts: x, unten: y + WEIT }
-            }
-            5 => {
-                quer(format, 2);
-                hoch(format, 1);
-                Rechteck { links: x - WEIT, oben: y - WEIT, rechts: x + WEIT, unten: y }
-            }
-            6 => {
-                quer(format, 2);
-                hoch(format, 0);
-                Rechteck { links: x - WEIT, oben: y, rechts: x + WEIT, unten: y + WEIT }
-            }
-            _ => {
-                quer(format, 0);
-                hoch(format, 0);
-                Rechteck { links: x, oben: y, rechts: x + WEIT, unten: y + WEIT }
-            }
-        };
+        let (links, oben) = (x - anteil_x * 2.0 * WEIT, y - anteil_y * 2.0 * WEIT);
+        let flaeche = Rechteck { links, oben, rechts: links + 2.0 * WEIT, unten: oben + 2.0 * WEIT };
         let p = pinsel(f);
         let schreiben: unsafe extern "system" fn(Zeiger, *const u16, u32, Zeiger, *const Rechteck, Zeiger, u32, u32) =
             methode(f.ziel, ZIEL_TEXT);
@@ -1343,6 +1476,20 @@ mod tests {
         assert_eq!(tasten_nummer(b"links"), 0x25);
         assert_eq!(tasten_nummer(b"LAA"), 0x20);
         assert_eq!(tasten_nummer(b"F5"), 0x74);
+    }
+
+    #[test]
+    fn bunte_texte_und_ausrichtung() {
+        assert!(!bunt("HP  100 / 100"));
+        assert!(!bunt("Zeit: 00:12 • ä ö ü ß —"));
+        assert!(bunt("☠ 12"));
+        assert!(bunt("🔥"));
+        assert!(bunt("★ BIG BOSS ★"));
+        // links oben, Mitte, rechts unten ...
+        assert_eq!(ausrichtung_teile(0), (0, 0, 0.0, 0.0));
+        assert_eq!(ausrichtung_teile(1), (2, 2, 0.5, 0.5));
+        assert_eq!(ausrichtung_teile(4), (1, 2, 1.0, 0.5));
+        assert_eq!(ausrichtung_teile(5), (2, 1, 0.5, 1.0));
     }
 
     #[test]

@@ -928,6 +928,19 @@ pub extern "C" fn oida_ende() {
     if zustand().pruefen {
         eprintln!("OIDA: {} Texte, Listen und Objekte übrig", zustand().lebende_texte);
     }
+    if std::env::var_os("OIDA_FENSTER_PRUEFEN").is_some_and(|w| !w.is_empty()) {
+        use std::sync::atomic::Ordering;
+        let bilder = fenster::GEZAEHLTE_BILDER.load(Ordering::Relaxed);
+        let ms = |nanos: u64| nanos as f64 / 1e6;
+        let mittel = |summe: u64| if bilder == 0 { 0.0 } else { ms(summe) / bilder as f64 };
+        eprintln!(
+            "OIDA: {bilder} Büda; Rechnen und Zeichnen im Schnitt {:.2} ms, am längsten {:.2} ms, {} moi üba 16 ms; Auzeign im Schnitt {:.2} ms",
+            mittel(fenster::ARBEIT_SUMME.load(Ordering::Relaxed)),
+            ms(fenster::ARBEIT_LAENGSTE.load(Ordering::Relaxed)),
+            fenster::ARBEIT_UEBER.load(Ordering::Relaxed),
+            mittel(fenster::ANZEIGEN_SUMME.load(Ordering::Relaxed)),
+        );
+    }
     if std::env::var_os("OIDA_TON_PRUEFEN").is_some_and(|w| !w.is_empty()) {
         use std::sync::atomic::Ordering;
         eprintln!(

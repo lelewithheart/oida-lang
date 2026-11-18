@@ -537,6 +537,12 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             "Verzeichnis: zu einem Schlüssel einen Wert merken",
         ),
         (
+            w(Const).to_string(),
+            w(Const).to_string(),
+            vec![format!("{} ${{1:NAME}} = ${{2:0}} {}", w(Const), w(Oida))],
+            "Fester Wert, der im ganzen Programm gilt",
+        ),
+        (
             "fensta".to_string(),
             "fensta".to_string(),
             vec![

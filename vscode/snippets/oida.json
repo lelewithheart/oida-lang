@@ -85,6 +85,11 @@
     "body": ["SOG AU ${1:name} = VAZEICHNIS VON ${2:KETTN} UND ${3:ZOI}() OIDA"],
     "description": "Verzeichnis: zu einem Schlüssel einen Wert merken"
   },
+  "FIX": {
+    "prefix": "fix",
+    "body": ["FIX ${1:NAME} = ${2:0} OIDA"],
+    "description": "Fester Wert, der im ganzen Programm gilt"
+  },
   "fensta": {
     "prefix": "fensta",
     "body": ["BRAUCH fensta OIDA", "", "fensta_auf(\"${1:Mei Programm}\", ${2:800}, ${3:600}) OIDA", "SOLONG fensta_offn() TUA", "\tfoab(20, 20, 40) OIDA", "\thintagrund() OIDA", "\t$0", "PASST SCHO"],

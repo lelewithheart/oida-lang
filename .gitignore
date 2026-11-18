@@ -10,3 +10,7 @@
 
 # Die gepackte VS-Code-Erweiterung (entsteht mit vscode/bauen.ps1)
 /vscode/*.vsix
+
+# Was die Beispielspiele beim Spielen anlegen
+roguewave_bestenlistn_*.txt
+sternfanga_bestes.txt

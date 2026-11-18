@@ -106,6 +106,7 @@
     { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])BIS(?![\\p{L}\\p{N}_])" },
     { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])MEI(?![\\p{L}\\p{N}_])" },
     { "name": "constant.language.boolean.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])NIX(?![\\p{L}\\p{N}_])" },
+    { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])FIX(?![\\p{L}\\p{N}_])" },
     { "name": "constant.numeric.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])PI(?![\\p{L}\\p{N}_])" },
     { "name": "keyword.control.oida", "match": "(?i)(?<![\\p{L}\\p{N}_])IN(?![\\p{L}\\p{N}_])" },
     { "name": "entity.name.function.oida", "match": "[\\p{L}_][\\p{L}\\p{N}_]*(?=\\s*\\()" },

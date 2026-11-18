@@ -34,12 +34,12 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.8.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.9.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
-mehreren Dateien und eine mitgelieferte Bibliothek sind da. Neu: ein eigenes
-[Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen, mit Tasten und Maus, dazu
-[Töne](#töne) und [Dateien](#dateien); damit geht ein kleines Spiel
-([`beispiele/spui/sternfanga.oida`](beispiele/spui/sternfanga.oida)).
+mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
+[Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
+[Töne](#töne) und [Dateien](#dateien) sind da. Neu: Damit ist ein ganzes Spiel geschrieben,
+[RogueWave](#ein-ganzes-spiel-roguewave), rund 2500 Zeilen OIDA.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -135,7 +135,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.8)
+## Die Sprache (v0.9)
 
 ### Typen
 
@@ -161,6 +161,32 @@ alter = alter + 1 OIDA
 
 Eine Variable behält ihren Typ. `alter = "siebzehn" OIDA` ist ein Fehler.
 Eine Variable gilt nur in dem Block (`WENN`, `SOLONG`, Funktion), in dem sie angesagt wurde.
+Eine Funktion sieht also nicht, was außerhalb von ihr angesagt wurde. Was überall gelten soll
+und sich nie ändert, sagt man mit `FIX` an:
+
+### Feste Werte: FIX
+
+```
+FIX BREITE = 960 OIDA
+FIX HÖHE = 640 OIDA
+FIX MITTE_X = BREITE / 2 OIDA               # aus anderen festen Werten gerechnet
+FIX TEMPO KOMMAZOI = 200 OIDA               # Typ dazuschreiben geht auch: 200.0
+FIX TITL = "Mei Spü" OIDA
+
+FUNKTIAUN is_drin(x KOMMAZOI) GIBT ZRUCK JONA
+    GIB ZRUCK x >= 0 UND x < BREITE OIDA    # gilt auch hier, ohne dass man es übergibt
+PASST SCHO
+
+SCHREIB(TITL, MITTE_X, TEMPO, is_drin(1000)) OIDA    # Mei Spü 480 200.0 FOISCH
+```
+
+- `FIX` steht ganz außen (nicht in einer Funktion) und gilt im ganzen Programm, auch in
+  Funktionen, Methoden und in Dateien, die mit `BRAUCH` zusammengehören. Die Reihenfolge ist egal.
+- Der Wert muss schon beim Übersetzen feststehen: Zahlen, Texte, `WOAHR`/`FOISCH`, Rechnen damit,
+  andere feste Werte und Rechenfunktionen wie `WURZL`. Eine Eingabe oder `ZUFOI()` geht nicht.
+- Ändern kann man ihn nicht (`BREITE = 5 OIDA` ist ein Fehler). Es geht nur `ZOI`, `KOMMAZOI`,
+  `JONA` und `KETTN`.
+- Eine Variable oder ein Parameter mit demselben Namen verdeckt den festen Wert dort, wo sie gilt.
 
 ### Rechnen und Vergleichen
 
@@ -189,6 +215,10 @@ PASST SCHO
 ```
 
 `SUNST` und `SUNST WENN` sind freiwillig. Nach `PASST SCHO` darf ein `OIDA` stehen, muss aber nicht.
+
+`SUNST WENN` gehört nur zusammen, wenn beides in derselben Zeile steht; dann reicht ein
+`PASST SCHO` für die ganze Kette. Steht das `WENN` in der Zeile nach `SUNST`, ist es eine eigene
+Anweisung im `SUNST`-Teil und braucht sein eigenes `PASST SCHO`.
 
 ### Schleifen
 
@@ -865,6 +895,7 @@ geht auch eine `ZOI`.
 | `rechteck(x, y, breite, höhe)` | gefüllt; (x, y) ist die linke obere Ecke |
 | `rechteck_rund(x, y, breite, höhe, radius)` | mit runden Ecken |
 | `rechteck_rand(x, y, breite, höhe, dicke)` | nur der Rand |
+| `rechteck_rund_rand(x, y, breite, höhe, radius, dicke)` | nur der Rand, mit runden Ecken |
 | `kreis(x, y, radius)`, `ellipsn(x, y, radius_x, radius_y)` | gefüllt; (x, y) ist die Mitte |
 | `kreis_rand(x, y, radius, dicke)` | nur die Kreislinie |
 | `bogn(x, y, radius, von_winkl, bis_winkl, dicke)` | ein Stück Kreislinie (0 zeigt nach rechts, weiter im Uhrzeigersinn) |
@@ -872,6 +903,8 @@ geht auch eine `ZOI`.
 | `dreieck(x1, y1, x2, y2, x3, y3)` | gefüllt |
 | `vieleck(punkte)` | gefüllte Form durch die Punkte `[x, y, x, y, ...]` |
 | `linienzug(punkte, dicke, zua)` | Linien von Punkt zu Punkt; mit `zua = WOAHR` zurück zum ersten |
+| `gstrichlt(strich, lückn)` | Ränder und Linien sind ab jetzt gestrichelt: so lang der Strich, so lang die Lücke |
+| `durchzogn()` | ... und ab jetzt wieder durchgezogen |
 
 | Text | |
 |---|---|
@@ -879,6 +912,11 @@ geht auch eine `ZOI`.
 | `text_links(x, y, inhalt)` | (x, y) ist die linke obere Ecke |
 | `text_mittig(x, y, inhalt)` | (x, y) ist die Mitte |
 | `text_rechts(x, y, inhalt)` | (x, y) ist die rechte obere Ecke |
+| `text_links_mitte(x, y, inhalt)` | der Text fängt bei x an, y ist seine halbe Höhe |
+| `text_rechts_mitte(x, y, inhalt)` | der Text hört bei x auf, y ist seine halbe Höhe |
+| `text_drüba(x, y, inhalt)`, `text_drunta(x, y, inhalt)` | mittig über bzw. unter dem Punkt |
+
+Die Schrift ist Segoe UI. Bunte Zeichen (Emoji wie 🏆 oder 🔥) gehen im Text und bleiben bunt.
 
 | Verschieben, drehen, vergrößern | |
 |---|---|
@@ -911,14 +949,23 @@ davorsitzt. Dafür gibt es Umgebungsvariablen:
 | `OIDA_FENSTER_TASTEN=RECHTS@10-50,LAA@20` | Tasten nach Drehbuch: `RECHTS` in den Bildern 10 bis 50, die Leertaste im Bild 20 |
 | `OIDA_SOMEN=<zahl>` | der Zufall fängt immer gleich an |
 | `OIDA_TON_AUS=1` | kein Ton |
+| `OIDA_FENSTER_PRUEFEN=1` | meldet am Ende, wie lang das Programm für ein Bild gerechnet und gezeichnet hat |
 
-So spielen die Tests von OIDA das Beispielspiel durch und schauen einzelne Bildpunkte nach.
+So spielen die Tests von OIDA die Beispielspiele durch und schauen einzelne Bildpunkte nach.
+
+Für 60 Bilder in der Sekunde hat ein Bild 16,7 Millisekunden. `OIDA_FENSTER_PRUEFEN=1` zeigt, wie
+viel davon das eigene Programm braucht:
+
+```
+OIDA: 900 Büda; Rechnen und Zeichnen im Schnitt 3.27 ms, am längsten 99.63 ms, 5 moi üba 16 ms; Auzeign im Schnitt 13.52 ms
+```
 
 ### Töne
 
 `BRAUCH ton OIDA` macht Klänge, wie ein Spiel sie braucht. Sie werden errechnet, nicht aus
-Dateien gelesen. Jeder Ton wird von selbst leiser und hört auf, mehrere können zugleich laufen,
-und die Funktionen kommen sofort zurück.
+Dateien gelesen. Jeder Ton wird von selbst leiser (am Anfang schnell, dann langsamer, wie eine
+angeschlagene Saite) und hört auf, mehrere können zugleich laufen, und die Funktionen kommen
+sofort zurück.
 
 ```
 BRAUCH ton OIDA
@@ -939,6 +986,49 @@ wart(0.5) OIDA
 | `rauschn(dauer, laut)` | ein Rauschen |
 | `lautstärke(wert)` | für alle Töne zusammen: 0 ist stumm, 1 normal |
 | `wart(sekunden)` | Pause; Töne laufen weiter. Hört das Programm auf, hören auch sie auf |
+| `ton_zeit()` | die Uhr der Töne in Sekunden; sie läuft ganz gleichmäßig, sobald der erste Ton gespielt wurde |
+| `ton_um(wann, art, höhe, dauer, laut)` | ein Ton, der anfängt, wenn die Uhr der Töne bei `wann` steht |
+| `ton_gleitend_um(wann, art, von_höhe, bis_höhe, dauer, laut)` | dasselbe für einen gleitenden Ton |
+
+Mit `ton_um` plant man Musik: In jedem Bild die Noten der nächsten Fünftelsekunde einplanen, und
+der Takt bleibt genau, auch wenn das Programm einmal ruckelt (so macht es
+[`beispiele/roguewave/klang.oida`](beispiele/roguewave/klang.oida)).
+
+### Ein ganzes Spiel: RogueWave
+
+![RogueWave in OIDA](beispiele/roguewave/roguewave.png)
+
+[`beispiele/roguewave/`](beispiele/roguewave/) ist ein Survivor-Roguelite, nachgebaut nach einem
+Browserspiel in JavaScript: Die Figur schießt von selbst, Gegner kommen in Wellen, für Erfahrung
+gibt es Verbesserungen, alle fünf Wellen kommt ein Boss, nach Welle 25 hat man gewonnen.
+
+```
+target\release\oida beispiele\roguewave\roguewave.oida --renn
+```
+
+WASD oder die Pfeiltasten bewegen, `1` bis `3` (oder ein Klick) wählt eine Verbesserung, `ESC`
+führt zu den Einstellungen, `ENTER` startet.
+
+| Datei | Was drinsteht |
+|---|---|
+| `roguewave.oida` | das Hauptprogramm: Fenster auf, und die Schleife für jedes Bild |
+| `werte.oida` | die festen Werte (`FIX`): Größen, Tempo, Farben |
+| `dinge.oida` | Spielfigur, Schüsse, Erfahrung, Funken und die Gegner: sieben Arten als Klassen, die vom gewöhnlichen Gegner erben und anders aussehen oder sich anders bewegen |
+| `spü.oida` | die Regeln: was in jedem Bild passiert, die vier Waffen, die Wellen |
+| `vabessarungen.oida` | 27 Verbesserungen als Liste; was jede tut, steht als Funktion dabei |
+| `klang.oida` | Geräusche und die Musik (64 Achtelnoten, die sich wiederholen) |
+| `bestenlistn.oida` | die fünf besten Läufe je Spielart, in Dateien gemerkt |
+| `büdschirm.oida` | alles, was gezeichnet wird: Spielfeld, Anzeige, Menüs |
+
+Das fertige Programm hat 560 KB und braucht keine weiteren Dateien. Im Getümmel einer späten
+Welle (über 60 Gegner, 150 Funken, alle Waffen) rechnet und zeichnet es ein Bild in rund 3
+Millisekunden, das Rechnen allein dauert unter 0,1 Millisekunden.
+
+Was anders ist als im Original: Werbung, Online-Bestenliste und Bedienung am Handy gibt es nicht
+(die hingen am Browser). Treffer werden für jeden Schuss gegen alle Gegner geprüft statt über ein
+Raster, und ein Gegner, der schon tot ist, kann nicht noch einmal getroffen und gezählt werden.
+Die Bestenlisten liegen als `roguewave_bestenlistn_<spielart>.txt` in dem Ordner, in dem das
+Spiel gestartet wurde.
 
 ### Kommentare
 
@@ -1033,7 +1123,8 @@ steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
 ```
 woerterbuch.txt        die Wörter der Sprache
 beispiele/             Beispielprogramme, jeweils mit der erwarteten Ausgabe (.erwartet)
-  spui/                  ein Spiel mit Fenster
+  spui/                  ein kleines Spiel mit Fenster
+  roguewave/             ein ganzes Spiel in acht Dateien
 bibliothek/            die mitgelieferte Bibliothek, in OIDA geschrieben (wird in oida.exe eingebaut)
 uebersetzer/           der Compiler (Rust), ergibt oida.exe
   src/woerterbuch.rs     Wörterbuch lesen, längster Treffer gewinnt
@@ -1076,8 +1167,10 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - Strukturen und Listen kann man nicht mit `=` vergleichen.
 - Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
-- Im Fenster fehlen noch: Bilder aus Dateien (PNG), Farbverläufe, gestrichelte Linien, getippter
-  Text als Eingabe, Mausrad, Gamepad, Vollbild und mehr als ein Fenster.
+- Im Fenster fehlen noch: Bilder aus Dateien (PNG), Farbverläufe, getippter Text als Eingabe,
+  Mausrad, Gamepad, Vollbild und mehr als ein Fenster.
+- Tasten heißen nach dem, was auf ihnen steht, nicht nach ihrem Platz: Auf einer französischen
+  Tastatur liegt `"W"` woanders.
 - Töne werden nur errechnet; Tondateien abspielen geht nicht.
 - Dateien gehen nur als ganzer Text (UTF-8); Ordner auflisten oder anlegen geht nicht.
 - Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
@@ -1107,7 +1200,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 5 | Vorlagen (Generics), Funktionen als Werte, das Verzeichnis (Schlüssel → Wert) | fertig |
 | 6 | Programme aus mehreren Dateien, Bibliothek in OIDA | fertig |
 | 7 | Fenster, Grafik, Tasten, Ton und Dateien, direkt über Windows | fertig |
-| 8 | Das Spiel nachbauen | offen |
+| 8 | Das Spiel nachbauen: [RogueWave](#ein-ganzes-spiel-roguewave); dazu feste Werte (`FIX`) | fertig |
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind
