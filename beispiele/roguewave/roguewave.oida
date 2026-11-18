@@ -1,0 +1,70 @@
+# RogueWave: ein Survivor-Roguelite, ganz in OIDA.
+#
+# Nachgebaut nach dem gleichnamigen Browserspiel (JavaScript und Canvas),
+# hier als eigenes Programm mit eigenem Fenster.
+#
+#   WASD oder Pfeiltasten   bewegen (geschossen wird von selbst)
+#   1, 2, 3 oder Mausklick  eine Verbesserung wählen
+#   ESC                     Einstellungen und zurück
+#   ENTER                   starten, und nach dem Ende noch einmal
+#
+#   oida beispiele\roguewave\roguewave.oida --renn
+#
+# Die Teile:
+#   werte.oida           die festen Werte (Größen, Tempo, Farben ...)
+#   dinge.oida           Spielfigur, Schüsse, Gegner, Erfahrung, Funken
+#   klang.oida           Geräusche und Musik
+#   vabessarungen.oida   was man beim Stufenaufstieg wählen kann
+#   bestenlistn.oida     die besten Läufe, in Dateien gemerkt
+#   spü.oida             die Regeln: was in jedem Bild passiert
+#   büdschirm.oida       alles, was gezeichnet wird
+
+BRAUCH fensta OIDA
+BRAUCH "werte.oida" OIDA
+BRAUCH "dinge.oida" OIDA
+BRAUCH "klang.oida" OIDA
+BRAUCH "vabessarungen.oida" OIDA
+BRAUCH "bestenlistn.oida" OIDA
+BRAUCH "spü.oida" OIDA
+BRAUCH "büdschirm.oida" OIDA
+
+fensta_auf("RogueWave", FELD_B, FELD_H) OIDA
+
+SOG AU spü = Spü(Spiela(WELT_B / 2, WELT_H / 2, SPIELA_RADIUS), Kamera(), Klang(melodie(), bass()), Bestenlistn(), olle_vabessarungen()) OIDA
+spü.von_vuan() OIDA
+
+SOLONG fensta_offn() TUA
+    # Das Spielfeld hat immer 960 mal 640 Punkte. Ist das Fenster größer,
+    # wird es vergrößert und in die Mitte gesetzt.
+    SOG AU maß = KLANSTA(KOMMAZOI(fensta_breite()) / FELD_B, KOMMAZOI(fensta_höhe()) / FELD_H) OIDA
+    SOG AU links = (fensta_breite() - FELD_B * maß) / 2 OIDA
+    SOG AU obn = (fensta_höhe() - FELD_H * maß) / 2 OIDA
+
+    spü.jetzt = zeit() * 1000 OIDA
+    spü.maus_x = (maus_x() - links) / maß OIDA
+    spü.maus_y = (maus_y() - obn) / maß OIDA
+    spü.klick = maus_taste_neich(1) OIDA
+
+    spü.weida_um(büd_zeit()) OIDA
+
+    foab(0, 0, 0) OIDA
+    hintagrund() OIDA
+    lage_merkn() OIDA
+    schiab(links, obn) OIDA
+    vergrößa(maß) OIDA
+    moi_ollas(spü) OIDA
+    lage_zruck() OIDA
+
+    # Was über das Spielfeld hinausragt, verschwindet hinter schwarzen Balken.
+    foab(0, 0, 0) OIDA
+    WENN links > 0 DAUN
+        rechteck(0, 0, links, fensta_höhe()) OIDA
+        rechteck(fensta_breite() - links, 0, links, fensta_höhe()) OIDA
+    PASST SCHO
+    WENN obn > 0 DAUN
+        rechteck(0, 0, fensta_breite(), obn) OIDA
+        rechteck(0, fensta_höhe() - obn, fensta_breite(), obn) OIDA
+    PASST SCHO
+PASST SCHO
+
+SCHREIB("Wave", spü.wön, "- Kills", spü.tote, "- Level", spü.spiela.stufn, "- Zeit", zeit_text(spü.spüzeit)) OIDA

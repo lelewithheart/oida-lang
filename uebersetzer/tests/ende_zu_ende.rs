@@ -426,3 +426,131 @@ fn spiel_laeuft_nach_drehbuch() {
     // Wer stehen bleibt, wird erwischt: Nach drei Treffern ist das Spiel aus, ESC beendet es.
     assert_eq!(spiel("2000", "ESC@1990"), "Punkte: 0 - Bestes: 10\n");
 }
+
+/// Wie viele Punkte im Rechteck `passt` erfüllen.
+fn zaehle(bild: &Bild, x: std::ops::Range<usize>, y: std::ops::Range<usize>, passt: impl Fn((u8, u8, u8)) -> bool) -> usize {
+    y.flat_map(|y| x.clone().map(move |x| (x, y))).filter(|(x, y)| passt(bild.farbe(*x, *y))).count()
+}
+
+#[test]
+fn roguewave_geht_durch_alle_zustaende() {
+    // Das große Beispiel: ein ganzes Spiel in OIDA. Ein Prüfprogramm holt sich
+    // seine Teile dazu und führt es durch Menü, Spiel mit allen Waffen und
+    // Gegnern, Boss, Einstellungen, Ende, Sieg und Bestenliste.
+    let arbeit = arbeitsordner("roguewave_probe");
+    let exe = arbeit.join("probe.exe");
+    let quelle = tests().join("fenster").join("roguewave_probe.oida");
+    uebersetze(&quelle, &exe, &[]);
+    let lauf = befehl(&exe, None)
+        .env("OIDA_FENSTER_BILDER", &arbeit)
+        .env("OIDA_FENSTER_BILD_JEDES", "250")
+        .env("OIDA_FENSTER_TASTEN", "D@251-1750")
+        .env("OIDA_TEXTE_PRUEFEN", "1")
+        .output()
+        .unwrap();
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert_eq!(text(&lauf.stdout), lies(&quelle.with_extension("erwartet")));
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+
+    let bild = |nummer: usize| {
+        let bild = Bild::lies(&arbeit.join(format!("bild_{nummer}.bmp")));
+        assert_eq!((bild.breite, bild.hoehe), (960, 640));
+        bild
+    };
+    let grund = (17, 17, 34);
+    // Ein Knopf: die Akzentfarbe, leicht durchscheinend über dem Hintergrund.
+    let knopf = (46, 176, 222);
+    let gold = |f: (u8, u8, u8)| f.0 > 150 && f.1 > 120 && f.2 < 60 && f.0 > f.1;
+
+    // Das Menü: Titel, die drei Spielarten, die zwei Knöpfe
+    let menue = bild(250);
+    menue.pruefe(5, 5, grund, "Hintergrund im Menü");
+    assert!(menue.andere(300..660, 165..215, grund) > 3000, "der Titel fehlt");
+    menue.pruefe(380, 345, knopf, "Knopf PLAY");
+    menue.pruefe(380, 415, knopf, "Knopf SETTINGS");
+    menue.pruefe(420, 275, (48, 185, 233), "gewählte Spielart NORMAL");
+
+    // Mitten im Spiel: die Balken oben, die vier Waffen links unten
+    let spiel = bild(1750);
+    spiel.pruefe(30, 20, (255, 51, 68), "Lebensbalken");
+    spiel.pruefe(20, 44, (68, 170, 255), "Erfahrungsbalken");
+    for waffe in 0..4 {
+        let hell = zaehle(&spiel, 16 + waffe * 50..46 + waffe * 50, 600..630, |f| f.0.max(f.1).max(f.2) > 150);
+        assert!(hell > 100, "Waffe {waffe} fehlt in der Anzeige");
+    }
+
+    // Die Auswahl nach dem großen Boss: goldene Überschrift, vier Karten
+    let wahl = bild(2000);
+    assert!(zaehle(&wahl, 250..760, 100..140, gold) > 1500, "die goldene Überschrift fehlt");
+    for karte in 0..4 {
+        let x = 35 + karte * 230;
+        // Der Rand der Karte ist heller als ihr Inneres.
+        let rand = wahl.farbe(x + 100, 200);
+        let innen = wahl.farbe(x + 20, 320);
+        assert!(rand.0 > innen.0 + 20, "Karte {karte}: Rand {rand:?}, innen {innen:?}");
+    }
+
+    // Der große Boss: sein Lebensbalken unten in der Mitte
+    let boss = bild(2500);
+    boss.pruefe(290, 587, (204, 0, 0), "Lebensbalken vom Boss");
+
+    // Die Einstellungen decken das Spiel zu.
+    let einstellungen = bild(2750);
+    einstellungen.pruefe(5, 5, (11, 11, 30), "Hintergrund der Einstellungen");
+    for y in [150, 210, 270, 552] {
+        einstellungen.pruefe(350, y, knopf, "Knopf in den Einstellungen");
+    }
+
+    // Aus: rote Überschrift. Gewonnen: goldene.
+    let aus = bild(3000);
+    let rot = |f: (u8, u8, u8)| f.0 > 230 && (50..95).contains(&f.1) && (80..125).contains(&f.2);
+    assert!(zaehle(&aus, 340..620, 190..235, rot) > 1500, "GAME OVER fehlt");
+    let gewonnen = bild(3250);
+    assert!(zaehle(&gewonnen, 300..660, 185..240, gold) > 1500, "YOU WIN fehlt");
+    let _ = bild(3500);
+
+    // Die Bestenlisten liegen als Dateien da: eine Zeile pro Lauf.
+    let normal = lies(&arbeit.join("roguewave_bestenlistn_normal.txt"));
+    assert_eq!(normal.lines().count(), 1);
+    assert!(normal.starts_with("lauf") && normal.contains(";10;") && normal.ends_with(";na\n"), "{normal}");
+    let leicht = lies(&arbeit.join("roguewave_bestenlistn_easy.txt"));
+    let zeilen: Vec<&str> = leicht.lines().collect();
+    assert_eq!(zeilen.len(), 2);
+    assert!(zeilen[0].contains(";25;0;") && zeilen[0].ends_with(";jo"), "{leicht}");
+    assert!(zeilen[1].contains(";1;") && zeilen[1].ends_with(";na"), "{leicht}");
+}
+
+#[test]
+fn roguewave_spielt_sich() {
+    // Das Spiel selbst, wie es jemand startet: ENTER, herumlaufen, bei jedem
+    // Aufstieg die erste Verbesserung nehmen. Eine halbe Minute nach Drehbuch.
+    let arbeit = arbeitsordner("roguewave");
+    let exe = arbeit.join("roguewave.exe");
+    uebersetze(&wurzel().join("beispiele").join("roguewave").join("roguewave.oida"), &exe, &[]);
+    let mut tasten = String::from("ENTER@5");
+    for runde in 0..9 {
+        let a = 10 + runde * 200;
+        tasten += &format!(",RECHTS@{}-{},S@{}-{},A@{}-{},AUFFE@{}-{}", a, a + 50, a + 50, a + 100, a + 100, a + 150, a + 150, a + 199);
+    }
+    for mal in 1..=30 {
+        tasten += &format!(",1@{}", mal * 60);
+    }
+    let lauf = befehl(&exe, None)
+        .env("OIDA_SOMEN", "7")
+        .env("OIDA_FENSTER_BILDER", &arbeit)
+        .env("OIDA_FENSTER_BILD_JEDES", "900")
+        .env("OIDA_FENSTER_ENDE", "1800")
+        .env("OIDA_FENSTER_TASTEN", &tasten)
+        .env("OIDA_TEXTE_PRUEFEN", "1")
+        .output()
+        .unwrap();
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+    assert_eq!(text(&lauf.stdout), "Wave 2 - Kills 15 - Level 2 - Zeit 00:29\n");
+    let bild = Bild::lies(&arbeit.join("bild_1800.bmp"));
+    assert_eq!((bild.breite, bild.hoehe), (960, 640));
+    bild.pruefe(30, 20, (255, 51, 68), "Lebensbalken");
+    // Die Spielfigur ist in der Nähe der Mitte zu sehen (die Kamera zieht etwas nach).
+    let figur = zaehle(&bild, 380..580, 220..420, |f| f == (51, 204, 255));
+    assert!(figur > 300, "von der Spielfigur sind nur {figur} Punkte da");
+}

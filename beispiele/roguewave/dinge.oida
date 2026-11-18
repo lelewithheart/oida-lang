@@ -1,0 +1,537 @@
+# RogueWave: alles, was sich in der Welt bewegt.
+
+BRAUCH fensta OIDA
+BRAUCH mathe OIDA
+BRAUCH "werte.oida" OIDA
+
+# Alles mit einem Platz und einer Größe. Zwei Dinge treffen sich, wenn ihre Kreise sich schneiden.
+KLASSE Ding
+    x KOMMAZOI
+    y KOMMAZOI
+    radius KOMMAZOI
+    lebt JONA = WOAHR
+
+    FUNKTIAUN trifft(wen Ding) GIBT ZRUCK JONA
+        GIB ZRUCK abstand(MEI.x, MEI.y, wen.x, wen.y) < MEI.radius + wen.radius OIDA
+    PASST SCHO
+PASST SCHO
+
+# ------------------------------------------------------------- Spielfigur
+
+KLASSE Spiela ERBT VON Ding
+    lebn KOMMAZOI = SPIELA_LEBN
+    max_lebn ZOI = SPIELA_LEBN
+    tempo KOMMAZOI = SPIELA_TEMPO
+    schodn ZOI = SPIELA_SCHODN
+    schuss_pause KOMMAZOI = SPIELA_SCHUSS_PAUSE
+    schuss_uhr KOMMAZOI = 0.0
+    xp ZOI = 0
+    stufn ZOI = 1
+    xp_ziel ZOI = 50
+    # Wohin die Figur schaut (und schießt), im Bogenmaß.
+    richtung KOMMAZOI = 0.0
+    # Kurz nach einem Treffer kann ihr nichts passieren.
+    schutz KOMMAZOI = 0.0
+
+    rüstung ZOI = 0                 # so viel weniger Schaden bei jedem Treffer
+    heilung ZOI = 0                 # Leben pro Sekunde
+    durchschuss ZOI = 0             # so viele Gegner mehr trifft ein Schuss
+    mehrschuss ZOI = 0              # so viele Schüsse mehr auf einmal
+    glück KOMMAZOI = 0.0            # Wahrscheinlichkeit für einen Glückstreffer (0 bis 1)
+    glück_moi KOMMAZOI = 2.0        # und wie viel mehr Schaden der macht
+    schuss_größe KOMMAZOI = 1.0
+    reichweite KOMMAZOI = SPIELA_REICHWEITE
+    xp_moi KOMMAZOI = 1.0
+
+    # Wie oft welche Verbesserung genommen wurde (für die Anzeige).
+    zähla VAZEICHNIS VON KETTN UND ZOI = VAZEICHNIS VON KETTN UND ZOI()
+
+    # Die vier Waffen: Stufe 0 heißt, man hat sie noch nicht.
+    schüd_stufn ZOI = 0
+    schüd_winkl KOMMAZOI = 0.0
+    blitz_stufn ZOI = 0
+    blitz_uhr KOMMAZOI = 0.0
+    frost_stufn ZOI = 0
+    frost_uhr KOMMAZOI = 0.0
+    feia_stufn ZOI = 0
+    feia_uhr KOMMAZOI = 0.0
+    feia_x KOMMAZOI = 0.0
+    feia_y KOMMAZOI = 0.0
+
+    FUNKTIAUN mehr_lebn(wievü ZOI)
+        MEI.max_lebn += wievü OIDA
+        MEI.lebn = KLANSTA(MEI.lebn + wievü, MEI.max_lebn) OIDA
+    PASST SCHO
+
+    FUNKTIAUN heil(anteil KOMMAZOI)
+        MEI.lebn = KLANSTA(MEI.max_lebn, MEI.lebn + MEI.max_lebn * anteil) OIDA
+    PASST SCHO
+
+    FUNKTIAUN mehr_glück(wievü KOMMAZOI)
+        MEI.glück = KLANSTA(1.0, MEI.glück + wievü) OIDA
+    PASST SCHO
+
+    # Die Kugeln vom Schild kreisen in diesem Abstand ...
+    FUNKTIAUN schüd_obstand() GIBT ZRUCK KOMMAZOI
+        GIB ZRUCK 80.0 + MEI.schüd_stufn * 12 OIDA
+    PASST SCHO
+
+    # ... und die Kugel Nummer `i` steht gerade bei diesem Winkel.
+    FUNKTIAUN schüd_winkl_von(i ZOI) GIBT ZRUCK KOMMAZOI
+        GIB ZRUCK MEI.schüd_winkl + 2 * PI / (1 + MEI.schüd_stufn) * i OIDA
+    PASST SCHO
+
+    FUNKTIAUN moi()
+        # Die Reichweite als gestrichelter Kreis
+        foab_hex(FOAB_SPIELA) OIDA
+        deckung(0.12) OIDA
+        gstrichlt(6, 6) OIDA
+        kreis_rand(MEI.x, MEI.y, MEI.reichweite, 1) OIDA
+        durchzogn() OIDA
+
+        # Der Schein um die Figur
+        deckung(0.25) OIDA
+        kreis(MEI.x, MEI.y, MEI.radius * 2) OIDA
+        deckung(1) OIDA
+
+        # Die Figur selbst; nach einem Treffer blinkt sie.
+        WENN MEI.schutz > 0 UND ZOI(OBRUNDN(MEI.schutz * 20)) % 2 == 1 DAUN
+            foab_hex("#ffffff") OIDA
+        PASST SCHO
+        kreis(MEI.x, MEI.y, MEI.radius) OIDA
+        foab_hex("#ffffff") OIDA
+        kreis_rand(MEI.x, MEI.y, MEI.radius, 2) OIDA
+
+        # Ein Punkt zeigt, wohin sie schaut.
+        foab_hex(FOAB_SCHUSS) OIDA
+        kreis(MEI.x + KOSINUS(MEI.richtung) * (MEI.radius + 8), MEI.y + SINUS(MEI.richtung) * (MEI.radius + 8), 4) OIDA
+
+        # Die Kugeln vom Schild
+        WENN MEI.schüd_stufn > 0 DAUN
+            FIA i VON 0 BIS MEI.schüd_stufn TUA
+                SOG AU w = MEI.schüd_winkl_von(i) OIDA
+                SOG AU kx = MEI.x + KOSINUS(w) * MEI.schüd_obstand() OIDA
+                SOG AU ky = MEI.y + SINUS(w) * MEI.schüd_obstand() OIDA
+                foab_hex(FOAB_AKZENT) OIDA
+                deckung(0.8) OIDA
+                kreis(kx, ky, 12) OIDA
+                deckung(1) OIDA
+                foab_hex("#ffffff") OIDA
+                kreis_rand(kx, ky, 12, 1.5) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# ----------------------------------------------------------------- Schuss
+
+KLASSE Schuss ERBT VON Ding
+    vx KOMMAZOI
+    vy KOMMAZOI
+    schodn ZOI
+    lebn KOMMAZOI
+    durchschuss ZOI
+    glückstreffa JONA
+    vom_gegna JONA
+    treffa ZOI = 0
+
+    FUNKTIAUN weida_um(dauer KOMMAZOI)
+        MEI.x += MEI.vx * dauer OIDA
+        MEI.y += MEI.vy * dauer OIDA
+        MEI.lebn -= dauer OIDA
+        WENN MEI.lebn <= 0 ODA MEI.x < 0 ODA MEI.x > WELT_B ODA MEI.y < 0 ODA MEI.y > WELT_H DAUN
+            MEI.lebt = FOISCH OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN moi()
+        WENN MEI.vom_gegna DAUN
+            foab_hex(FOAB_GEGNA_SCHUSS) OIDA
+            kreis(MEI.x, MEI.y, MEI.radius) OIDA
+            GIB ZRUCK OIDA
+        PASST SCHO
+        # Ein blasser Schweif hinter dem Schuss
+        foab_hex(FOAB_SCHUSS) OIDA
+        deckung(0.3) OIDA
+        kreis(MEI.x - MEI.vx * 0.02, MEI.y - MEI.vy * 0.02, MEI.radius * 0.6) OIDA
+        deckung(1) OIDA
+        WENN MEI.glückstreffa DAUN
+            foab_hex("#ff4444") OIDA
+            kreis(MEI.x, MEI.y, MEI.radius) OIDA
+            foab_hex("#ff8888") OIDA
+            kreis_rand(MEI.x, MEI.y, MEI.radius + 2, 1) OIDA
+        SUNST
+            kreis(MEI.x, MEI.y, MEI.radius) OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN neicha_schuss(x KOMMAZOI, y KOMMAZOI, richtung KOMMAZOI, schodn ZOI, durchschuss ZOI, größe KOMMAZOI, glückstreffa JONA, vom_gegna JONA, lebn KOMMAZOI) GIBT ZRUCK Schuss
+    SOG AU tempo = SCHUSS_TEMPO OIDA
+    WENN vom_gegna DAUN
+        tempo = GEGNA_SCHUSS_TEMPO OIDA
+    PASST SCHO
+    GIB ZRUCK Schuss(x, y, SCHUSS_RADIUS * größe, KOSINUS(richtung) * tempo, SINUS(richtung) * tempo, schodn, lebn, durchschuss, glückstreffa, vom_gegna) OIDA
+PASST SCHO
+
+# ----------------------------------------------------------------- Gegner
+
+# Die Ecken einer Form um (x, y): abwechselnd `außn` und `innen` weit weg
+# (mit außn = innen ein gleichmäßiges Vieleck), als x, y, x, y ...
+FUNKTIAUN zackn(x KOMMAZOI, y KOMMAZOI, eckn ZOI, außn KOMMAZOI, innen KOMMAZOI, drehung KOMMAZOI) GIBT ZRUCK LISTN VON KOMMAZOI
+    SOG AU punkte LISTN VON KOMMAZOI = [] OIDA
+    FIA i VON 0 BIS eckn - 1 TUA
+        SOG AU w = 2 * PI / eckn * i + drehung OIDA
+        SOG AU weit = außn OIDA
+        WENN i % 2 == 1 DAUN
+            weit = innen OIDA
+        PASST SCHO
+        HAU EINE(punkte, x + KOSINUS(w) * weit) OIDA
+        HAU EINE(punkte, y + SINUS(w) * weit) OIDA
+    PASST SCHO
+    GIB ZRUCK punkte OIDA
+PASST SCHO
+
+# Der gewöhnliche Gegner: läuft auf die Spielfigur zu. Die anderen Arten erben
+# von ihm und schauen anders aus (`körpa`) oder bewegen sich anders (`beweg`).
+KLASSE Gegna ERBT VON Ding
+    oat ZOI
+    lebn ZOI
+    max_lebn ZOI
+    tempo KOMMAZOI
+    schodn ZOI                      # bei Berührung
+    xp_moi KOMMAZOI
+    foab KETTN
+    blitzt KOMMAZOI = 0.0           # leuchtet kurz weiß nach einem Treffer
+    berührt KOMMAZOI = 0.0          # Pause, bis die nächste Berührung wieder wehtut
+    brems_zeit KOMMAZOI = 0.0       # vom Frost
+    brems_faktor KOMMAZOI = 1.0
+    schuss_uhr KOMMAZOI = 0.0
+    schüd_pause KOMMAZOI = 0.0      # bis ihn die Kugeln vom Schild wieder treffen
+    gsprengt JONA = FOISCH
+
+    FUNKTIAUN is_boss() GIBT ZRUCK JONA
+        GIB ZRUCK MEI.oat == OAT_MINIBOSS ODA MEI.oat == OAT_ENDBOSS OIDA
+    PASST SCHO
+
+    FUNKTIAUN weida_um(ziel Ding, schüsse LISTN VON Schuss, dauer KOMMAZOI, jetzt KOMMAZOI)
+        SOG AU tempo = MEI.tempo OIDA
+        WENN MEI.brems_zeit > 0 DAUN
+            tempo = MEI.tempo * MEI.brems_faktor OIDA
+            MEI.brems_zeit -= dauer OIDA
+        PASST SCHO
+        MEI.beweg(ziel, schüsse, tempo, dauer, jetzt) OIDA
+        MEI.x = klemm(MEI.x, MEI.radius, WELT_B - MEI.radius) OIDA
+        MEI.y = klemm(MEI.y, MEI.radius, WELT_H - MEI.radius) OIDA
+        MEI.blitzt = GRÖSSTA(0.0, MEI.blitzt - dauer) OIDA
+        MEI.berührt = GRÖSSTA(0.0, MEI.berührt - dauer) OIDA
+    PASST SCHO
+
+    FUNKTIAUN beweg(ziel Ding, schüsse LISTN VON Schuss, tempo KOMMAZOI, dauer KOMMAZOI, jetzt KOMMAZOI)
+        SOG AU dx = ziel.x - MEI.x OIDA
+        SOG AU dy = ziel.y - MEI.y OIDA
+        SOG AU weit = WURZL(dx * dx + dy * dy) OIDA
+        WENN weit > 1 DAUN
+            MEI.x += dx / weit * tempo * dauer OIDA
+            MEI.y += dy / weit * tempo * dauer OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Die Farbe, in der er gerade gezeichnet wird.
+    FUNKTIAUN foab_jetzt() GIBT ZRUCK KETTN
+        WENN MEI.blitzt > 0 DAUN
+            GIB ZRUCK "#ffffff" OIDA
+        PASST SCHO
+        WENN MEI.brems_zeit > 0 DAUN
+            GIB ZRUCK "#88ccff" OIDA
+        PASST SCHO
+        GIB ZRUCK MEI.foab OIDA
+    PASST SCHO
+
+    FUNKTIAUN körpa(jetzt KOMMAZOI)
+        foab_hex(MEI.foab_jetzt()) OIDA
+        kreis(MEI.x, MEI.y, MEI.radius) OIDA
+        foab_hex("#000000") OIDA
+        kreis_rand(MEI.x, MEI.y, MEI.radius, 1.5) OIDA
+    PASST SCHO
+
+    FUNKTIAUN moi(jetzt KOMMAZOI)
+        MEI.körpa(jetzt) OIDA
+
+        # Der Lebensbalken, sobald er verletzt ist
+        WENN MEI.lebn < MEI.max_lebn DAUN
+            SOG AU breite = MEI.radius * 2.5 OIDA
+            SOG AU höhe = 4.0 OIDA
+            SOG AU foab = FOAB_LEBN OIDA
+            WENN MEI.oat == OAT_ENDBOSS DAUN
+                höhe = 8.0 OIDA
+                foab = "#ff3333" OIDA
+            SUNST WENN MEI.oat == OAT_MINIBOSS DAUN
+                höhe = 6.0 OIDA
+                foab = "#ff88bb" OIDA
+            PASST SCHO
+            SOG AU links = MEI.x - breite / 2 OIDA
+            SOG AU obn = MEI.y - MEI.radius - 12 OIDA
+            foab_hex(FOAB_LEBN_GRUND) OIDA
+            rechteck(links, obn, breite, höhe) OIDA
+            foab_hex(foab) OIDA
+            rechteck(links, obn, breite * MEI.lebn / MEI.max_lebn, höhe) OIDA
+            WENN MEI.is_boss() DAUN
+                schrift_fett(11) OIDA
+                WENN MEI.oat == OAT_ENDBOSS DAUN
+                    text_drüba(MEI.x, obn - 2, "★ BIG BOSS ★") OIDA
+                SUNST
+                    text_drüba(MEI.x, obn - 2, "★ MINIBOSS ★") OIDA
+                PASST SCHO
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# Hält viel aus, ist langsam: ein Sechseck.
+KLASSE Panza ERBT VON Gegna
+    FUNKTIAUN körpa(jetzt KOMMAZOI)
+        SOG AU form = zackn(MEI.x, MEI.y, 6, MEI.radius, MEI.radius, -PI / 6) OIDA
+        foab_hex(MEI.foab_jetzt()) OIDA
+        vieleck(form) OIDA
+        foab_hex("#226622") OIDA
+        linienzug(form, 2.5, WOAHR) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Schnell und schwach: eine Raute.
+KLASSE Flitza ERBT VON Gegna
+    FUNKTIAUN körpa(jetzt KOMMAZOI)
+        SOG AU form = zackn(MEI.x, MEI.y, 4, MEI.radius, MEI.radius, -PI / 2) OIDA
+        foab_hex(MEI.foab_jetzt()) OIDA
+        vieleck(form) OIDA
+        foab_hex("#aa8800") OIDA
+        linienzug(form, 1.5, WOAHR) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Hält Abstand und schießt: ein Dreieck.
+KLASSE Schütz ERBT VON Gegna
+    FUNKTIAUN beweg(ziel Ding, schüsse LISTN VON Schuss, tempo KOMMAZOI, dauer KOMMAZOI, jetzt KOMMAZOI)
+        SOG AU liaba_obstand = 200.0 OIDA
+        SOG AU dx = ziel.x - MEI.x OIDA
+        SOG AU dy = ziel.y - MEI.y OIDA
+        SOG AU weit = WURZL(dx * dx + dy * dy) OIDA
+        WENN weit > 1 DAUN
+            # Zu nah: zurückweichen. Ungefähr richtig: stehen bleiben.
+            SOG AU voraus = 1.0 OIDA
+            WENN weit < liaba_obstand - 20 DAUN
+                voraus = -0.7 OIDA
+            SUNST WENN weit < liaba_obstand + 20 DAUN
+                voraus = 0.0 OIDA
+            PASST SCHO
+            MEI.x += dx / weit * tempo * voraus * dauer OIDA
+            MEI.y += dy / weit * tempo * voraus * dauer OIDA
+            # Dabei ein bisschen seitlich hin und her
+            SOG AU seitlich = SINUS(jetzt * 0.003 + MEI.x) * 0.5 OIDA
+            MEI.x += -dy / weit * tempo * seitlich * dauer OIDA
+            MEI.y += dx / weit * tempo * seitlich * dauer OIDA
+        PASST SCHO
+        MEI.schuss_uhr -= dauer OIDA
+        WENN MEI.schuss_uhr <= 0 UND weit < 350 DAUN
+            MEI.schuss_uhr = 1.8 OIDA
+            # Mit Absicht nicht ganz genau gezielt
+            SOG AU richtung = WINKL(dy, dx) + zufoi_von(-0.15, 0.15) OIDA
+            HAU EINE(schüsse, neicha_schuss(MEI.x, MEI.y, richtung, MEI.schodn, 0, 0.8, FOISCH, WOAHR, SCHUSS_LEBN)) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN körpa(jetzt KOMMAZOI)
+        SOG AU form = [MEI.x, MEI.y - MEI.radius * 1.2, MEI.x + MEI.radius, MEI.y + MEI.radius * 0.7, MEI.x - MEI.radius, MEI.y + MEI.radius * 0.7] OIDA
+        foab_hex(MEI.foab_jetzt()) OIDA
+        vieleck(form) OIDA
+        foab_hex("#7733aa") OIDA
+        linienzug(form, 1.5, WOAHR) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Explodiert, wenn er stirbt: ein Stern mit Stacheln.
+KLASSE Sprenga ERBT VON Gegna
+    FUNKTIAUN körpa(jetzt KOMMAZOI)
+        SOG AU form = zackn(MEI.x, MEI.y, 8, MEI.radius * 1.2, MEI.radius * 0.7, 0) OIDA
+        foab_hex(MEI.foab_jetzt()) OIDA
+        vieleck(form) OIDA
+        foab_hex("#aa5500") OIDA
+        linienzug(form, 1.5, WOAHR) OIDA
+        # Fast tot: Er pulsiert als Warnung.
+        WENN MEI.lebn < MEI.max_lebn * 0.3 DAUN
+            foab_hex(FOAB_SPRENGA) OIDA
+            deckung(0.3 + 0.3 * SINUS(jetzt * 0.015)) OIDA
+            kreis(MEI.x, MEI.y, MEI.radius * 2) OIDA
+            deckung(1) OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# Der kleine Boss: ein Stern mit acht Zacken, der atmet.
+KLASSE Miniboss ERBT VON Gegna
+    FUNKTIAUN körpa(jetzt KOMMAZOI)
+        SOG AU puls = 0.08 + 0.05 * SINUS(jetzt * 0.006) OIDA
+        SOG AU form = zackn(MEI.x, MEI.y, 16, MEI.radius, MEI.radius * (0.55 + puls), -PI / 2) OIDA
+        foab_hex(MEI.foab_jetzt()) OIDA
+        vieleck(form) OIDA
+        foab_hex("#ff88bb") OIDA
+        linienzug(form, 3, WOAHR) OIDA
+        foab_hex("#dd2277") OIDA
+        deckung(0.18 + 0.1 * SINUS(jetzt * 0.007)) OIDA
+        kreis(MEI.x, MEI.y, MEI.radius * 1.6) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Der große Boss: ein Achteck, das sich dreht, mit einem pulsierenden Kern.
+KLASSE Endboss ERBT VON Gegna
+    FUNKTIAUN körpa(jetzt KOMMAZOI)
+        SOG AU form = zackn(MEI.x, MEI.y, 8, MEI.radius, MEI.radius, jetzt * 0.001) OIDA
+        foab_hex(MEI.foab_jetzt()) OIDA
+        vieleck(form) OIDA
+        foab_hex("#ff3333") OIDA
+        linienzug(form, 4, WOAHR) OIDA
+        foab_hex("#ff6666") OIDA
+        kreis(MEI.x, MEI.y, MEI.radius * (0.4 + 0.08 * SINUS(jetzt * 0.01))) OIDA
+        foab_hex("#cc0000") OIDA
+        deckung(0.2 + 0.12 * SINUS(jetzt * 0.008)) OIDA
+        kreis(MEI.x, MEI.y, MEI.radius * 1.7) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Baut einen Gegner der Art `oat`. `grund_lebn` und `grund_tempo` sind die
+# Werte der Welle; jede Art rechnet sie für sich um.
+FUNKTIAUN neicha_gegna(oat ZOI, x KOMMAZOI, y KOMMAZOI, grund_lebn ZOI, grund_tempo KOMMAZOI) GIBT ZRUCK Gegna
+    WENN oat == OAT_PANZA DAUN
+        SOG AU l = ZOI(OBRUNDN(grund_lebn * 3.5)) OIDA
+        GIB ZRUCK Panza(x, y, 24, oat, l, l, grund_tempo * 0.45, 25, 2.5, "#44bb44") OIDA
+    PASST SCHO
+    WENN oat == OAT_FLITZA DAUN
+        SOG AU l = ZOI(OBRUNDN(grund_lebn * 0.5)) OIDA
+        GIB ZRUCK Flitza(x, y, 10, oat, l, l, grund_tempo * 2.2, 8, 1.2, "#ffdd33") OIDA
+    PASST SCHO
+    WENN oat == OAT_SCHÜTZ DAUN
+        SOG AU l = ZOI(OBRUNDN(grund_lebn * 0.8)) OIDA
+        GIB ZRUCK Schütz(x, y, 13, oat, l, l, grund_tempo * 0.7, 6, 1.8, "#bb55ff") OIDA
+    PASST SCHO
+    WENN oat == OAT_SPRENGA DAUN
+        SOG AU l = ZOI(OBRUNDN(grund_lebn * 0.9)) OIDA
+        GIB ZRUCK Sprenga(x, y, 15, oat, l, l, grund_tempo * 1.1, 5, 1.5, FOAB_SPRENGA) OIDA
+    PASST SCHO
+    WENN oat == OAT_MINIBOSS DAUN
+        SOG AU l = grund_lebn * 12 OIDA
+        GIB ZRUCK Miniboss(x, y, 38, oat, l, l, grund_tempo * 0.55, 30, 12, "#dd2277") OIDA
+    PASST SCHO
+    WENN oat == OAT_ENDBOSS DAUN
+        SOG AU l = grund_lebn * 30 OIDA
+        GIB ZRUCK Endboss(x, y, 56, oat, l, l, grund_tempo * 0.35, 50, 30, "#cc0000") OIDA
+    PASST SCHO
+    SOG AU foab = FOAB_GEGNA_A OIDA
+    WENN ZUFOI(0, 1) == 1 DAUN
+        foab = FOAB_GEGNA_B OIDA
+    PASST SCHO
+    GIB ZRUCK Gegna(x, y, 14, OAT_NORMAL, grund_lebn, grund_lebn, grund_tempo, 10, 1, foab) OIDA
+PASST SCHO
+
+# ------------------------------------------------------- Erfahrung und Funken
+
+# Was ein Gegner fallen lässt. In der Nähe der Spielfigur fliegt es zu ihr hin.
+KLASSE XpKugl ERBT VON Ding
+    menge ZOI
+    vy KOMMAZOI = -60.0             # hüpft beim Erscheinen kurz hoch
+    zogn JONA = FOISCH
+
+    # Gibt WOAHR zurück, wenn die Figur sie aufgesammelt hat.
+    FUNKTIAUN weida_um(ziel Ding, magnet KOMMAZOI, dauer KOMMAZOI) GIBT ZRUCK JONA
+        WENN MEI.vy < 0 DAUN
+            MEI.y += MEI.vy * dauer OIDA
+            MEI.vy += 200 * dauer OIDA
+        PASST SCHO
+        SOG AU weit = abstand(MEI.x, MEI.y, ziel.x, ziel.y) OIDA
+        WENN weit < XP_MAGNET + magnet DAUN
+            MEI.zogn = WOAHR OIDA
+        PASST SCHO
+        WENN MEI.zogn UND weit > 1 DAUN
+            MEI.x += (ziel.x - MEI.x) / weit * 400 * dauer OIDA
+            MEI.y += (ziel.y - MEI.y) / weit * 400 * dauer OIDA
+        PASST SCHO
+        WENN weit < ziel.radius + MEI.radius DAUN
+            MEI.lebt = FOISCH OIDA
+            GIB ZRUCK WOAHR OIDA
+        PASST SCHO
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+
+    FUNKTIAUN moi(jetzt KOMMAZOI)
+        foab_hex(FOAB_XP) OIDA
+        deckung(0.8) OIDA
+        kreis(MEI.x, MEI.y, MEI.radius * (1 + 0.2 * SINUS(jetzt * 0.008))) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Ein Funke: fliegt weg, wird langsamer, kleiner und blasser.
+KLASSE Funkn
+    x KOMMAZOI
+    y KOMMAZOI
+    vx KOMMAZOI
+    vy KOMMAZOI
+    radius KOMMAZOI
+    foab KETTN
+    lebn KOMMAZOI = FUNKN_LEBN
+
+    FUNKTIAUN weida_um(dauer KOMMAZOI)
+        MEI.x += MEI.vx * dauer OIDA
+        MEI.y += MEI.vy * dauer OIDA
+        MEI.vx *= 0.95 OIDA
+        MEI.vy *= 0.95 OIDA
+        MEI.lebn -= dauer OIDA
+    PASST SCHO
+
+    FUNKTIAUN moi()
+        SOG AU rest = klemm(MEI.lebn / FUNKN_LEBN, 0.0, 1.0) OIDA
+        foab_hex(MEI.foab) OIDA
+        deckung(rest) OIDA
+        kreis(MEI.x, MEI.y, MEI.radius * rest) OIDA
+        deckung(1) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN neicha_funkn(x KOMMAZOI, y KOMMAZOI, foab KETTN) GIBT ZRUCK Funkn
+    SOG AU richtung = ZUFOI() * 2 * PI OIDA
+    SOG AU tempo = zufoi_von(60, 200) OIDA
+    GIB ZRUCK Funkn(x, y, KOSINUS(richtung) * tempo, SINUS(richtung) * tempo, zufoi_von(2, 5), foab) OIDA
+PASST SCHO
+
+# ---------------------------------------------------- was die Waffen hinterlassen
+
+# Ein Blitz von der Figur zu einem Gegner; nur zum Anschauen.
+KLASSE Blitz
+    x1 KOMMAZOI
+    y1 KOMMAZOI
+    x2 KOMMAZOI
+    y2 KOMMAZOI
+    lebn KOMMAZOI = 0.15
+PASST SCHO
+
+# Der Ring vom Frost, der sich ausbreitet; nur zum Anschauen.
+KLASSE Frostwön
+    x KOMMAZOI
+    y KOMMAZOI
+    max_radius KOMMAZOI
+    radius KOMMAZOI = 0.0
+    lebn KOMMAZOI = 0.4
+PASST SCHO
+
+# Eine Flamme am Boden: Wer drinsteht, nimmt immer wieder Schaden.
+KLASSE Flamme
+    x KOMMAZOI
+    y KOMMAZOI
+    radius KOMMAZOI
+    schodn ZOI
+    max_lebn KOMMAZOI
+    lebn KOMMAZOI
+    schodn_uhr KOMMAZOI = 0.0
+PASST SCHO

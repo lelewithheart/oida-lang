@@ -740,8 +740,11 @@ impl Parser<'_> {
         self.erwarte_schluessel(Schluessel::Then)?;
         let dann = self.block()?;
         let mut sunst = Vec::new();
+        let sunst_zeile = self.aktuell().pos.zeile;
         if self.nimm(Schluessel::Else) {
-            if self.ist(Schluessel::If) {
+            // Nur in derselben Zeile ist es ein SUNST WENN. Ein WENN in der
+            // nächsten Zeile ist eine eigene Anweisung im SUNST-Teil.
+            if self.ist(Schluessel::If) && self.aktuell().pos.zeile == sunst_zeile {
                 // SUNST WENN ...: gehört zum selben PASST SCHO.
                 let innen_pos = self.weiter().pos;
                 sunst.push(self.wenn(innen_pos)?);
@@ -1368,6 +1371,24 @@ mod tests {
         assert_eq!(sunst.len(), 1);
         let AnweisungArt::Wenn { dann, sunst, .. } = &sunst[0].art else { panic!() };
         assert_eq!((dann.len(), sunst.len()), (1, 1));
+    }
+
+    #[test]
+    fn sunst_und_wenn_in_der_naechsten_zeile() {
+        // Das WENN steht in einer eigenen Zeile: Es ist eine Anweisung im SUNST-Teil
+        // mit eigenem PASST SCHO, und danach kann noch etwas kommen.
+        let p = parse("WENN a DAUN
+SCHREIB(1) OIDA
+SUNST
+WENN b DAUN
+SCHREIB(2) OIDA
+PASST SCHO
+SCHREIB(3) OIDA
+PASST SCHO");
+        assert_eq!(p.haupt.len(), 1);
+        let AnweisungArt::Wenn { sunst, .. } = &p.haupt[0].art else { panic!() };
+        assert_eq!(sunst.len(), 2);
+        assert!(matches!(&sunst[0].art, AnweisungArt::Wenn { sunst, .. } if sunst.is_empty()));
     }
 
     #[test]

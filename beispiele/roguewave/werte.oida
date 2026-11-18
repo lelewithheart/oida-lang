@@ -1,0 +1,128 @@
+# RogueWave: die festen Werte des Spiels und ein paar kleine Helfer.
+
+BRAUCH texte OIDA
+
+# Das Spielfeld am Bildschirm; das Fenster kann größer sein, dann wird vergrößert.
+FIX FELD_B = 960 OIDA
+FIX FELD_H = 640 OIDA
+
+# Die Welt ist größer als der Bildschirm; die Kamera folgt der Spielfigur.
+FIX WELT_B = 3000.0 OIDA
+FIX WELT_H = 3000.0 OIDA
+
+# Die Zustände des Spiels
+FIX ZUSTAND_ANFANG = 0 OIDA
+FIX ZUSTAND_SPÜ = 1 OIDA
+FIX ZUSTAND_VABESSARUNG = 2 OIDA
+FIX ZUSTAND_EINSTELLUNGEN = 3 OIDA
+FIX ZUSTAND_AUS = 4 OIDA
+FIX ZUSTAND_GWUNNA = 5 OIDA
+
+# Spielfigur
+FIX SPIELA_RADIUS = 16.0 OIDA
+FIX SPIELA_TEMPO = 200.0 OIDA           # Bildpunkte in der Sekunde
+FIX SPIELA_LEBN = 100 OIDA
+FIX SPIELA_SCHODN = 15 OIDA
+FIX SPIELA_SCHUSS_PAUSE = 0.35 OIDA     # Sekunden zwischen zwei Schüssen
+FIX SPIELA_REICHWEITE = 300.0 OIDA      # so weit wird gezielt
+
+# Schüsse
+FIX SCHUSS_TEMPO = 500.0 OIDA
+FIX SCHUSS_RADIUS = 5.0 OIDA
+FIX SCHUSS_LEBN = 1.5 OIDA
+FIX GEGNA_SCHUSS_TEMPO = 280.0 OIDA
+
+# Gegner
+FIX GEGNA_TEMPO = 80.0 OIDA
+FIX GEGNA_LEBN = 30.0 OIDA
+
+# Die Arten von Gegnern
+FIX OAT_NORMAL = 0 OIDA
+FIX OAT_PANZA = 1 OIDA
+FIX OAT_FLITZA = 2 OIDA
+FIX OAT_SCHÜTZ = 3 OIDA
+FIX OAT_SPRENGA = 4 OIDA
+FIX OAT_MINIBOSS = 5 OIDA
+FIX OAT_ENDBOSS = 6 OIDA
+
+# Erfahrung
+FIX XP_RADIUS = 6.0 OIDA
+FIX XP_GRUND = 10 OIDA
+FIX XP_MAGNET = 100.0 OIDA
+
+# Funken
+FIX FUNKN_LEBN = 0.5 OIDA
+
+# Obergrenzen, damit es nie zu viel wird
+FIX HÖCHSTNS_FUNKN = 150 OIDA
+FIX HÖCHSTNS_GEGNA = 80 OIDA
+FIX HÖCHSTNS_XP = 150 OIDA
+FIX HÖCHSTNS_FLAMMEN = 50 OIDA
+FIX HÖCHSTNS_BLITZE = 20 OIDA
+
+# Kamera
+FIX KAMERA_TEMPO = 5.0 OIDA             # je höher, desto schneller folgt sie
+FIX WACKL_DAUER = 0.15 OIDA
+FIX WACKL_STÄRKE = 6.0 OIDA
+
+# Wellen: Gegner kommen ohne Ende, eine Welle ist geschafft nach genug Treffern.
+FIX WÖN_GRUND_TOTE = 10 OIDA            # so viele braucht die erste Welle
+FIX WÖN_TOTE_DAZUA = 5 OIDA             # und jede weitere um so viele mehr
+FIX WÖN_GRUND_PAUSE = 1.5 OIDA          # Sekunden zwischen zwei neuen Gegnern (Welle 1)
+FIX WÖN_KLANSTE_PAUSE = 0.3 OIDA
+FIX WÖN_PAUSE_MOI = 0.92 OIDA           # die Pause wird mit jeder Welle so viel kürzer
+FIX WÖN_LEBN_MOI = 1.22 OIDA
+FIX WÖN_TEMPO_MOI = 1.07 OIDA
+FIX WÖN_SCHODN_MOI = 1.10 OIDA
+FIX WÖN_RAST = 2.5 OIDA                 # Sekunden zwischen zwei Wellen
+FIX WÖN_LETZTE = 25 OIDA                # wer die schafft, hat gewonnen
+
+FIX WOI_ANZAHL = 3 OIDA                 # Verbesserungen zur Auswahl
+
+# Farben
+FIX FOAB_GRUND = "#111122" OIDA
+FIX FOAB_GITTA = "#1a1a33" OIDA
+FIX FOAB_SPIELA = "#33ccff" OIDA
+FIX FOAB_SCHUSS = "#ffee55" OIDA
+FIX FOAB_GEGNA_A = "#ff4466" OIDA
+FIX FOAB_GEGNA_B = "#ff7744" OIDA
+FIX FOAB_XP = "#55ff88" OIDA
+FIX FOAB_LEBN = "#ff3344" OIDA
+FIX FOAB_LEBN_GRUND = "#440011" OIDA
+FIX FOAB_XP_BOIKN = "#44aaff" OIDA
+FIX FOAB_XP_GRUND = "#112244" OIDA
+FIX FOAB_TEXT = "#ffffff" OIDA
+FIX FOAB_TEXT_MATT = "#8899aa" OIDA
+FIX FOAB_TAFL = "#0a0a1e" OIDA
+FIX DECKUNG_TAFL = 0.92 OIDA
+FIX FOAB_AKZENT = "#33ccff" OIDA
+FIX FOAB_AKZENT_HÖ = "#66ddff" OIDA
+FIX FOAB_GFOAH = "#ff4466" OIDA
+FIX FOAB_GEGNA_SCHUSS = "#ff55ff" OIDA
+FIX FOAB_SPRENGA = "#ff8800" OIDA
+FIX FOAB_GOID = "#ffd700" OIDA
+FIX FOAB_RAHMEN = "#333344" OIDA
+
+# ------------------------------------------------------------------ Helfer
+
+# Zufällige Kommazahl von `untn` bis unter `obn`.
+FUNKTIAUN zufoi_von(untn KOMMAZOI, obn KOMMAZOI) GIBT ZRUCK KOMMAZOI
+    GIB ZRUCK untn + ZUFOI() * (obn - untn) OIDA
+PASST SCHO
+
+# Sekunden als MM:SS
+FUNKTIAUN zeit_text(sekundn KOMMAZOI) GIBT ZRUCK KETTN
+    SOG AU gaunz = ZOI(OBRUNDN(sekundn)) OIDA
+    GIB ZRUCK vuan_auffülln(KETTN(gaunz / 60), 2, "0") + ":" + vuan_auffülln(KETTN(gaunz % 60), 2, "0") OIDA
+PASST SCHO
+
+# Der Name der Spielart für die Anzeige.
+FUNKTIAUN modus_nam(modus KETTN) GIBT ZRUCK KETTN
+    WENN modus == "easy" DAUN
+        GIB ZRUCK "EASY" OIDA
+    PASST SCHO
+    WENN modus == "hard" DAUN
+        GIB ZRUCK "HARD" OIDA
+    PASST SCHO
+    GIB ZRUCK "NORMAL" OIDA
+PASST SCHO

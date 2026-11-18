@@ -1,0 +1,192 @@
+# RogueWave: Geräusche und Musik, alles errechnet (keine Tondateien).
+
+BRAUCH ton OIDA
+
+# Wie laut Geräusche und Musik im Vergleich zu "voll" sind.
+FIX LAUT_KLANG = 0.4 OIDA
+FIX LAUT_MUSIK = 0.3 OIDA
+# 140 Schläge in der Minute; gespielt werden Achtelnoten.
+FIX ACHTL = 60.0 / 140.0 * 0.5 OIDA
+
+# Die Melodie: acht Takte zu acht Achteln, als Tonhöhen in Hertz (0 ist eine Pause).
+FUNKTIAUN melodie() GIBT ZRUCK LISTN VON ZOI
+    GIB ZRUCK [
+        262, 330, 392, 330, 262, 330, 392, 523,
+        440, 392, 330, 262, 330, 392, 440, 392,
+        349, 440, 523, 440, 349, 330, 262, 330,
+        392, 330, 262, 220, 262, 330, 392, 330,
+        262, 330, 392, 523, 440, 392, 330, 392,
+        440, 523, 440, 392, 330, 262, 330, 392,
+        349, 330, 262, 330, 349, 440, 523, 440,
+        392, 330, 262, 220, 196, 220, 262, 0
+    ] OIDA
+PASST SCHO
+
+FUNKTIAUN bass() GIBT ZRUCK LISTN VON ZOI
+    GIB ZRUCK [
+        131, 0, 131, 0, 165, 0, 165, 0,
+        220, 0, 220, 0, 196, 0, 196, 0,
+        175, 0, 175, 0, 165, 0, 165, 0,
+        196, 0, 196, 0, 131, 0, 131, 0,
+        131, 0, 131, 0, 220, 0, 220, 0,
+        220, 0, 220, 0, 196, 0, 196, 0,
+        175, 0, 175, 0, 220, 0, 220, 0,
+        196, 0, 196, 0, 131, 0, 131, 0
+    ] OIDA
+PASST SCHO
+
+KLASSE Klang
+    melodie LISTN VON ZOI
+    bass LISTN VON ZOI
+    gräusche JONA = WOAHR           # Geräusche an?
+    musik_au JONA = WOAHR
+    musik_rennt JONA = FOISCH
+    # Welche Achtelnote als nächste drankommt und wann (auf der Uhr der Töne).
+    musik_stö ZOI = 0
+    musik_zeit KOMMAZOI = 0.0
+
+    # Ein Ton, der in `wann` Sekunden anfängt.
+    FUNKTIAUN piep(wann KOMMAZOI, art KETTN, höhe KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
+        ton_um(ton_zeit() + wann, art, höhe, dauer, laut * LAUT_KLANG) OIDA
+    PASST SCHO
+
+    FUNKTIAUN kroch(wann KOMMAZOI, dauer KOMMAZOI, laut KOMMAZOI)
+        ton_um(ton_zeit() + wann, "rauschn", 0, dauer, laut * LAUT_KLANG) OIDA
+    PASST SCHO
+
+    # ------------------------------------------------------------ Geräusche
+
+    FUNKTIAUN schuss()
+        WENN MEI.gräusche DAUN
+            ton_gleitend("eckig", 880, 220, 0.08, 0.15 * LAUT_KLANG) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN treffa()
+        WENN MEI.gräusche DAUN
+            MEI.kroch(0, 0.06, 0.2) OIDA
+            MEI.piep(0, "eckig", 200, 0.08, 0.15) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN gegna_tot()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "eckig", 400, 0.06, 0.15) OIDA
+            MEI.piep(0.06, "eckig", 300, 0.06, 0.12) OIDA
+            MEI.piep(0.12, "säge", 150, 0.1, 0.1) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN spiela_troffn()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "säge", 150, 0.15, 0.2) OIDA
+            MEI.kroch(0, 0.1, 0.25) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN xp()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "sinus", 600, 0.05, 0.1) OIDA
+            MEI.piep(0.05, "sinus", 900, 0.05, 0.1) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN stufn_auf()
+        WENN MEI.gräusche DAUN
+            SOG AU töne = [523, 659, 784, 1047] OIDA
+            FIA i VON 0 BIS 3 TUA
+                MEI.piep(i * 0.09, "eckig", töne[i], 0.12, 0.15) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN wön_start()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "säge", 220, 0.15, 0.12) OIDA
+            MEI.piep(0.12, "säge", 330, 0.15, 0.12) OIDA
+            MEI.piep(0.24, "säge", 440, 0.2, 0.15) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN spü_aus()
+        WENN MEI.gräusche DAUN
+            SOG AU töne = [440, 370, 311, 220] OIDA
+            FIA i VON 0 BIS 3 TUA
+                MEI.piep(i * 0.2, "säge", töne[i], 0.25, 0.18) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN woi()
+        WENN MEI.gräusche DAUN
+            MEI.piep(0, "eckig", 440, 0.06, 0.12) OIDA
+            MEI.piep(0.06, "eckig", 660, 0.08, 0.12) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN explosion()
+        WENN MEI.gräusche DAUN
+            MEI.kroch(0, 0.3, 0.3) OIDA
+            MEI.piep(0, "säge", 80, 0.3, 0.2) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN bestwert()
+        WENN MEI.gräusche DAUN
+            SOG AU töne = [523, 659, 784, 1047, 1319] OIDA
+            FIA i VON 0 BIS 4 TUA
+                MEI.piep(i * 0.1, "eckig", töne[i], 0.14, 0.15) OIDA
+                MEI.piep(i * 0.1, "sinus", töne[i] * 1.5, 0.14, 0.06) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+
+    # ---------------------------------------------------------------- Musik
+
+    FUNKTIAUN musik_start()
+        WENN MEI.musik_rennt DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        MEI.musik_rennt = WOAHR OIDA
+        MEI.musik_stö = 0 OIDA
+        MEI.musik_zeit = ton_zeit() + 0.05 OIDA
+    PASST SCHO
+
+    FUNKTIAUN musik_stopp()
+        MEI.musik_rennt = FOISCH OIDA
+    PASST SCHO
+
+    # In jedem Bild aufrufen: plant die Noten der nächsten Fünftelsekunde ein.
+    # Die Uhr der Töne sorgt dafür, dass der Takt genau bleibt.
+    FUNKTIAUN musik_weida()
+        WENN NED MEI.musik_rennt ODA NED MEI.musik_au DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        SOG AU jetzt = ton_zeit() OIDA
+        # War die Musik aus, geht es von hier weiter, ohne etwas nachzuholen.
+        WENN MEI.musik_zeit < jetzt DAUN
+            MEI.musik_zeit = jetzt + 0.05 OIDA
+        PASST SCHO
+        SOLONG MEI.musik_zeit < jetzt + 0.2 TUA
+            SOG AU wann = MEI.musik_zeit OIDA
+            SOG AU note = MEI.musik_stö % 8 OIDA
+            SOG AU höhe = MEI.melodie[MEI.musik_stö] OIDA
+            WENN höhe > 0 DAUN
+                ton_um(wann, "eckig", höhe, ACHTL * 0.8, 0.08 * LAUT_MUSIK) OIDA
+            PASST SCHO
+            SOG AU tiaf = MEI.bass[MEI.musik_stö] OIDA
+            WENN tiaf > 0 DAUN
+                ton_um(wann, "dreieck", tiaf, ACHTL * 0.9, 0.1 * LAUT_MUSIK) OIDA
+            PASST SCHO
+            # Die Trommel auf 1 und 5, ein Zischen zwischen jeder zweiten Note
+            WENN note == 0 ODA note == 4 DAUN
+                ton_um(wann, "sinus", 60, 0.08, 0.12 * LAUT_MUSIK) OIDA
+            PASST SCHO
+            WENN note % 2 == 0 DAUN
+                ton_um(wann + ACHTL * 0.5, "rauschn", 0, 0.03, 0.04 * LAUT_MUSIK) OIDA
+            PASST SCHO
+            MEI.musik_zeit += ACHTL OIDA
+            MEI.musik_stö = (MEI.musik_stö + 1) % 64 OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO

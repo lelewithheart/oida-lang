@@ -1,0 +1,165 @@
+# Führt das Spiel RogueWave durch alle seine Zustände, ohne dass jemand
+# spielt: Der Test stellt Dinge ein, die sonst erst nach vielen Minuten
+# kämen (alle Waffen, späte Wellen, Boss, Ende, Sieg), lässt jeweils eine
+# feste Zahl von Bildern laufen und schreibt auf, was dabei herauskommt.
+# Jedes 250. Bild wird gespeichert; die Abschnitte enden genau dort.
+
+BRAUCH fensta OIDA
+BRAUCH dateien OIDA
+BRAUCH "../../../beispiele/roguewave/werte.oida" OIDA
+BRAUCH "../../../beispiele/roguewave/dinge.oida" OIDA
+BRAUCH "../../../beispiele/roguewave/klang.oida" OIDA
+BRAUCH "../../../beispiele/roguewave/vabessarungen.oida" OIDA
+BRAUCH "../../../beispiele/roguewave/bestenlistn.oida" OIDA
+BRAUCH "../../../beispiele/roguewave/spü.oida" OIDA
+BRAUCH "../../../beispiele/roguewave/büdschirm.oida" OIDA
+
+# Lässt `wievü` Bilder laufen. Mit `wöhn` wird bei jeder Auswahl gleich die erste Verbesserung genommen.
+FUNKTIAUN büda(s Spü, wievü ZOI, wöhn JONA)
+    FIA i VON 1 BIS wievü TUA
+        WENN NED fensta_offn() DAUN
+            GIB ZRUCK OIDA
+        PASST SCHO
+        s.jetzt = zeit() * 1000 OIDA
+        s.weida_um(büd_zeit()) OIDA
+        WENN wöhn UND s.zustand == ZUSTAND_VABESSARUNG DAUN
+            s.woi_nehma(0) OIDA
+        PASST SCHO
+        moi_ollas(s) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Wie viele Gegner einer Art gerade da sind.
+FUNKTIAUN wievü_von(s Spü, oat ZOI) GIBT ZRUCK ZOI
+    SOG AU anzahl = 0 OIDA
+    FIA JEDE g IN s.gegna TUA
+        WENN g.oat == oat DAUN
+            anzahl += 1 OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK anzahl OIDA
+PASST SCHO
+
+fensta_auf("RogueWave", FELD_B, FELD_H) OIDA
+SOG AU s = Spü(Spiela(WELT_B / 2, WELT_H / 2, SPIELA_RADIUS), Kamera(), Klang(melodie(), bass()), Bestenlistn(), olle_vabessarungen()) OIDA
+s.von_vuan() OIDA
+
+# 1. Das Menü (Bild 250)
+büda(s, 250, FOISCH) OIDA
+SCHREIB("Menü:", s.zustand == ZUSTAND_ANFANG, LÄNGN(s.vabessarungen), LÄNGN(s.bestenlistn.einträge("normal"))) OIDA
+
+# 2. Ein Spiel mit allen Waffen ab Welle 9, in der es jede Art von Gegner gibt (Bild 1750).
+#    Die Figur hält dabei fast alles aus und läuft nach rechts (das Drehbuch drückt D).
+s.start() OIDA
+SOG AU p = s.spiela OIDA
+p.max_lebn = 100000 OIDA
+p.lebn = 100000.0 OIDA
+p.schüd_stufn = 3 OIDA
+p.blitz_stufn = 3 OIDA
+p.frost_stufn = 3 OIDA
+p.feia_stufn = 3 OIDA
+p.mehrschuss = 2 OIDA
+p.durchschuss = 1 OIDA
+p.glück = 0.5 OIDA
+s.wön = 8 OIDA
+SOG AU gsehn = [FOISCH, FOISCH, FOISCH, FOISCH, FOISCH] OIDA
+SOG AU meiste_gegna = 0 OIDA
+SOG AU meiste_funkn = 0 OIDA
+SOG AU blitze_gsehn = FOISCH OIDA
+SOG AU frost_gsehn = FOISCH OIDA
+SOG AU flammen_gsehn = FOISCH OIDA
+SOG AU gegna_schuss_gsehn = FOISCH OIDA
+FIA rundn VON 1 BIS 150 TUA
+    büda(s, 10, WOAHR) OIDA
+    FIA oat VON 0 BIS 4 TUA
+        WENN wievü_von(s, oat) > 0 DAUN
+            gsehn[oat] = WOAHR OIDA
+        PASST SCHO
+    PASST SCHO
+    meiste_gegna = GRÖSSTA(meiste_gegna, LÄNGN(s.gegna)) OIDA
+    meiste_funkn = GRÖSSTA(meiste_funkn, LÄNGN(s.funkn)) OIDA
+    blitze_gsehn = blitze_gsehn ODA LÄNGN(s.blitze) > 0 OIDA
+    frost_gsehn = frost_gsehn ODA LÄNGN(s.frostwön) > 0 OIDA
+    flammen_gsehn = flammen_gsehn ODA LÄNGN(s.flammen) > 0 OIDA
+    FIA JEDE schuss IN s.schüsse TUA
+        gegna_schuss_gsehn = gegna_schuss_gsehn ODA schuss.vom_gegna OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB("Spü:", s.zustand == ZUSTAND_SPÜ, s.wön >= 9, s.tote > 10, p.stufn >= 2, p.x > WELT_B / 2 + 500) OIDA
+SCHREIB("Gegna:", gsehn, meiste_gegna <= HÖCHSTNS_GEGNA, meiste_funkn <= HÖCHSTNS_FUNKN, meiste_funkn > 20) OIDA
+SCHREIB("Waffn:", blitze_gsehn, frost_gsehn, flammen_gsehn, gegna_schuss_gsehn, p.lebn < 100000) OIDA
+
+# 3. Die Auswahl nach dem großen Boss: vier Karten (Bild 2000)
+s.woi_zeign(WOAHR, OAT_ENDBOSS) OIDA
+büda(s, 250, FOISCH) OIDA
+SCHREIB("Woi:", s.zustand == ZUSTAND_VABESSARUNG, LÄNGN(s.woi), s.woi_vom_boss) OIDA
+SOG AU vuaher = p.schodn + p.max_lebn + p.rüstung + p.heilung + p.durchschuss + p.mehrschuss + p.schüd_stufn + p.blitz_stufn + p.frost_stufn + p.feia_stufn OIDA
+SOG AU kommazoin = p.tempo + p.schuss_pause + p.glück + p.glück_moi + p.schuss_größe + p.reichweite + p.xp_moi + s.magnet + p.lebn OIDA
+s.woi_nehma(1) OIDA
+SOG AU danoch = p.schodn + p.max_lebn + p.rüstung + p.heilung + p.durchschuss + p.mehrschuss + p.schüd_stufn + p.blitz_stufn + p.frost_stufn + p.feia_stufn OIDA
+SOG AU kommazoin_danoch = p.tempo + p.schuss_pause + p.glück + p.glück_moi + p.schuss_größe + p.reichweite + p.xp_moi + s.magnet + p.lebn OIDA
+SCHREIB("Gnumma:", s.zustand == ZUSTAND_SPÜ, vuaher != danoch ODA kommazoin != kommazoin_danoch) OIDA
+
+# 4. Die Welle 10 mit dem großen Boss (Bild 2500)
+s.wön = 9 OIDA
+s.gegna = [] OIDA
+s.wön_rennt = WOAHR OIDA
+s.wön_tote = s.wön_ziel OIDA
+s.offn_boss_woi = FOISCH OIDA
+büda(s, 500, WOAHR) OIDA
+SOG AU boss = s.boss OIDA
+WENN boss != NIX DAUN
+    SCHREIB("Boss:", s.wön, boss.oat == OAT_ENDBOSS, boss.radius, boss.max_lebn > 5000, wievü_von(s, OAT_ENDBOSS)) OIDA
+SUNST
+    SCHREIB("Boss: kana do") OIDA
+PASST SCHO
+
+# 5. Die Einstellungen, mitten im Spiel (Bild 2750)
+s.zustand = ZUSTAND_EINSTELLUNGEN OIDA
+SOG AU zeit_vuaher = s.spüzeit OIDA
+büda(s, 250, FOISCH) OIDA
+SCHREIB("Einstellungen:", s.zustand == ZUSTAND_EINSTELLUNGEN, s.spüzeit == zeit_vuaher) OIDA
+s.zruck() OIDA
+SCHREIB("Zruck:", s.zustand == ZUSTAND_SPÜ) OIDA
+
+# 6. Der Boss stirbt: Danach gibt es eine Verbesserung geschenkt.
+s.gegna_triff(boss ODA HOID s.gegna[0], 1000000) OIDA
+SCHREIB("Boss tot:", s.offn_boss_woi, s.offn_boss_oat == OAT_ENDBOSS) OIDA
+
+# 7. Die Figur stirbt: Das Spiel ist aus, der Lauf kommt in die Bestenliste (Bild 3000).
+p.max_lebn = 100 OIDA
+p.lebn = 1.0 OIDA
+p.heilung = 0 OIDA
+p.rüstung = 0 OIDA
+p.schutz = 0.0 OIDA
+s.spiela_triff(5) OIDA
+SOG AU tote = s.tote OIDA
+büda(s, 250, FOISCH) OIDA
+SCHREIB("Aus:", s.zustand == ZUSTAND_AUS, p.lebt, s.rang, s.tote >= tote, gibts_datei("roguewave_bestenlistn_normal.txt")) OIDA
+
+# 8. Ein neues Spiel in der Spielart "easy", und gleich die letzte Welle geschafft: gewonnen (Bild 3250).
+s.modus = "easy" OIDA
+s.start() OIDA
+s.wön = WÖN_LETZTE OIDA
+s.wön_rennt = WOAHR OIDA
+s.wön_ziel = 1 OIDA
+s.wön_tote = 1 OIDA
+büda(s, 250, FOISCH) OIDA
+SCHREIB("Gwunna:", s.zustand == ZUSTAND_GWUNNA, s.rang, gibts_datei("roguewave_bestenlistn_easy.txt")) OIDA
+
+# 9. Noch ein Lauf in "easy", diesmal verloren: Er steht hinter dem gewonnenen.
+s.start() OIDA
+büda(s, 100, FOISCH) OIDA
+s.spiela.lebn = 1.0 OIDA
+s.spiela_triff(50) OIDA
+büda(s, 150, FOISCH) OIDA
+SOG AU beste = s.bestenlistn.einträge("easy") OIDA
+SCHREIB("Zwa Läufe:", s.zustand == ZUSTAND_AUS, s.rang, LÄNGN(beste), beste[0].gwunna, beste[1].gwunna, beste[0].wön, beste[1].wön) OIDA
+
+# Noch ein Bild, damit auch das letzte (3500) fertig wird und gespeichert ist.
+büda(s, 1, FOISCH) OIDA
+
+# Die Liste steht so in der Datei, dass man sie wieder lesen kann.
+SOG AU frisch = Bestenlistn() OIDA
+SOG AU glesn = frisch.einträge("easy") OIDA
+SCHREIB("Datei:", LÄNGN(glesn), glesn[0].gwunna, glesn[0].wön, glesn[1].kennung == s.bestenlistn.letzte, LÄNGN(frisch.einträge("normal")), LÄNGN(frisch.einträge("hard"))) OIDA

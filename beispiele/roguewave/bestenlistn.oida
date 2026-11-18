@@ -1,0 +1,122 @@
+# RogueWave: die Bestenliste, für jede Spielart eine eigene Datei.
+#
+# In jeder Zeile steht ein Lauf:  kennung;welle;treffer;sekunden;gewonnen
+
+BRAUCH dateien OIDA
+BRAUCH listen OIDA
+BRAUCH texte OIDA
+BRAUCH "werte.oida" OIDA
+
+FIX BESTE_ANZAHL = 5 OIDA
+
+STRUKTUR Eintrag
+    kennung KETTN
+    wön ZOI
+    tote ZOI
+    dauer KOMMAZOI
+    gwunna JONA
+PASST SCHO
+
+# Wer alle Wellen geschafft hat, hat gewonnen.
+FUNKTIAUN hot_gwunna(e Eintrag) GIBT ZRUCK JONA
+    GIB ZRUCK e.gwunna ODA e.wön >= WÖN_LETZTE OIDA
+PASST SCHO
+
+# Gehört `a` in der Liste vor `b`? Gewonnene Läufe zuerst, der schnellste
+# voran; dann die weiteste Welle, die meisten Treffer, die längste Zeit.
+FUNKTIAUN eintrag_vuaher(a Eintrag, b Eintrag) GIBT ZRUCK JONA
+    SOG AU a_gwunna = hot_gwunna(a) OIDA
+    SOG AU b_gwunna = hot_gwunna(b) OIDA
+    WENN a_gwunna UND NED b_gwunna DAUN
+        GIB ZRUCK WOAHR OIDA
+    PASST SCHO
+    WENN b_gwunna UND NED a_gwunna DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    WENN a_gwunna DAUN
+        GIB ZRUCK a.dauer < b.dauer OIDA
+    PASST SCHO
+    WENN a.wön != b.wön DAUN
+        GIB ZRUCK a.wön > b.wön OIDA
+    PASST SCHO
+    WENN a.tote != b.tote DAUN
+        GIB ZRUCK a.tote > b.tote OIDA
+    PASST SCHO
+    GIB ZRUCK a.dauer > b.dauer OIDA
+PASST SCHO
+
+# Eine Zeile der Datei als Eintrag; passt etwas nicht, gibt es einen Fehler.
+FUNKTIAUN eintrag_aus(zeile KETTN) GIBT ZRUCK Eintrag ODA FEHLA
+    SOG AU teile = teil(zeile, ";") OIDA
+    WENN LÄNGN(teile) != 5 DAUN
+        GIB ZRUCK FEHLA("De Zeile hot ned fünf Teile: " + zeile) OIDA
+    PASST SCHO
+    SOG AU wön = PROBIER ZOI AUS(teile[1]) OIDA
+    SOG AU tote = PROBIER ZOI AUS(teile[2]) OIDA
+    SOG AU dauer = PROBIER KOMMAZOI AUS(teile[3]) OIDA
+    GIB ZRUCK Eintrag(teile[0], wön, tote, dauer, teile[4] == "jo") OIDA
+PASST SCHO
+
+KLASSE Bestenlistn
+    # Die Kennung vom Lauf, der zuletzt eingetragen wurde (für "← YOU").
+    letzte KETTN = ""
+    # Damit die Datei nicht in jedem Bild gelesen wird.
+    gmerkt_modus KETTN = ""
+    gmerkt LISTN VON Eintrag = []
+
+    FUNKTIAUN datei(modus KETTN) GIBT ZRUCK KETTN
+        GIB ZRUCK "roguewave_bestenlistn_" + modus + ".txt" OIDA
+    PASST SCHO
+
+    # Die Einträge einer Spielart, die besten zuerst.
+    FUNKTIAUN einträge(modus KETTN) GIBT ZRUCK LISTN VON Eintrag
+        WENN modus == MEI.gmerkt_modus DAUN
+            GIB ZRUCK MEI.gmerkt OIDA
+        PASST SCHO
+        SOG AU liste LISTN VON Eintrag = [] OIDA
+        # Gibt es die Datei noch nicht, ist die Liste eben leer.
+        FIA JEDE zeile IN lies_zeilen(MEI.datei(modus)) ODA HOID [] TUA
+            PROBIER e = eintrag_aus(zeile)
+                HAU EINE(liste, e) OIDA
+            WONNS SCHIEFGEHT f
+                # Eine kaputte Zeile wird übergangen.
+                WEIDA OIDA
+            PASST SCHO
+        PASST SCHO
+        MEI.gmerkt_modus = modus OIDA
+        MEI.gmerkt = liste OIDA
+        GIB ZRUCK liste OIDA
+    PASST SCHO
+
+    # Trägt einen Lauf ein und gibt seinen Platz zurück (1 ist der beste),
+    # oder 0, wenn er es nicht unter die Besten geschafft hat.
+    FUNKTIAUN eintragn(modus KETTN, wön ZOI, tote ZOI, dauer KOMMAZOI, gwunna JONA) GIBT ZRUCK ZOI
+        SOG AU liste = MEI.einträge(modus) OIDA
+        SOG AU kennung = "lauf" + KETTN(ZUFOI(0, 999999999)) OIDA
+        MEI.letzte = kennung OIDA
+        HAU EINE(liste, Eintrag(kennung, wön, tote, dauer, gwunna)) OIDA
+        sortier(liste, eintrag_vuaher) OIDA
+        SOLONG LÄNGN(liste) > BESTE_ANZAHL TUA
+            HAU AUSSE(liste, LÄNGN(liste) - 1) OIDA
+        PASST SCHO
+
+        SOG AU inhalt = "" OIDA
+        SOG AU platz = 0 OIDA
+        FIA i VON 0 BIS LÄNGN(liste) - 1 TUA
+            SOG AU e = liste[i] OIDA
+            SOG AU jo_na = "na" OIDA
+            WENN e.gwunna DAUN
+                jo_na = "jo" OIDA
+            PASST SCHO
+            inhalt += e.kennung + ";" + KETTN(e.wön) + ";" + KETTN(e.tote) + ";" + KETTN(e.dauer) + ";" + jo_na + "\n" OIDA
+            WENN e.kennung == kennung DAUN
+                platz = i + 1 OIDA
+            PASST SCHO
+        PASST SCHO
+        PROBIER schreib_datei(MEI.datei(modus), inhalt)
+        WONNS SCHIEFGEHT f
+            SCHREIB("De Bestenlistn kaun i ned speichern:", f.meldung) OIDA
+        PASST SCHO
+        GIB ZRUCK platz OIDA
+    PASST SCHO
+PASST SCHO
