@@ -1,0 +1,19 @@
+Hansi gegn da Ratz
+  Runde 1 - Hansi (56) gegn da Ratz (5)
+  Runde 2 - Hansi (56) gegn da Ratz (0)
+Hansi gegn da Räuba
+  Runde 1 - Hansi (66) gegn da Räuba (21)
+  Runde 2 - Hansi (61) gegn da Räuba (12)
+  Runde 3 - Hansi (56) gegn da Räuba (3)
+  Runde 4 - Hansi (56) gegn da Räuba (0)
+Hansi gegn da Droch
+  Runde 1 - Hansi (67) gegn da Droch (34)
+  Runde 2 - Hansi (63) gegn da Droch (28)
+  Runde 3 - Hansi (51) gegn da Droch (22)
+  Runde 4 - Hansi (47) gegn da Droch (16)
+  Runde 5 - Hansi (43) gegn da Droch (10)
+  Runde 6 - Hansi (31) gegn da Droch (4)
+  Runde 7 - Hansi (31) gegn da Droch (0)
+
+Besiegt: ["da Ratz", "da Räuba", "da Droch"]
+Höd("Hansi", 46, 9, ["da Ratz", "da Räuba", "da Droch"])

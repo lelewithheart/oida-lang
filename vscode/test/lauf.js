@@ -102,6 +102,23 @@ const pruefungen = {
         assert.deepStrictEqual(vscode.languages.getDiagnostics(dokument.uri), []);
     },
 
+    async 'Klassen, Methoden und Felder werden eingefärbt'() {
+        const dokument = await oeffne(schreibe('klasse.oida',
+            'KLASSE Wesen\n    lebn ZOI = 3\n    FUNKTIAUN sog()\n        SCHREIB(SÖWA.lebn) OIDA\n    PASST SCHO\n'
+            + 'PASST SCHO\nSOG AU w = Wesen() OIDA\nw.sog() OIDA\n'));
+        const liste = await tokens(dokument);
+        const art = (zeile, spalte) => (liste.find((t) => t[0] === zeile && t[1] === spalte) || [])[3];
+        assert.strictEqual(art(0, 0), 'keyword');    // KLASSE
+        assert.strictEqual(art(0, 7), 'type');       // Wesen, wo die Klasse steht
+        assert.strictEqual(art(6, 11), 'type');      // Wesen() beim Anlegen
+        assert.strictEqual(art(3, 16), 'keyword');   // SÖWA
+        assert.strictEqual(art(3, 21), 'property');  // .lebn
+        assert.strictEqual(art(7, 0), 'variable');   // w
+        assert.strictEqual(art(7, 2), 'function');   // .sog()
+        await warte(500);
+        assert.deepStrictEqual(vscode.languages.getDiagnostics(dokument.uri), []);
+    },
+
     async 'Fehlendes OIDA wird unterstrichen'() {
         const dokument = await oeffne(schreibe('fehler.oida', 'SOG AU alter = 17\nSCHREIB(alter) OIDA\n'));
         const fehler = await bis('Fehler erscheint', () => {

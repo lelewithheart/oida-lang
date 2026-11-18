@@ -310,7 +310,12 @@ pub fn zerlegen_nachsichtig(quelltext: &str, wb: &Woerterbuch) -> (Vec<Token>, V
     let mut tokens = Vec::with_capacity(roh.len());
     let mut i = 0;
     while i < roh.len() {
-        if let TokenArt::Name(wort) = &roh[i].token.art {
+        // Direkt hinter einem Punkt steht immer ein Name (Feld oder Methode),
+        // auch wenn das Wort sonst eines der Sprache wäre.
+        let nach_punkt = i > 0 && roh[i - 1].token.art == TokenArt::Punkt;
+        if let TokenArt::Name(wort) = &roh[i].token.art
+            && !nach_punkt
+        {
             let mut folge = vec![norm(wort)];
             let mut j = i + 1;
             while j < roh.len() && roh[j].klebt && folge.len() < wb.laengste_phrase() {
@@ -508,6 +513,35 @@ mod tests {
                 DateiEnde
             ]
         );
+    }
+
+    #[test]
+    fn hinter_dem_punkt_ist_alles_ein_name() {
+        assert_eq!(
+            arten("x.von.ende.längn(1) SÖWA.lebn DE OIDN.schritt()"),
+            vec![
+                name("x"),
+                Punkt,
+                name("von"),
+                Punkt,
+                name("ende"),
+                Punkt,
+                name("längn"),
+                KlammerAuf,
+                Zoi(1),
+                KlammerZu,
+                Schluessel(S::This),
+                Punkt,
+                name("lebn"),
+                Schluessel(S::Super),
+                Punkt,
+                name("schritt"),
+                KlammerAuf,
+                KlammerZu,
+                DateiEnde
+            ]
+        );
+        assert_eq!(arten("KLASSE A ERBT VON B"), vec![Schluessel(S::Class), name("A"), Schluessel(S::Extends), name("B"), DateiEnde]);
     }
 
     #[test]

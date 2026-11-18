@@ -1,0 +1,24 @@
+--- Felder
+a: a1 a2 a3 3 6 1
+Ding("aa!", Punkt(6, 13), ["a1", "zwa", "a3"], 1)
+nix langer1 nix
+--- Objekte in Objekten
+aa! a1 aa!: a1 zwa a3
+WOAHR b Punkt(2, 4)
+c: c1 bleibt
+Kistn(Ding("c", Punkt(1, 10), ["c1", "bleibt"], 5), [])
+--- Listen in Objekten
+6 p4 p2: p21 p22 dazua WOAHR
+p4 aa!
+14
+0 aa!
+--- Wegwerfen, während es gebraucht wird
+oid: oid1 oid2 / gwechslt / neich:
+neichgwechslt neich
+letzter gwechslt 3 neich
+aa! tauft z!
+--- Strukturen mit Objekten
+WOAHR r 4
+S WOAHR 3
+--- vü auf amoi
+1000 1001

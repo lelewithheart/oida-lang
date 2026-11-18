@@ -41,6 +41,12 @@ struct Pruefer<'a> {
     typen: Typen,
     /// Name einer Struktur -> ihre Nummer in `typen.strukturen`.
     struktur_nummern: HashMap<String, u32>,
+    /// Name einer Klasse -> ihre Nummer in `typen.klassen`.
+    klassen_nummern: HashMap<String, u32>,
+    /// Die Klasse, deren Methoden gerade geprüft werden.
+    methoden_klasse: Option<u32>,
+    /// In einer Methode: die Klasse und die Nummer von SÖWA.
+    selbst: Option<(u32, usize)>,
 }
 
 /// Das Wort, unter dem eine eingebaute Funktion im Wörterbuch steht.
@@ -132,9 +138,13 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         schleifen: 0,
         typen: Typen::default(),
         struktur_nummern: HashMap::new(),
+        klassen_nummern: HashMap::new(),
+        methoden_klasse: None,
+        selbst: None,
     };
 
-    p.strukturen(&programm.strukturen);
+    p.strukturen(&programm.strukturen, &programm.klassen);
+    p.klassen(&mut programm.klassen);
 
     // Alle Funktionen kennenlernen, damit die Reihenfolge egal ist.
     for f in &mut programm.funktionen {
@@ -142,11 +152,18 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
             parameter.typ = p.typ_aus(&parameter.angabe);
         }
         f.rueckgabe = f.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| p.typ_aus(angabe));
-        if p.struktur_nummern.contains_key(&f.name) {
+        let schon = if p.struktur_nummern.contains_key(&f.name) {
+            Some(Schluessel::Struct)
+        } else if p.klassen_nummern.contains_key(&f.name) {
+            Some(Schluessel::Class)
+        } else {
+            None
+        };
+        if let Some(schon) = schon {
             let meldung = format!(
                 "'{}' gibt's scho ois {}, des kaun ned a no a {} sei.",
                 f.name,
-                p.wort(Schluessel::Struct),
+                p.wort(schon),
                 p.wort(Schluessel::Function)
             );
             p.melde(f.pos, meldung);
@@ -166,9 +183,16 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
     for f in &mut programm.funktionen {
         p.funktion(f);
     }
+    for (nummer, k) in programm.klassen.iter_mut().enumerate() {
+        // Eine doppelte Klasse ist schon gemeldet; ihr Inhalt wird nicht geprüft.
+        if p.klassen_nummern.get(&k.name) == Some(&(nummer as u32)) {
+            p.klassen_inhalt(nummer as u32, k);
+        }
+    }
 
     p.bereiche = vec![HashMap::new()];
     p.funktion = None;
+    p.selbst = None;
     p.schleifen = 0;
     for a in &mut programm.haupt {
         p.anweisung(a);
@@ -200,6 +224,7 @@ impl Pruefer<'_> {
             Typ::Jona => self.wort(Schluessel::Boolean).to_string(),
             Typ::Kettn => self.wort(Schluessel::Text).to_string(),
             Typ::Struktur(_) => self.typen.struktur(typ).map_or_else(String::new, |s| s.name.clone()),
+            Typ::Klasse(_) => self.typen.klasse(typ).map_or_else(String::new, |k| k.name.clone()),
             Typ::Liste(_) => format!(
                 "{} {} {}",
                 self.wort(Schluessel::List),
@@ -223,20 +248,24 @@ impl Pruefer<'_> {
     fn typ_aus(&mut self, angabe: &TypAngabe) -> Typ {
         match angabe {
             TypAngabe::Einfach(typ) => *typ,
-            TypAngabe::Name { name, pos } => match self.struktur_nummern.get(name) {
-                Some(nummer) => Typ::Struktur(*nummer),
-                None => {
-                    let meldung = match self.wb.festes_wort(name) {
-                        Some(schluessel) => format!("Des haaßt {}, ned {}!", self.wort(schluessel), name),
-                        None => format!(
-                            "An Typ '{name}' kenn i ned. Gibt's a {} mit dem Nom?",
-                            self.wort(Schluessel::Struct)
-                        ),
-                    };
-                    self.melde(*pos, meldung);
-                    Typ::Fehler
+            TypAngabe::Name { name, pos } => {
+                if let Some(nummer) = self.struktur_nummern.get(name) {
+                    return Typ::Struktur(*nummer);
                 }
-            },
+                if let Some(nummer) = self.klassen_nummern.get(name) {
+                    return Typ::Klasse(*nummer);
+                }
+                let meldung = match self.wb.festes_wort(name) {
+                    Some(schluessel) => format!("Des haaßt {}, ned {}!", self.wort(schluessel), name),
+                    None => format!(
+                        "An Typ '{name}' kenn i ned. Gibt's a {} oda a {} mit dem Nom?",
+                        self.wort(Schluessel::Struct),
+                        self.wort(Schluessel::Class)
+                    ),
+                };
+                self.melde(*pos, meldung);
+                Typ::Fehler
+            }
             TypAngabe::Liste(innen) => match self.typ_aus(innen) {
                 Typ::Fehler => Typ::Fehler,
                 element => self.typen.liste_von(element),
@@ -274,7 +303,7 @@ impl Pruefer<'_> {
 
     /// Lernt alle Strukturen kennen: erst die Namen (damit die Reihenfolge
     /// egal ist), dann die Felder.
-    fn strukturen(&mut self, definitionen: &[StrukturDef]) {
+    fn strukturen(&mut self, definitionen: &[StrukturDef], klassen: &[KlassenDef]) {
         // Welche Definition zu welcher Nummer gehört (doppelte Namen fallen weg).
         let mut gueltig: Vec<&StrukturDef> = Vec::new();
         for s in definitionen {
@@ -287,6 +316,8 @@ impl Pruefer<'_> {
             self.typen.strukturen.push(StrukturInfo { name: s.name.clone(), felder: Vec::new() });
             gueltig.push(s);
         }
+        // Auch die Namen der Klassen müssen bekannt sein, bevor Felder aufgelöst werden.
+        self.klassen_namen(klassen);
         for (nummer, s) in gueltig.iter().enumerate() {
             let mut felder: Vec<(String, Typ)> = Vec::new();
             for feld in &s.felder {
@@ -332,6 +363,356 @@ impl Pruefer<'_> {
         }
     }
 
+    // ----------------------------------------------------------- Klassen
+
+    /// Trägt die Namen aller Klassen ein. Jede Klasse bekommt die Nummer, an
+    /// der sie im Programm steht; eine doppelte bleibt leer und wird gemeldet.
+    fn klassen_namen(&mut self, definitionen: &[KlassenDef]) {
+        for (nummer, k) in definitionen.iter().enumerate() {
+            self.typen.klassen.push(KlassenInfo { name: k.name.clone(), ..KlassenInfo::default() });
+            if self.klassen_nummern.contains_key(&k.name) {
+                let meldung = format!("De {} '{}' gibt's scho. Zwamoi geht ned.", self.wort(Schluessel::Class), k.name);
+                self.melde(k.pos, meldung);
+            } else if self.struktur_nummern.contains_key(&k.name) {
+                let meldung = format!(
+                    "'{}' gibt's scho ois {}, des kaun ned a no a {} sei.",
+                    k.name,
+                    self.wort(Schluessel::Struct),
+                    self.wort(Schluessel::Class)
+                );
+                self.melde(k.pos, meldung);
+            } else {
+                self.klassen_nummern.insert(k.name.clone(), nummer as u32);
+            }
+        }
+    }
+
+    /// Die oberste Klasse der Familie.
+    fn wurzel(&self, klasse: u32) -> u32 {
+        let mut aktuell = klasse;
+        for _ in 0..self.typen.klassen.len() {
+            match self.typen.klassen[aktuell as usize].eltern {
+                Some(eltern) => aktuell = eltern,
+                None => break,
+            }
+        }
+        aktuell
+    }
+
+    /// Löst auf, wer von wem erbt, und baut für jede Klasse die Liste ihrer
+    /// Felder und Methoden (die geerbten zuerst).
+    fn klassen(&mut self, definitionen: &mut [KlassenDef]) {
+        let gueltig: Vec<usize> = (0..definitionen.len())
+            .filter(|n| self.klassen_nummern.get(&definitionen[*n].name) == Some(&(*n as u32)))
+            .collect();
+
+        // Wer erbt von wem?
+        for &n in &gueltig {
+            let k = &definitionen[n];
+            let Some((eltern_name, pos)) = &k.eltern else { continue };
+            match self.klassen_nummern.get(eltern_name).copied() {
+                Some(eltern) if eltern as usize == n => {
+                    let meldung =
+                        format!("De {} '{}' kaun ned von si söwa erbn.", self.wort(Schluessel::Class), k.name);
+                    self.melde(*pos, meldung);
+                }
+                Some(eltern) => self.typen.klassen[n].eltern = Some(eltern),
+                None => {
+                    let meldung = if self.struktur_nummern.contains_key(eltern_name) {
+                        format!(
+                            "'{eltern_name}' is a {}, erbn kaun ma nur von ana {}.",
+                            self.wort(Schluessel::Struct),
+                            self.wort(Schluessel::Class)
+                        )
+                    } else {
+                        format!("De {} '{eltern_name}' kenn i ned.", self.wort(Schluessel::Class))
+                    };
+                    self.melde(*pos, meldung);
+                }
+            }
+        }
+        // Im Kreis erben geht nicht: A von B und B von A.
+        for &n in &gueltig {
+            let mut aktuell = self.typen.klassen[n].eltern;
+            for _ in 0..definitionen.len() {
+                match aktuell {
+                    Some(e) if e as usize == n => {
+                        let meldung = format!(
+                            "De {} '{}' erbt im Kreis von si söwa.",
+                            self.wort(Schluessel::Class),
+                            definitionen[n].name
+                        );
+                        self.melde(definitionen[n].pos, meldung);
+                        self.typen.klassen[n].eltern = None;
+                        break;
+                    }
+                    Some(e) => aktuell = self.typen.klassen[e as usize].eltern,
+                    None => break,
+                }
+            }
+        }
+
+        // Eltern vor den Kindern drannehmen, damit die geerbten Felder und Methoden schon feststehen.
+        let tiefe = |typen: &Typen, n: usize| {
+            let mut stufen = 0;
+            let mut aktuell = typen.klassen[n].eltern;
+            while let Some(e) = aktuell {
+                stufen += 1;
+                aktuell = typen.klassen[e as usize].eltern;
+            }
+            stufen
+        };
+        let mut reihenfolge = gueltig.clone();
+        reihenfolge.sort_by_key(|n| tiefe(&self.typen, *n));
+
+        // Methoden, die eine geerbte ersetzen: (Klasse, Name)
+        let mut ueberschrieben: Vec<(u32, String)> = Vec::new();
+        for n in reihenfolge {
+            let klassen_name = definitionen[n].name.clone();
+            let (mut felder, mut methoden) = match self.typen.klassen[n].eltern {
+                Some(e) => {
+                    let eltern = &self.typen.klassen[e as usize];
+                    (eltern.felder.clone(), eltern.methoden.clone())
+                }
+                None => (Vec::new(), Vec::new()),
+            };
+            for (stelle, feld) in definitionen[n].felder.iter().enumerate() {
+                let typ = self.typ_aus(&feld.angabe);
+                if felder.iter().any(|f| f.name == feld.name) {
+                    let meldung = format!("Des Föd '{}' gibt's in '{klassen_name}' scho.", feld.name);
+                    self.melde(feld.pos, meldung);
+                    continue;
+                }
+                felder.push(KlassenFeldInfo {
+                    name: feld.name.clone(),
+                    typ,
+                    klasse: n as u32,
+                    stelle,
+                    hat_standard: feld.standard.is_some(),
+                });
+            }
+            let mut eigene: Vec<String> = Vec::new();
+            for m in &mut definitionen[n].methoden {
+                for parameter in &mut m.parameter {
+                    parameter.typ = self.typ_aus(&parameter.angabe);
+                }
+                m.rueckgabe = m.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| self.typ_aus(angabe));
+                if eigene.contains(&m.name) {
+                    let meldung = format!("De Methode '{}' gibt's in '{klassen_name}' scho. Zwamoi geht ned.", m.name);
+                    self.melde(m.pos, meldung);
+                    continue;
+                }
+                eigene.push(m.name.clone());
+                if felder.iter().any(|f| f.name == m.name) {
+                    let meldung = format!(
+                        "'{}' is in '{klassen_name}' scho a Föd, des kaun ned a no a Methode sei.",
+                        m.name
+                    );
+                    self.melde(m.pos, meldung);
+                    continue;
+                }
+                let info = MethodenInfo {
+                    name: m.name.clone(),
+                    parameter: m.parameter.iter().map(|p| p.typ).collect(),
+                    rueckgabe: m.rueckgabe,
+                    klasse: n as u32,
+                    platz: None,
+                };
+                match methoden.iter_mut().find(|alt| alt.name == m.name) {
+                    Some(alt) => {
+                        // Überschreiben: Die neue Fassung muss genauso aufzurufen sein wie die alte.
+                        if alt.parameter != info.parameter || alt.rueckgabe != info.rueckgabe {
+                            let meldung = format!(
+                                "De Methode '{}' in '{klassen_name}' passt ned zu der in '{}': \
+                                 Sie muass de gleichn Werte nehma und des Gleiche zruckgebn.",
+                                m.name, self.typen.klassen[alt.klasse as usize].name
+                            );
+                            self.fehler.push(Fehler::neu(m.pos, meldung));
+                        }
+                        ueberschrieben.push((n as u32, m.name.clone()));
+                        *alt = info;
+                    }
+                    None => methoden.push(info),
+                }
+            }
+            self.typen.klassen[n].felder = felder;
+            self.typen.klassen[n].methoden = methoden;
+        }
+
+        // Sprungtabellen: Eine Methode, die irgendwo in der Familie überschrieben
+        // wird, bekommt einen Platz; alle anderen werden direkt aufgerufen.
+        let mut plaetze: HashMap<(u32, String), usize> = HashMap::new();
+        let mut anzahl: HashMap<u32, usize> = HashMap::new();
+        for (klasse, name) in ueberschrieben {
+            let wurzel = self.wurzel(klasse);
+            plaetze.entry((wurzel, name)).or_insert_with(|| {
+                let naechster = anzahl.entry(wurzel).or_default();
+                *naechster += 1;
+                *naechster - 1
+            });
+        }
+        for &n in &gueltig {
+            let wurzel = self.wurzel(n as u32);
+            for m in &mut self.typen.klassen[n].methoden {
+                m.platz = plaetze.get(&(wurzel, m.name.clone())).copied();
+            }
+            self.typen.klassen[n].plaetze = anzahl.get(&wurzel).copied().unwrap_or(0);
+        }
+    }
+
+    /// Prüft, was in einer Klasse steht: die Werte, mit denen Felder beginnen, und die Methoden.
+    fn klassen_inhalt(&mut self, nummer: u32, k: &mut KlassenDef) {
+        for feld in &mut k.felder {
+            let Some(standard) = &mut feld.standard else { continue };
+            // Der Wert wird beim Anlegen des Objekts ausgerechnet: Da gibt es noch kein SÖWA.
+            self.bereiche = vec![HashMap::new()];
+            self.funktion = None;
+            self.selbst = None;
+            self.schleifen = 0;
+            let typ = self.ausdruck(standard);
+            let ziel = self.typen.klassen[nummer as usize]
+                .felder
+                .iter()
+                .find(|f| f.klasse == nummer && f.name == feld.name)
+                .map(|f| f.typ);
+            let Some(ziel) = ziel else { continue };
+            if typ == Typ::Nix {
+                self.melde(standard.pos, "Des gibt nix zruck, des kaunst in ka Föd einetuan.");
+            } else if !self.anpassen(standard, ziel) {
+                let meldung = format!(
+                    "Des Föd '{}' is {}, da Wert dahinta is oba {}.",
+                    feld.name,
+                    self.typ_name(ziel),
+                    self.typ_name(typ)
+                );
+                self.melde(standard.pos, meldung);
+            } else {
+                self.fertig_verlangt(standard);
+            }
+        }
+        self.methoden_klasse = Some(nummer);
+        for m in &mut k.methoden {
+            self.funktion(m);
+        }
+        self.methoden_klasse = None;
+    }
+
+    /// `Gegner("Hansi", 5)`: ein neues Objekt. Angegeben werden die Felder,
+    /// die keinen eigenen Wert haben, der Reihe nach (die geerbten zuerst).
+    fn neu(&mut self, ausdruck: &mut Ausdruck, nummer: u32) -> Typ {
+        let AusdruckArt::Aufruf { name, argumente } = &mut ausdruck.art else { unreachable!() };
+        let name = name.clone();
+        let mut argumente = std::mem::take(argumente);
+        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        let felder: Vec<KlassenFeldInfo> =
+            self.typen.klassen[nummer as usize].felder.iter().filter(|f| !f.hat_standard).cloned().collect();
+        if felder.len() != argumente.len() {
+            let namen: Vec<&str> = felder.iter().map(|f| f.name.as_str()).collect();
+            let braucht = match felder.len() {
+                0 => "kane Werte".to_string(),
+                1 => format!("an Wert ({})", namen[0]),
+                n => format!("{n} Werte ({})", namen.join(", ")),
+            };
+            let meldung = format!("'{name}' braucht {braucht}, du gibst eam {}.", anzahl(argumente.len()));
+            self.melde(ausdruck.pos, meldung);
+        } else {
+            for (i, (argument, feld)) in argumente.iter_mut().zip(&felder).enumerate() {
+                if !self.anpassen(argument, feld.typ) {
+                    let meldung = format!(
+                        "'{name}' wü fia des Föd '{}' {}, du gibst eam {}.",
+                        feld.name,
+                        self.typ_name(feld.typ),
+                        self.typ_name(typen[i])
+                    );
+                    self.melde(argument.pos, meldung);
+                }
+            }
+        }
+        ausdruck.art = AusdruckArt::Neu { klasse: nummer, argumente };
+        ausdruck.typ = Typ::Klasse(nummer);
+        ausdruck.typ
+    }
+
+    /// Prüft den Aufruf `objekt.name(argumente)`. Gibt die Stelle der
+    /// Methode in der Klasse und ihren Rückgabetyp zurück.
+    fn methode(
+        &mut self,
+        objekt_typ: Typ,
+        name: &str,
+        argumente: &mut [Ausdruck],
+        typen: &[Typ],
+        pos: Position,
+    ) -> Option<(usize, Typ)> {
+        if objekt_typ == Typ::Fehler {
+            return None;
+        }
+        let Some(klasse) = self.typen.klasse(objekt_typ).cloned() else {
+            let meldung = format!("{} hot kane Methodn.", self.typ_name(objekt_typ).replacen("a ", "A ", 1));
+            self.melde(pos, meldung);
+            return None;
+        };
+        let Some(stelle) = klasse.methoden.iter().position(|m| m.name == name) else {
+            let meldung = if klasse.felder.iter().any(|f| f.name == name) {
+                format!("'{name}' is in '{}' a Föd, ka Methode. Loss de Klammern weg.", klasse.name)
+            } else if klasse.methoden.is_empty() {
+                format!("A Methode '{name}' gibt's in '{}' ned, de hot gor kane.", klasse.name)
+            } else {
+                let namen: Vec<&str> = klasse.methoden.iter().map(|m| m.name.as_str()).collect();
+                format!("A Methode '{name}' gibt's in '{}' ned. Es gibt: {}.", klasse.name, namen.join(", "))
+            };
+            self.melde(pos, meldung);
+            return None;
+        };
+        let methode = &klasse.methoden[stelle];
+        if typen.contains(&Typ::Fehler) {
+            return Some((stelle, methode.rueckgabe));
+        }
+        if methode.parameter.len() != argumente.len() {
+            let meldung = format!(
+                "'{name}' wü {} hom, du gibst eam {}.",
+                anzahl(methode.parameter.len()),
+                anzahl(argumente.len())
+            );
+            self.melde(pos, meldung);
+            return Some((stelle, methode.rueckgabe));
+        }
+        for (i, (argument, ziel)) in argumente.iter_mut().zip(&methode.parameter).enumerate() {
+            if !self.anpassen(argument, *ziel) {
+                let meldung = format!(
+                    "'{name}' wü ois {}. Wert {}, du gibst eam {}.",
+                    i + 1,
+                    self.typ_name(*ziel),
+                    self.typ_name(typen[i])
+                );
+                self.melde(argument.pos, meldung);
+            }
+        }
+        Some((stelle, methode.rueckgabe))
+    }
+
+    /// Prüft `DE OIDN.name(argumente)`. Gibt die Klasse zurück, in der die
+    /// aufgerufene Fassung steht, und ihren Rückgabetyp.
+    fn eltern_aufruf(&mut self, name: &str, argumente: &mut [Ausdruck], pos: Position) -> Option<(u32, Typ)> {
+        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        let Some((klasse, _)) = self.selbst else {
+            let meldung = format!("{} gibt's nur in ana Methode.", self.wort(Schluessel::Super));
+            self.melde(pos, meldung);
+            return None;
+        };
+        let Some(eltern) = self.typen.klassen[klasse as usize].eltern else {
+            let meldung = format!(
+                "'{}' erbt von kana {}, do gibt's kane {}.",
+                self.typen.klassen[klasse as usize].name,
+                self.wort(Schluessel::Class),
+                self.wort(Schluessel::Super)
+            );
+            self.melde(pos, meldung);
+            return None;
+        };
+        let (stelle, rueckgabe) = self.methode(Typ::Klasse(eltern), name, argumente, &typen, pos)?;
+        Some((self.typen.klassen[eltern as usize].methoden[stelle].klasse, rueckgabe))
+    }
+
     // --------------------------------------------------------- Variablen
 
     fn neue_variable(&mut self, name: &str, typ: Typ, pos: Position) -> usize {
@@ -363,6 +744,12 @@ impl Pruefer<'_> {
         self.bereiche = vec![HashMap::new()];
         self.schleifen = 0;
         self.funktion = Some((f.name.clone(), f.rueckgabe));
+        // In einer Methode gibt es SÖWA; es bekommt eine Nummer wie eine Variable.
+        self.selbst = self.methoden_klasse.map(|klasse| {
+            f.selbst_id = self.naechste_id;
+            self.naechste_id += 1;
+            (klasse, f.selbst_id)
+        });
         for parameter in &mut f.parameter {
             parameter.id = self.neue_variable(&parameter.name, parameter.typ, parameter.pos);
         }
@@ -580,7 +967,14 @@ impl Pruefer<'_> {
             }
             AnweisungArt::Ausdruck(ausdruck) => {
                 self.ausdruck(ausdruck);
-                if !matches!(ausdruck.art, AusdruckArt::Aufruf { .. } | AusdruckArt::Eingebaut { .. }) {
+                let aufruf = matches!(
+                    ausdruck.art,
+                    AusdruckArt::Aufruf { .. }
+                        | AusdruckArt::Eingebaut { .. }
+                        | AusdruckArt::Methode { .. }
+                        | AusdruckArt::ElternAufruf { .. }
+                );
+                if !aufruf {
                     self.melde(ausdruck.pos, "Des rechnet wos aus und schmeißt's glei wieda weg. Wos soll des?");
                 }
             }
@@ -637,6 +1031,14 @@ impl Pruefer<'_> {
             einpacken(ausdruck, Typ::Kommazoi);
             return true;
         }
+        // Ein Gegner ist auch ein Wesen: Wo die Elternklasse verlangt ist, passt jedes Kind.
+        if let (Typ::Klasse(von), Typ::Klasse(nach)) = (ausdruck.typ, ziel)
+            && self.typen.erbt_von(von, nach)
+        {
+            // Im Baum steht danach überall der Typ, als der der Wert verwendet wird.
+            einpacken(ausdruck, ziel);
+            return true;
+        }
         if let Some(element) = self.typen.element(ziel)
             && let AusdruckArt::ListenWert { elemente } = &mut ausdruck.art
         {
@@ -655,11 +1057,14 @@ impl Pruefer<'_> {
     /// Bestimmt den Typ eines Ausdrucks und trägt ihn ein.
     fn ausdruck(&mut self, ausdruck: &mut Ausdruck) -> Typ {
         let pos = ausdruck.pos;
-        // Heißt die "Funktion" wie eine Struktur, wird ein neuer Wert gebaut.
-        if let AusdruckArt::Aufruf { name, .. } = &ausdruck.art
-            && let Some(&nummer) = self.struktur_nummern.get(name)
-        {
-            return self.bau(ausdruck, nummer);
+        // Heißt die "Funktion" wie eine Struktur oder Klasse, wird ein neuer Wert gebaut.
+        if let AusdruckArt::Aufruf { name, .. } = &ausdruck.art {
+            if let Some(&nummer) = self.struktur_nummern.get(name) {
+                return self.bau(ausdruck, nummer);
+            }
+            if let Some(&nummer) = self.klassen_nummern.get(name) {
+                return self.neu(ausdruck, nummer);
+            }
         }
         let typ = match &mut ausdruck.art {
             AusdruckArt::Zoi(_) => Typ::Zoi,
@@ -748,6 +1153,25 @@ impl Pruefer<'_> {
                 let objekt_typ = self.ausdruck(objekt);
                 if objekt_typ == Typ::Fehler {
                     Typ::Fehler
+                } else if let Some(klasse) = self.typen.klasse(objekt_typ).cloned() {
+                    match klasse.felder.iter().position(|feld| feld.name == *name) {
+                        Some(stelle) => {
+                            *nummer = stelle;
+                            klasse.felder[stelle].typ
+                        }
+                        None => {
+                            let meldung = if klasse.methoden.iter().any(|m| m.name == *name) {
+                                format!("'{name}' is in '{}' a Methode: Schreib {name}(...).", klasse.name)
+                            } else if klasse.felder.is_empty() {
+                                format!("A Föd '{name}' gibt's in '{}' ned, de hot gor kane Föda.", klasse.name)
+                            } else {
+                                let namen: Vec<&str> = klasse.felder.iter().map(|f| f.name.as_str()).collect();
+                                format!("A Föd '{name}' gibt's in '{}' ned. Es gibt: {}.", klasse.name, namen.join(", "))
+                            };
+                            self.melde(pos, meldung);
+                            Typ::Fehler
+                        }
+                    }
                 } else if let Some(struktur) = self.typen.struktur(objekt_typ).cloned() {
                     match struktur.felder.iter().position(|(feld, _)| feld == name) {
                         Some(stelle) => {
@@ -806,6 +1230,40 @@ impl Pruefer<'_> {
             }
             AusdruckArt::ListenWert { elemente } => self.listen_wert(elemente),
             AusdruckArt::Bau { struktur, .. } => Typ::Struktur(*struktur),
+            AusdruckArt::Neu { klasse, .. } => Typ::Klasse(*klasse),
+            AusdruckArt::Selbst { id } => match self.selbst {
+                Some((klasse, selbst_id)) => {
+                    *id = selbst_id;
+                    Typ::Klasse(klasse)
+                }
+                None => {
+                    let meldung = format!("{} gibt's nur in ana Methode.", self.wort(Schluessel::This));
+                    self.melde(pos, meldung);
+                    Typ::Fehler
+                }
+            },
+            AusdruckArt::Methode { objekt, name, argumente, nummer } => {
+                let objekt_typ = self.ausdruck(objekt);
+                let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+                let name = name.clone();
+                match self.methode(objekt_typ, &name, argumente, &typen, pos) {
+                    Some((stelle, rueckgabe)) => {
+                        *nummer = stelle;
+                        rueckgabe
+                    }
+                    None => Typ::Fehler,
+                }
+            }
+            AusdruckArt::ElternAufruf { name, argumente, klasse } => {
+                let name = name.clone();
+                match self.eltern_aufruf(&name, argumente, pos) {
+                    Some((in_klasse, rueckgabe)) => {
+                        *klasse = in_klasse;
+                        rueckgabe
+                    }
+                    None => Typ::Fehler,
+                }
+            }
         };
         ausdruck.typ = typ;
         typ
@@ -832,6 +1290,19 @@ impl Pruefer<'_> {
         };
         if gemeinsam == Typ::Zoi && typen.contains(&Typ::Kommazoi) {
             gemeinsam = Typ::Kommazoi;
+        }
+        // Objekte verschiedener Klassen: Es gilt die nächste Klasse, von der alle erben.
+        for typ in &typen {
+            if let (Typ::Klasse(a), Typ::Klasse(b)) = (gemeinsam, *typ) {
+                let mut vorfahr = Some(a);
+                while let Some(v) = vorfahr {
+                    if self.typen.erbt_von(b, v) {
+                        gemeinsam = Typ::Klasse(v);
+                        break;
+                    }
+                    vorfahr = self.typen.klassen[v as usize].eltern;
+                }
+            }
         }
         for (i, element) in elemente.iter_mut().enumerate() {
             if !self.anpassen(element, gemeinsam) {
@@ -891,6 +1362,13 @@ impl Pruefer<'_> {
     ) -> Typ {
         if l == Typ::Fehler || r == Typ::Fehler {
             return Typ::Fehler;
+        }
+        // Zwei Objekte vergleichen heißt fragen: Ist es dasselbe Objekt?
+        if let (Typ::Klasse(a), Typ::Klasse(b)) = (l, r)
+            && matches!(op, BinaerOp::Gleich | BinaerOp::Ungleich)
+            && (self.typen.erbt_von(a, b) || self.typen.erbt_von(b, a))
+        {
+            return Typ::Jona;
         }
         if let Some(typ) = binaer_ergebnis(op, l, r) {
             // Zwei Zahlen: trifft ZOI auf KOMMAZOI, wird mit KOMMAZOI gerechnet.
@@ -1082,7 +1560,8 @@ fn anzahl(n: usize) -> String {
 fn ist_ziel(ausdruck: &Ausdruck) -> bool {
     match &ausdruck.art {
         AusdruckArt::Variable { .. } | AusdruckArt::Stelle { .. } => true,
-        AusdruckArt::Feld { objekt, .. } => ist_ziel(objekt),
+        // Das Feld eines Objekts kann man immer ändern, egal woher das Objekt kommt.
+        AusdruckArt::Feld { objekt, .. } => matches!(objekt.typ, Typ::Klasse(_)) || ist_ziel(objekt),
         _ => false,
     }
 }
@@ -1093,6 +1572,7 @@ fn ziel_text(ausdruck: &Ausdruck) -> String {
         AusdruckArt::Variable { name, .. } => name.clone(),
         AusdruckArt::Feld { objekt, name, .. } => format!("{}.{name}", ziel_text(objekt)),
         AusdruckArt::Stelle { liste, .. } => format!("{}[...]", ziel_text(liste)),
+        AusdruckArt::Selbst { .. } => "SÖWA".to_string(),
         _ => "des".to_string(),
     }
 }
@@ -1426,7 +1906,7 @@ mod tests {
         let f = fehler("STRUKTUR A\nPASST SCHO\nSTRUKTUR A\nPASST SCHO");
         assert_eq!(f.meldung, "De STRUKTUR 'A' gibt's scho. Zwamoi geht ned.");
         let f = fehler("STRUKTUR A\n b Gibtsned\nPASST SCHO");
-        assert_eq!(f.meldung, "An Typ 'Gibtsned' kenn i ned. Gibt's a STRUKTUR mit dem Nom?");
+        assert_eq!(f.meldung, "An Typ 'Gibtsned' kenn i ned. Gibt's a STRUKTUR oda a KLASSE mit dem Nom?");
         let f = fehler("STRUKTUR A\nPASST SCHO\nFUNKTIAUN A()\nPASST SCHO");
         assert_eq!(f.meldung, "'A' gibt's scho ois STRUKTUR, des kaun ned a no a FUNKTIAUN sei.");
     }
@@ -1531,5 +2011,87 @@ mod tests {
         assert_eq!(f.meldung, "A Punkt == a Punkt? Des geht si ned aus.");
         let f = fehler("SOG AU a = [1] = [1] OIDA");
         assert_eq!(f.meldung, "A LISTN VON ZOI == a LISTN VON ZOI? Des geht si ned aus.");
+    }
+
+    const WESEN: &str = "KLASSE Wesen\n name KETTN\n lebn ZOI = 100\n \
+        FUNKTIAUN sog() GIBT ZRUCK KETTN\n  GIB ZRUCK SÖWA.name OIDA\n PASST SCHO\n \
+        FUNKTIAUN lebt() GIBT ZRUCK JONA\n  GIB ZRUCK SÖWA.lebn > 0 OIDA\n PASST SCHO\nPASST SCHO\n\
+        KLASSE Gegner ERBT VON Wesen\n staerke ZOI\n \
+        FUNKTIAUN sog() GIBT ZRUCK KETTN\n  GIB ZRUCK DE OIDN.sog() + \"!\" OIDA\n PASST SCHO\nPASST SCHO\n";
+
+    #[test]
+    fn klassen_erben_felder_und_methoden() {
+        let programm = ok(&format!(
+            "{WESEN}SOG AU g = Gegner(\"Sepp\", 5) OIDA\nSCHREIB(g.name, g.lebn, g.staerke, g.lebt(), g.sog()) OIDA"
+        ));
+        let (wesen, gegner) = (&programm.typen.klassen[0], &programm.typen.klassen[1]);
+        assert_eq!(gegner.eltern, Some(0));
+        // Die geerbten Felder kommen zuerst; lebn hat einen eigenen Wert und wird nicht angegeben.
+        let felder: Vec<(&str, bool)> = gegner.felder.iter().map(|f| (f.name.as_str(), f.hat_standard)).collect();
+        assert_eq!(felder, vec![("name", false), ("lebn", true), ("staerke", false)]);
+        // sog() ist überschrieben und braucht einen Platz in der Sprungtabelle, lebt() nicht.
+        let methoden: Vec<(&str, u32, Option<usize>)> =
+            gegner.methoden.iter().map(|m| (m.name.as_str(), m.klasse, m.platz)).collect();
+        assert_eq!(methoden, vec![("sog", 1, Some(0)), ("lebt", 0, None)]);
+        assert_eq!(wesen.methoden[0].platz, Some(0));
+        assert_eq!((wesen.plaetze, gegner.plaetze), (1, 1));
+
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[0].art else { panic!() };
+        assert_eq!(wert.typ, Typ::Klasse(1));
+        assert!(matches!(&wert.art, AusdruckArt::Neu { klasse: 1, argumente } if argumente.len() == 2));
+        // In der Methode von Gegner ruft DE OIDN die Fassung von Wesen.
+        let AnweisungArt::GibZruck { wert: Some(wert) } = &programm.klassen[1].methoden[0].rumpf[0].art else { panic!() };
+        let AusdruckArt::Binaer { links, .. } = &wert.art else { panic!() };
+        assert!(matches!(links.art, AusdruckArt::ElternAufruf { klasse: 0, .. }));
+    }
+
+    #[test]
+    fn kind_passt_wo_die_eltern_verlangt_sind() {
+        let programm = ok(&format!(
+            "{WESEN}FUNKTIAUN zeig(w Wesen)\n SCHREIB(w.sog()) OIDA\nPASST SCHO\n\
+             SOG AU w Wesen = Gegner(\"a\", 1) OIDA\nSOG AU olle = [Gegner(\"b\", 2), Wesen(\"c\")] OIDA\n\
+             zeig(Gegner(\"d\", 3)) OIDA\nw = Gegner(\"e\", 4) OIDA\nSCHREIB(w == olle[0]) OIDA"
+        ));
+        // Im Baum steht der Typ, als der der Wert verwendet wird.
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[0].art else { panic!() };
+        assert_eq!(wert.typ, Typ::Klasse(0));
+        assert!(matches!(&wert.art, AusdruckArt::Umwandlung { ziel: Typ::Klasse(0), innen } if innen.typ == Typ::Klasse(1)));
+        // Verschiedene Klassen in einer Liste: Es gilt die nächste gemeinsame.
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[1].art else { panic!() };
+        assert_eq!(programm.typen.element(wert.typ), Some(Typ::Klasse(0)));
+
+        // Umgekehrt geht es nicht, und eine Liste von Kindern ist keine Liste von Eltern.
+        let f = fehler(&format!("{WESEN}SOG AU g Gegner = Wesen(\"a\") OIDA"));
+        assert_eq!(f.meldung, "'g' soll a Gegner sei, oba des do is a Wesen.");
+        let f = fehler(&format!("{WESEN}SOG AU gs = [Gegner(\"a\", 1)] OIDA\nSOG AU ws LISTN VON Wesen = gs OIDA"));
+        assert!(f.meldung.contains("LISTN VON Wesen"), "{}", f.meldung);
+        let f = fehler(&format!("{WESEN}SOG AU w Wesen = Gegner(\"a\", 1) OIDA\nSCHREIB(w.staerke) OIDA"));
+        assert_eq!(f.meldung, "A Föd 'staerke' gibt's in 'Wesen' ned. Es gibt: name, lebn.");
+    }
+
+    #[test]
+    fn methoden_ueberschreiben_nur_mit_gleichem_aufbau() {
+        let f = fehler(
+            "KLASSE A\n FUNKTIAUN f(x ZOI) GIBT ZRUCK ZOI\n  GIB ZRUCK x OIDA\n PASST SCHO\nPASST SCHO\n\
+             KLASSE B ERBT VON A\n FUNKTIAUN f(x KOMMAZOI) GIBT ZRUCK ZOI\n  GIB ZRUCK 1 OIDA\n PASST SCHO\nPASST SCHO",
+        );
+        assert!(f.meldung.starts_with("De Methode 'f' in 'B' passt ned zu der in 'A'"), "{}", f.meldung);
+        // Geschwister dürfen gleich heißende Methoden haben, die nichts miteinander zu tun haben.
+        let programm = ok("KLASSE A\nPASST SCHO\n\
+             KLASSE B ERBT VON A\n FUNKTIAUN f() GIBT ZRUCK ZOI\n  GIB ZRUCK 1 OIDA\n PASST SCHO\nPASST SCHO\n\
+             KLASSE C ERBT VON A\n FUNKTIAUN f(x KETTN)\n PASST SCHO\nPASST SCHO");
+        assert_eq!(programm.typen.klassen[1].methoden[0].platz, None);
+        assert_eq!(programm.typen.klassen[0].plaetze, 0);
+    }
+
+    #[test]
+    fn soewa_gibt_es_nur_in_methoden() {
+        let f = fehler("SCHREIB(SÖWA) OIDA");
+        assert_eq!(f.meldung, "SÖWA gibt's nur in ana Methode.");
+        let f = fehler("FUNKTIAUN f()\n DE OIDN.g() OIDA\nPASST SCHO");
+        assert_eq!(f.meldung, "DE OIDN gibt's nur in ana Methode.");
+        // Der Wert, mit dem ein Feld beginnt, wird ausgerechnet, bevor es das Objekt gibt.
+        let f = fehler("KLASSE A\n x ZOI\n y ZOI = SÖWA.x\nPASST SCHO");
+        assert_eq!(f.meldung, "SÖWA gibt's nur in ana Methode.");
     }
 }

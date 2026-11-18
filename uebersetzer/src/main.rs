@@ -162,7 +162,12 @@ fn starten(programm: &Path) -> Result<ExitCode, String> {
     let pfad = if programm.components().count() == 1 { Path::new(".").join(programm) } else { programm.to_path_buf() };
     let status =
         Command::new(&pfad).status().map_err(|e| format!("I kaun {} ned startn: {e}", pfad.display()))?;
-    Ok(ExitCode::from(status.code().unwrap_or(1).clamp(0, 255) as u8))
+    match status.code() {
+        Some(code) if (0..=255).contains(&code) => Ok(ExitCode::from(code as u8)),
+        // Windows meldet einen Absturz (etwa einen Zugriff auf falschen Speicher) mit einer riesigen Zahl.
+        Some(code) => Err(format!("Des Programm is ogstürzt (Windows sogt: 0x{:08X}).", code as u32)),
+        None => Err("Des Programm is ogstürzt.".to_string()),
+    }
 }
 
 fn main() -> ExitCode {

@@ -9,366 +9,406 @@
 <text x="802.0" y="37.5" font-size="12" fill="#52514e">andere Sprachen</text>
 <text x="28.0" y="100.0" font-size="14" fill="#0b0b0b" font-weight="600">hallo</text>
 <text x="28.0" y="117.0" font-size="11.5" fill="#52514e">Nur eine Zeile ausgeben.</text>
-<g><title>Rust: 21 ms 0,77×</title>
+<g><title>Rust: 22 ms 0,87×</title>
 <text x="28.0" y="145.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M110.0,135.0 h20.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-20.2 z" fill="#c3c2b7"/>
-<text x="142.2" y="145.0" font-size="12" fill="#0b0b0b">21 ms<tspan fill="#898781" font-weight="400">  ·  0,77×</tspan></text>
+<path d="M110.0,135.0 h19.6 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-19.6 z" fill="#c3c2b7"/>
+<text x="141.6" y="145.0" font-size="12" fill="#0b0b0b">22 ms<tspan fill="#898781" font-weight="400">  ·  0,87×</tspan></text>
 </g>
-<g><title>C: 23 ms 0,85×</title>
+<g><title>C: 23 ms 0,91×</title>
 <text x="28.0" y="167.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M110.0,157.0 h22.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-22.7 z" fill="#c3c2b7"/>
-<text x="144.7" y="167.0" font-size="12" fill="#0b0b0b">23 ms<tspan fill="#898781" font-weight="400">  ·  0,85×</tspan></text>
+<path d="M110.0,157.0 h20.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-20.9 z" fill="#c3c2b7"/>
+<text x="142.9" y="167.0" font-size="12" fill="#0b0b0b">23 ms<tspan fill="#898781" font-weight="400">  ·  0,91×</tspan></text>
 </g>
-<g><title>OIDA: 27 ms </title>
+<g><title>OIDA: 26 ms </title>
 <text x="28.0" y="189.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M110.0,179.0 h27.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-27.3 z" fill="#2a78d6"/>
-<text x="149.3" y="189.0" font-size="12" fill="#0b0b0b" font-weight="600">27 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M110.0,179.0 h23.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-23.3 z" fill="#2a78d6"/>
+<text x="145.3" y="189.0" font-size="12" fill="#0b0b0b" font-weight="600">26 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>JavaScript: 87 ms 3,25×</title>
+<g><title>JavaScript: 102 ms 4,00×</title>
 <text x="28.0" y="211.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M110.0,201.0 h97.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-97.7 z" fill="#c3c2b7"/>
-<text x="219.7" y="211.0" font-size="12" fill="#0b0b0b">87 ms<tspan fill="#898781" font-weight="400">  ·  3,25×</tspan></text>
+<path d="M110.0,201.0 h105.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-105.2 z" fill="#c3c2b7"/>
+<text x="227.2" y="211.0" font-size="12" fill="#0b0b0b">102 ms<tspan fill="#898781" font-weight="400">  ·  4,00×</tspan></text>
 </g>
-<g><title>Java: 114 ms 4,27×</title>
-<text x="28.0" y="233.0" font-size="12" fill="#0b0b0b">Java</text>
-<path d="M110.0,223.0 h129.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-129.8 z" fill="#c3c2b7"/>
-<text x="251.8" y="233.0" font-size="12" fill="#0b0b0b">114 ms<tspan fill="#898781" font-weight="400">  ·  4,27×</tspan></text>
+<g><title>C#: 118 ms 4,62×</title>
+<text x="28.0" y="233.0" font-size="12" fill="#0b0b0b">C#</text>
+<path d="M110.0,223.0 h122.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-122.2 z" fill="#c3c2b7"/>
+<text x="244.2" y="233.0" font-size="12" fill="#0b0b0b">118 ms<tspan fill="#898781" font-weight="400">  ·  4,62×</tspan></text>
 </g>
-<g><title>C#: 121 ms 4,52×</title>
-<text x="28.0" y="255.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M110.0,245.0 h137.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-137.4 z" fill="#c3c2b7"/>
-<text x="259.4" y="255.0" font-size="12" fill="#0b0b0b">121 ms<tspan fill="#898781" font-weight="400">  ·  4,52×</tspan></text>
+<g><title>Java: 119 ms 4,67×</title>
+<text x="28.0" y="255.0" font-size="12" fill="#0b0b0b">Java</text>
+<path d="M110.0,245.0 h123.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-123.5 z" fill="#c3c2b7"/>
+<text x="245.5" y="255.0" font-size="12" fill="#0b0b0b">119 ms<tspan fill="#898781" font-weight="400">  ·  4,67×</tspan></text>
 </g>
-<g><title>Python: 171 ms 6,39×</title>
+<g><title>Python: 187 ms 7,32×</title>
 <text x="28.0" y="277.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M110.0,267.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="318.0" y="277.0" font-size="12" fill="#0b0b0b">171 ms<tspan fill="#898781" font-weight="400">  ·  6,39×</tspan></text>
+<text x="318.0" y="277.0" font-size="12" fill="#0b0b0b">187 ms<tspan fill="#898781" font-weight="400">  ·  7,32×</tspan></text>
 </g>
 <line x1="110.0" y1="128.0" x2="110.0" y2="286.0" stroke="#898781" stroke-width="1"/>
 <text x="484.0" y="100.0" font-size="14" fill="#0b0b0b" font-weight="600">fib</text>
 <text x="484.0" y="117.0" font-size="11.5" fill="#52514e">Fibonacci-Zahl 40, rekursiv.</text>
-<g><title>Rust: 410 ms 0,94×</title>
+<g><title>Rust: 392 ms 0,94×</title>
 <text x="484.0" y="145.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M566.0,135.0 h43.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-43.9 z" fill="#c3c2b7"/>
-<text x="621.9" y="145.0" font-size="12" fill="#0b0b0b">410 ms<tspan fill="#898781" font-weight="400">  ·  0,94×</tspan></text>
+<path d="M566.0,135.0 h39.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-39.2 z" fill="#c3c2b7"/>
+<text x="617.2" y="145.0" font-size="12" fill="#0b0b0b">392 ms<tspan fill="#898781" font-weight="400">  ·  0,94×</tspan></text>
 </g>
-<g><title>OIDA: 437 ms </title>
+<g><title>OIDA: 419 ms </title>
 <text x="484.0" y="167.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M566.0,157.0 h47.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-47.1 z" fill="#2a78d6"/>
-<text x="625.1" y="167.0" font-size="12" fill="#0b0b0b" font-weight="600">437 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M566.0,157.0 h42.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-42.2 z" fill="#2a78d6"/>
+<text x="620.2" y="167.0" font-size="12" fill="#0b0b0b" font-weight="600">419 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>C: 496 ms 1,13×</title>
+<g><title>C: 485 ms 1,16×</title>
 <text x="484.0" y="189.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M566.0,179.0 h53.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-53.9 z" fill="#c3c2b7"/>
-<text x="631.9" y="189.0" font-size="12" fill="#0b0b0b">496 ms<tspan fill="#898781" font-weight="400">  ·  1,13×</tspan></text>
+<path d="M566.0,179.0 h49.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-49.5 z" fill="#c3c2b7"/>
+<text x="627.5" y="189.0" font-size="12" fill="#0b0b0b">485 ms<tspan fill="#898781" font-weight="400">  ·  1,16×</tspan></text>
 </g>
-<g><title>C#: 666 ms 1,52×</title>
+<g><title>C#: 716 ms 1,71×</title>
 <text x="484.0" y="211.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M566.0,201.0 h73.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-73.8 z" fill="#c3c2b7"/>
-<text x="651.8" y="211.0" font-size="12" fill="#0b0b0b">666 ms<tspan fill="#898781" font-weight="400">  ·  1,52×</tspan></text>
+<path d="M566.0,201.0 h75.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-75.0 z" fill="#c3c2b7"/>
+<text x="653.0" y="211.0" font-size="12" fill="#0b0b0b">716 ms<tspan fill="#898781" font-weight="400">  ·  1,71×</tspan></text>
 </g>
-<g><title>Java: 680 ms 1,55×</title>
+<g><title>Java: 734 ms 1,75×</title>
 <text x="484.0" y="233.0" font-size="12" fill="#0b0b0b">Java</text>
-<path d="M566.0,223.0 h75.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-75.5 z" fill="#c3c2b7"/>
-<text x="653.5" y="233.0" font-size="12" fill="#0b0b0b">680 ms<tspan fill="#898781" font-weight="400">  ·  1,55×</tspan></text>
+<path d="M566.0,223.0 h77.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-77.0 z" fill="#c3c2b7"/>
+<text x="655.0" y="233.0" font-size="12" fill="#0b0b0b">734 ms<tspan fill="#898781" font-weight="400">  ·  1,75×</tspan></text>
 </g>
-<g><title>JavaScript: 1,71 s 3,91×</title>
+<g><title>JavaScript: 1,81 s 4,33×</title>
 <text x="484.0" y="255.0" font-size="12" fill="#0b0b0b">JavaScript</text>
 <path d="M566.0,245.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="774.0" y="255.0" font-size="12" fill="#0b0b0b">1,71 s<tspan fill="#898781" font-weight="400">  ·  3,91×</tspan></text>
+<text x="774.0" y="255.0" font-size="12" fill="#0b0b0b">1,81 s<tspan fill="#898781" font-weight="400">  ·  4,33×</tspan></text>
 </g>
-<g><title>Python: 19,79 s 45×</title>
+<g><title>Python: 21,53 s 51×</title>
 <text x="484.0" y="277.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M566.0,267.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
 <path d="M744.0,266.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
 <path d="M752.0,266.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="774.0" y="277.0" font-size="12" fill="#0b0b0b">19,79 s<tspan fill="#898781" font-weight="400">  ·  45×</tspan></text>
+<text x="774.0" y="277.0" font-size="12" fill="#0b0b0b">21,53 s<tspan fill="#898781" font-weight="400">  ·  51×</tspan></text>
 </g>
 <line x1="566.0" y1="128.0" x2="566.0" y2="286.0" stroke="#898781" stroke-width="1"/>
 <line x1="28" y1="296.0" x2="904.0" y2="296.0" stroke="#e1e0d9" stroke-width="1"/>
 <text x="28.0" y="326.0" font-size="14" fill="#0b0b0b" font-weight="600">primzahlen</text>
 <text x="28.0" y="343.0" font-size="11.5" fill="#52514e">Primzahlen unter 2 Millionen zählen, durch Probeteilen.</text>
-<g><title>C: 496 ms 0,97×</title>
-<text x="28.0" y="371.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M110.0,361.0 h143.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-143.8 z" fill="#c3c2b7"/>
-<text x="265.8" y="371.0" font-size="12" fill="#0b0b0b">496 ms<tspan fill="#898781" font-weight="400">  ·  0,97×</tspan></text>
+<g><title>OIDA: 498 ms </title>
+<text x="28.0" y="371.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
+<path d="M110.0,361.0 h142.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-142.1 z" fill="#2a78d6"/>
+<text x="264.1" y="371.0" font-size="12" fill="#0b0b0b" font-weight="600">498 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>Rust: 497 ms 0,97×</title>
-<text x="28.0" y="393.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M110.0,383.0 h144.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-144.1 z" fill="#c3c2b7"/>
-<text x="266.1" y="393.0" font-size="12" fill="#0b0b0b">497 ms<tspan fill="#898781" font-weight="400">  ·  0,97×</tspan></text>
+<g><title>C: 499 ms 1,00×</title>
+<text x="28.0" y="393.0" font-size="12" fill="#0b0b0b">C</text>
+<path d="M110.0,383.0 h142.6 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-142.6 z" fill="#c3c2b7"/>
+<text x="264.6" y="393.0" font-size="12" fill="#0b0b0b">499 ms<tspan fill="#898781" font-weight="400">  ·  1,00×</tspan></text>
 </g>
-<g><title>OIDA: 510 ms </title>
-<text x="28.0" y="415.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M110.0,405.0 h148.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-148.0 z" fill="#2a78d6"/>
-<text x="270.0" y="415.0" font-size="12" fill="#0b0b0b" font-weight="600">510 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<g><title>Rust: 502 ms 1,01×</title>
+<text x="28.0" y="415.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M110.0,405.0 h143.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-143.3 z" fill="#c3c2b7"/>
+<text x="265.3" y="415.0" font-size="12" fill="#0b0b0b">502 ms<tspan fill="#898781" font-weight="400">  ·  1,01×</tspan></text>
 </g>
-<g><title>JavaScript: 606 ms 1,19×</title>
+<g><title>JavaScript: 631 ms 1,27×</title>
 <text x="28.0" y="437.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M110.0,427.0 h176.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-176.7 z" fill="#c3c2b7"/>
-<text x="298.7" y="437.0" font-size="12" fill="#0b0b0b">606 ms<tspan fill="#898781" font-weight="400">  ·  1,19×</tspan></text>
+<path d="M110.0,427.0 h181.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-181.2 z" fill="#c3c2b7"/>
+<text x="303.2" y="437.0" font-size="12" fill="#0b0b0b">631 ms<tspan fill="#898781" font-weight="400">  ·  1,27×</tspan></text>
 </g>
-<g><title>C#: 665 ms 1,30×</title>
+<g><title>C#: 669 ms 1,34×</title>
 <text x="28.0" y="459.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M110.0,449.0 h194.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-194.3 z" fill="#c3c2b7"/>
-<text x="316.3" y="459.0" font-size="12" fill="#0b0b0b">665 ms<tspan fill="#898781" font-weight="400">  ·  1,30×</tspan></text>
+<path d="M110.0,449.0 h192.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-192.5 z" fill="#c3c2b7"/>
+<text x="314.5" y="459.0" font-size="12" fill="#0b0b0b">669 ms<tspan fill="#898781" font-weight="400">  ·  1,34×</tspan></text>
 </g>
-<g><title>Java: 671 ms 1,32×</title>
+<g><title>Java: 681 ms 1,37×</title>
 <text x="28.0" y="481.0" font-size="12" fill="#0b0b0b">Java</text>
 <path d="M110.0,471.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="318.0" y="481.0" font-size="12" fill="#0b0b0b">671 ms<tspan fill="#898781" font-weight="400">  ·  1,32×</tspan></text>
+<text x="318.0" y="481.0" font-size="12" fill="#0b0b0b">681 ms<tspan fill="#898781" font-weight="400">  ·  1,37×</tspan></text>
 </g>
-<g><title>Python: 19,92 s 39×</title>
+<g><title>Python: 20,00 s 40×</title>
 <text x="28.0" y="503.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M110.0,493.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
 <path d="M288.0,492.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
 <path d="M296.0,492.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="318.0" y="503.0" font-size="12" fill="#0b0b0b">19,92 s<tspan fill="#898781" font-weight="400">  ·  39×</tspan></text>
+<text x="318.0" y="503.0" font-size="12" fill="#0b0b0b">20,00 s<tspan fill="#898781" font-weight="400">  ·  40×</tspan></text>
 </g>
 <line x1="110.0" y1="354.0" x2="110.0" y2="512.0" stroke="#898781" stroke-width="1"/>
 <text x="484.0" y="326.0" font-size="14" fill="#0b0b0b" font-weight="600">collatz</text>
 <text x="484.0" y="343.0" font-size="11.5" fill="#52514e">Längste Collatz-Folge für Startwerte unter 1 Million.</text>
-<g><title>Rust: 198 ms 0,96×</title>
-<text x="484.0" y="371.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M566.0,361.0 h83.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-83.7 z" fill="#c3c2b7"/>
-<text x="661.7" y="371.0" font-size="12" fill="#0b0b0b">198 ms<tspan fill="#898781" font-weight="400">  ·  0,96×</tspan></text>
+<g><title>C: 199 ms 0,98×</title>
+<text x="484.0" y="371.0" font-size="12" fill="#0b0b0b">C</text>
+<path d="M566.0,361.0 h84.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-84.1 z" fill="#c3c2b7"/>
+<text x="662.1" y="371.0" font-size="12" fill="#0b0b0b">199 ms<tspan fill="#898781" font-weight="400">  ·  0,98×</tspan></text>
 </g>
-<g><title>C: 200 ms 0,96×</title>
-<text x="484.0" y="393.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M566.0,383.0 h84.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-84.4 z" fill="#c3c2b7"/>
-<text x="662.4" y="393.0" font-size="12" fill="#0b0b0b">200 ms<tspan fill="#898781" font-weight="400">  ·  0,96×</tspan></text>
+<g><title>OIDA: 203 ms </title>
+<text x="484.0" y="393.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
+<path d="M566.0,383.0 h85.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-85.9 z" fill="#2a78d6"/>
+<text x="663.9" y="393.0" font-size="12" fill="#0b0b0b" font-weight="600">203 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>OIDA: 207 ms </title>
-<text x="484.0" y="415.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M566.0,405.0 h87.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-87.7 z" fill="#2a78d6"/>
-<text x="665.7" y="415.0" font-size="12" fill="#0b0b0b" font-weight="600">207 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<g><title>Rust: 207 ms 1,02×</title>
+<text x="484.0" y="415.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M566.0,405.0 h87.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-87.7 z" fill="#c3c2b7"/>
+<text x="665.7" y="415.0" font-size="12" fill="#0b0b0b">207 ms<tspan fill="#898781" font-weight="400">  ·  1,02×</tspan></text>
 </g>
-<g><title>C#: 389 ms 1,88×</title>
+<g><title>C#: 394 ms 1,94×</title>
 <text x="484.0" y="437.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M566.0,427.0 h168.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-168.5 z" fill="#c3c2b7"/>
-<text x="746.5" y="437.0" font-size="12" fill="#0b0b0b">389 ms<tspan fill="#898781" font-weight="400">  ·  1,88×</tspan></text>
+<path d="M566.0,427.0 h170.6 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-170.6 z" fill="#c3c2b7"/>
+<text x="748.6" y="437.0" font-size="12" fill="#0b0b0b">394 ms<tspan fill="#898781" font-weight="400">  ·  1,94×</tspan></text>
 </g>
-<g><title>Java: 451 ms 2,18×</title>
+<g><title>Java: 451 ms 2,22×</title>
 <text x="484.0" y="459.0" font-size="12" fill="#0b0b0b">Java</text>
 <path d="M566.0,449.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="774.0" y="459.0" font-size="12" fill="#0b0b0b">451 ms<tspan fill="#898781" font-weight="400">  ·  2,18×</tspan></text>
+<text x="774.0" y="459.0" font-size="12" fill="#0b0b0b">451 ms<tspan fill="#898781" font-weight="400">  ·  2,22×</tspan></text>
 </g>
-<g><title>JavaScript: 2,95 s 14×</title>
+<g><title>JavaScript: 2,95 s 15×</title>
 <text x="484.0" y="481.0" font-size="12" fill="#0b0b0b">JavaScript</text>
 <path d="M566.0,471.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
 <path d="M744.0,470.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
 <path d="M752.0,470.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="774.0" y="481.0" font-size="12" fill="#0b0b0b">2,95 s<tspan fill="#898781" font-weight="400">  ·  14×</tspan></text>
+<text x="774.0" y="481.0" font-size="12" fill="#0b0b0b">2,95 s<tspan fill="#898781" font-weight="400">  ·  15×</tspan></text>
 </g>
-<g><title>Python: 31,70 s 153×</title>
+<g><title>Python: 30,73 s 152×</title>
 <text x="484.0" y="503.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M566.0,493.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
 <path d="M744.0,492.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
 <path d="M752.0,492.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="774.0" y="503.0" font-size="12" fill="#0b0b0b">31,70 s<tspan fill="#898781" font-weight="400">  ·  153×</tspan></text>
+<text x="774.0" y="503.0" font-size="12" fill="#0b0b0b">30,73 s<tspan fill="#898781" font-weight="400">  ·  152×</tspan></text>
 </g>
 <line x1="566.0" y1="354.0" x2="566.0" y2="512.0" stroke="#898781" stroke-width="1"/>
 <line x1="28" y1="522.0" x2="904.0" y2="522.0" stroke="#e1e0d9" stroke-width="1"/>
 <text x="28.0" y="552.0" font-size="14" fill="#0b0b0b" font-weight="600">mandelbrot</text>
 <text x="28.0" y="569.0" font-size="11.5" fill="#52514e">Mandelbrot-Menge auf 1000 x 1000 Punkten.</text>
-<g><title>OIDA: 243 ms </title>
-<text x="28.0" y="597.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M110.0,587.0 h93.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-93.9 z" fill="#2a78d6"/>
-<text x="215.9" y="597.0" font-size="12" fill="#0b0b0b" font-weight="600">243 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<g><title>Rust: 256 ms 0,97×</title>
+<text x="28.0" y="597.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M110.0,587.0 h125.6 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-125.6 z" fill="#c3c2b7"/>
+<text x="247.6" y="597.0" font-size="12" fill="#0b0b0b">256 ms<tspan fill="#898781" font-weight="400">  ·  0,97×</tspan></text>
 </g>
-<g><title>Rust: 249 ms 1,02×</title>
-<text x="28.0" y="619.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M110.0,609.0 h96.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-96.2 z" fill="#c3c2b7"/>
-<text x="218.2" y="619.0" font-size="12" fill="#0b0b0b">249 ms<tspan fill="#898781" font-weight="400">  ·  1,02×</tspan></text>
+<g><title>OIDA: 264 ms </title>
+<text x="28.0" y="619.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
+<path d="M110.0,609.0 h129.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-129.8 z" fill="#2a78d6"/>
+<text x="251.8" y="619.0" font-size="12" fill="#0b0b0b" font-weight="600">264 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>JavaScript: 323 ms 1,33×</title>
+<g><title>JavaScript: 324 ms 1,23×</title>
 <text x="28.0" y="641.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M110.0,631.0 h126.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-126.0 z" fill="#c3c2b7"/>
-<text x="248.0" y="641.0" font-size="12" fill="#0b0b0b">323 ms<tspan fill="#898781" font-weight="400">  ·  1,33×</tspan></text>
+<path d="M110.0,631.0 h160.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-160.1 z" fill="#c3c2b7"/>
+<text x="282.1" y="641.0" font-size="12" fill="#0b0b0b">324 ms<tspan fill="#898781" font-weight="400">  ·  1,23×</tspan></text>
 </g>
-<g><title>C#: 335 ms 1,38×</title>
+<g><title>C#: 350 ms 1,32×</title>
 <text x="28.0" y="663.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M110.0,653.0 h130.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-130.8 z" fill="#c3c2b7"/>
-<text x="252.8" y="663.0" font-size="12" fill="#0b0b0b">335 ms<tspan fill="#898781" font-weight="400">  ·  1,38×</tspan></text>
+<path d="M110.0,653.0 h172.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-172.9 z" fill="#c3c2b7"/>
+<text x="294.9" y="663.0" font-size="12" fill="#0b0b0b">350 ms<tspan fill="#898781" font-weight="400">  ·  1,32×</tspan></text>
 </g>
-<g><title>C: 372 ms 1,53×</title>
-<text x="28.0" y="685.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M110.0,675.0 h145.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-145.7 z" fill="#c3c2b7"/>
-<text x="267.7" y="685.0" font-size="12" fill="#0b0b0b">372 ms<tspan fill="#898781" font-weight="400">  ·  1,53×</tspan></text>
+<g><title>Java: 368 ms 1,39×</title>
+<text x="28.0" y="685.0" font-size="12" fill="#0b0b0b">Java</text>
+<path d="M110.0,675.0 h182.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-182.1 z" fill="#c3c2b7"/>
+<text x="304.1" y="685.0" font-size="12" fill="#0b0b0b">368 ms<tspan fill="#898781" font-weight="400">  ·  1,39×</tspan></text>
 </g>
-<g><title>Java: 497 ms 2,04×</title>
-<text x="28.0" y="707.0" font-size="12" fill="#0b0b0b">Java</text>
+<g><title>C: 395 ms 1,49×</title>
+<text x="28.0" y="707.0" font-size="12" fill="#0b0b0b">C</text>
 <path d="M110.0,697.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="318.0" y="707.0" font-size="12" fill="#0b0b0b">497 ms<tspan fill="#898781" font-weight="400">  ·  2,04×</tspan></text>
+<text x="318.0" y="707.0" font-size="12" fill="#0b0b0b">395 ms<tspan fill="#898781" font-weight="400">  ·  1,49×</tspan></text>
 </g>
-<g><title>Python: 28,84 s 119×</title>
+<g><title>Python: 30,90 s 117×</title>
 <text x="28.0" y="729.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M110.0,719.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
 <path d="M288.0,718.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
 <path d="M296.0,718.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="318.0" y="729.0" font-size="12" fill="#0b0b0b">28,84 s<tspan fill="#898781" font-weight="400">  ·  119×</tspan></text>
+<text x="318.0" y="729.0" font-size="12" fill="#0b0b0b">30,90 s<tspan fill="#898781" font-weight="400">  ·  117×</tspan></text>
 </g>
 <line x1="110.0" y1="580.0" x2="110.0" y2="738.0" stroke="#898781" stroke-width="1"/>
 <text x="484.0" y="552.0" font-size="14" fill="#0b0b0b" font-weight="600">teilchen</text>
 <text x="484.0" y="569.0" font-size="11.5" fill="#52514e">Hunderttausend Teilchen in einer Liste, 300 Runden lang bewegt.</text>
-<g><title>C: 80 ms 0,74×</title>
-<text x="484.0" y="597.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M566.0,587.0 h45.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-45.4 z" fill="#c3c2b7"/>
-<text x="623.4" y="597.0" font-size="12" fill="#0b0b0b">80 ms<tspan fill="#898781" font-weight="400">  ·  0,74×</tspan></text>
+<g><title>Rust: 86 ms 0,79×</title>
+<text x="484.0" y="597.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M566.0,587.0 h53.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-53.2 z" fill="#c3c2b7"/>
+<text x="631.2" y="597.0" font-size="12" fill="#0b0b0b">86 ms<tspan fill="#898781" font-weight="400">  ·  0,79×</tspan></text>
 </g>
-<g><title>Rust: 91 ms 0,84×</title>
-<text x="484.0" y="619.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M566.0,609.0 h52.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-52.2 z" fill="#c3c2b7"/>
-<text x="630.2" y="619.0" font-size="12" fill="#0b0b0b">91 ms<tspan fill="#898781" font-weight="400">  ·  0,84×</tspan></text>
+<g><title>C: 107 ms 0,97×</title>
+<text x="484.0" y="619.0" font-size="12" fill="#0b0b0b">C</text>
+<path d="M566.0,609.0 h66.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-66.7 z" fill="#c3c2b7"/>
+<text x="644.7" y="619.0" font-size="12" fill="#0b0b0b">107 ms<tspan fill="#898781" font-weight="400">  ·  0,97×</tspan></text>
 </g>
-<g><title>OIDA: 108 ms </title>
+<g><title>OIDA: 110 ms </title>
 <text x="484.0" y="641.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M566.0,631.0 h62.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-62.8 z" fill="#2a78d6"/>
-<text x="640.8" y="641.0" font-size="12" fill="#0b0b0b" font-weight="600">108 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M566.0,631.0 h68.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-68.8 z" fill="#2a78d6"/>
+<text x="646.8" y="641.0" font-size="12" fill="#0b0b0b" font-weight="600">110 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>C#: 244 ms 2,26×</title>
+<g><title>C#: 235 ms 2,13×</title>
 <text x="484.0" y="663.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M566.0,653.0 h147.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-147.2 z" fill="#c3c2b7"/>
-<text x="725.2" y="663.0" font-size="12" fill="#0b0b0b">244 ms<tspan fill="#898781" font-weight="400">  ·  2,26×</tspan></text>
+<path d="M566.0,653.0 h151.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-151.4 z" fill="#c3c2b7"/>
+<text x="729.4" y="663.0" font-size="12" fill="#0b0b0b">235 ms<tspan fill="#898781" font-weight="400">  ·  2,13×</tspan></text>
 </g>
-<g><title>JavaScript: 300 ms 2,79×</title>
+<g><title>JavaScript: 283 ms 2,57×</title>
 <text x="484.0" y="685.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M566.0,675.0 h182.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-182.3 z" fill="#c3c2b7"/>
-<text x="760.3" y="685.0" font-size="12" fill="#0b0b0b">300 ms<tspan fill="#898781" font-weight="400">  ·  2,79×</tspan></text>
+<path d="M566.0,675.0 h183.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-183.5 z" fill="#c3c2b7"/>
+<text x="761.5" y="685.0" font-size="12" fill="#0b0b0b">283 ms<tspan fill="#898781" font-weight="400">  ·  2,57×</tspan></text>
 </g>
-<g><title>Java: 323 ms 2,99×</title>
+<g><title>Java: 302 ms 2,75×</title>
 <text x="484.0" y="707.0" font-size="12" fill="#0b0b0b">Java</text>
 <path d="M566.0,697.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="774.0" y="707.0" font-size="12" fill="#0b0b0b">323 ms<tspan fill="#898781" font-weight="400">  ·  2,99×</tspan></text>
+<text x="774.0" y="707.0" font-size="12" fill="#0b0b0b">302 ms<tspan fill="#898781" font-weight="400">  ·  2,75×</tspan></text>
 </g>
-<g><title>Python: 13,66 s 127×</title>
+<g><title>Python: 13,18 s 120×</title>
 <text x="484.0" y="729.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M566.0,719.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
 <path d="M744.0,718.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
 <path d="M752.0,718.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="774.0" y="729.0" font-size="12" fill="#0b0b0b">13,66 s<tspan fill="#898781" font-weight="400">  ·  127×</tspan></text>
+<text x="774.0" y="729.0" font-size="12" fill="#0b0b0b">13,18 s<tspan fill="#898781" font-weight="400">  ·  120×</tspan></text>
 </g>
 <line x1="566.0" y1="580.0" x2="566.0" y2="738.0" stroke="#898781" stroke-width="1"/>
 <line x1="28" y1="748.0" x2="904.0" y2="748.0" stroke="#e1e0d9" stroke-width="1"/>
-<text x="28.0" y="778.0" font-size="14" fill="#0b0b0b" font-weight="600">texte</text>
-<text x="28.0" y="795.0" font-size="11.5" fill="#52514e">Eine Million kurze Texte zusammenbauen und vergleichen.</text>
-<g><title>C: 112 ms 0,64×</title>
-<text x="28.0" y="823.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M110.0,813.0 h30.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-30.5 z" fill="#c3c2b7"/>
-<text x="152.5" y="823.0" font-size="12" fill="#0b0b0b">112 ms<tspan fill="#898781" font-weight="400">  ·  0,64×</tspan></text>
+<text x="28.0" y="778.0" font-size="14" fill="#0b0b0b" font-weight="600">objekte</text>
+<text x="28.0" y="795.0" font-size="11.5" fill="#52514e">Hunderttausend Objekte aus drei Klassen, 200 Runden lang bewegt.</text>
+<g><title>Rust: 199 ms 0,83×</title>
+<text x="28.0" y="823.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M110.0,813.0 h58.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-58.4 z" fill="#c3c2b7"/>
+<text x="180.4" y="823.0" font-size="12" fill="#0b0b0b">199 ms<tspan fill="#898781" font-weight="400">  ·  0,83×</tspan></text>
 </g>
-<g><title>JavaScript: 152 ms 0,87×</title>
-<text x="28.0" y="845.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M110.0,835.0 h43.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-43.0 z" fill="#c3c2b7"/>
-<text x="165.0" y="845.0" font-size="12" fill="#0b0b0b">152 ms<tspan fill="#898781" font-weight="400">  ·  0,87×</tspan></text>
+<g><title>C: 210 ms 0,88×</title>
+<text x="28.0" y="845.0" font-size="12" fill="#0b0b0b">C</text>
+<path d="M110.0,835.0 h61.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-61.7 z" fill="#c3c2b7"/>
+<text x="183.7" y="845.0" font-size="12" fill="#0b0b0b">210 ms<tspan fill="#898781" font-weight="400">  ·  0,88×</tspan></text>
 </g>
-<g><title>C#: 168 ms 0,97×</title>
-<text x="28.0" y="867.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M110.0,857.0 h48.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-48.1 z" fill="#c3c2b7"/>
-<text x="170.1" y="867.0" font-size="12" fill="#0b0b0b">168 ms<tspan fill="#898781" font-weight="400">  ·  0,97×</tspan></text>
+<g><title>OIDA: 239 ms </title>
+<text x="28.0" y="867.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
+<path d="M110.0,857.0 h70.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-70.8 z" fill="#2a78d6"/>
+<text x="192.8" y="867.0" font-size="12" fill="#0b0b0b" font-weight="600">239 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>OIDA: 174 ms </title>
-<text x="28.0" y="889.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M110.0,879.0 h49.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-49.7 z" fill="#2a78d6"/>
-<text x="171.7" y="889.0" font-size="12" fill="#0b0b0b" font-weight="600">174 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<g><title>JavaScript: 285 ms 1,19×</title>
+<text x="28.0" y="889.0" font-size="12" fill="#0b0b0b">JavaScript</text>
+<path d="M110.0,879.0 h85.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-85.3 z" fill="#c3c2b7"/>
+<text x="207.3" y="889.0" font-size="12" fill="#0b0b0b">285 ms<tspan fill="#898781" font-weight="400">  ·  1,19×</tspan></text>
 </g>
-<g><title>Java: 193 ms 1,11×</title>
-<text x="28.0" y="911.0" font-size="12" fill="#0b0b0b">Java</text>
-<path d="M110.0,901.0 h55.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-55.7 z" fill="#c3c2b7"/>
-<text x="177.7" y="911.0" font-size="12" fill="#0b0b0b">193 ms<tspan fill="#898781" font-weight="400">  ·  1,11×</tspan></text>
+<g><title>C#: 328 ms 1,38×</title>
+<text x="28.0" y="911.0" font-size="12" fill="#0b0b0b">C#</text>
+<path d="M110.0,901.0 h98.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-98.9 z" fill="#c3c2b7"/>
+<text x="220.9" y="911.0" font-size="12" fill="#0b0b0b">328 ms<tspan fill="#898781" font-weight="400">  ·  1,38×</tspan></text>
 </g>
-<g><title>Rust: 217 ms 1,25×</title>
-<text x="28.0" y="933.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M110.0,923.0 h63.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-63.2 z" fill="#c3c2b7"/>
-<text x="185.2" y="933.0" font-size="12" fill="#0b0b0b">217 ms<tspan fill="#898781" font-weight="400">  ·  1,25×</tspan></text>
+<g><title>Java: 638 ms 2,67×</title>
+<text x="28.0" y="933.0" font-size="12" fill="#0b0b0b">Java</text>
+<path d="M110.0,923.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
+<text x="318.0" y="933.0" font-size="12" fill="#0b0b0b">638 ms<tspan fill="#898781" font-weight="400">  ·  2,67×</tspan></text>
 </g>
-<g><title>Python: 647 ms 3,72×</title>
+<g><title>Python: 13,50 s 57×</title>
 <text x="28.0" y="955.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M110.0,945.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="318.0" y="955.0" font-size="12" fill="#0b0b0b">647 ms<tspan fill="#898781" font-weight="400">  ·  3,72×</tspan></text>
+<path d="M288.0,944.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
+<path d="M296.0,944.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
+<text x="318.0" y="955.0" font-size="12" fill="#0b0b0b">13,50 s<tspan fill="#898781" font-weight="400">  ·  57×</tspan></text>
 </g>
 <line x1="110.0" y1="806.0" x2="110.0" y2="964.0" stroke="#898781" stroke-width="1"/>
-<text x="484.0" y="778.0" font-size="14" fill="#0b0b0b" font-weight="600">ausgabe</text>
-<text x="484.0" y="795.0" font-size="11.5" fill="#52514e">Zwei Millionen Zeilen ausgeben.</text>
-<g><title>OIDA: 124 ms </title>
-<text x="484.0" y="823.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M566.0,813.0 h42.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-42.0 z" fill="#2a78d6"/>
-<text x="620.0" y="823.0" font-size="12" fill="#0b0b0b" font-weight="600">124 ms<tspan fill="#898781" font-weight="400"></tspan></text>
+<text x="484.0" y="778.0" font-size="14" fill="#0b0b0b" font-weight="600">texte</text>
+<text x="484.0" y="795.0" font-size="11.5" fill="#52514e">Eine Million kurze Texte zusammenbauen und vergleichen.</text>
+<g><title>C: 122 ms 0,71×</title>
+<text x="484.0" y="823.0" font-size="12" fill="#0b0b0b">C</text>
+<path d="M566.0,813.0 h35.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-35.1 z" fill="#c3c2b7"/>
+<text x="613.1" y="823.0" font-size="12" fill="#0b0b0b">122 ms<tspan fill="#898781" font-weight="400">  ·  0,71×</tspan></text>
 </g>
-<g><title>Rust: 196 ms 1,59×</title>
-<text x="484.0" y="845.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M566.0,835.0 h69.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-69.0 z" fill="#c3c2b7"/>
-<text x="647.0" y="845.0" font-size="12" fill="#0b0b0b">196 ms<tspan fill="#898781" font-weight="400">  ·  1,59×</tspan></text>
+<g><title>JavaScript: 143 ms 0,83×</title>
+<text x="484.0" y="845.0" font-size="12" fill="#0b0b0b">JavaScript</text>
+<path d="M566.0,835.0 h41.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-41.8 z" fill="#c3c2b7"/>
+<text x="619.8" y="845.0" font-size="12" fill="#0b0b0b">143 ms<tspan fill="#898781" font-weight="400">  ·  0,83×</tspan></text>
 </g>
-<g><title>C#: 270 ms 2,19×</title>
+<g><title>C#: 153 ms 0,89×</title>
 <text x="484.0" y="867.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M566.0,857.0 h96.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-96.5 z" fill="#c3c2b7"/>
-<text x="674.5" y="867.0" font-size="12" fill="#0b0b0b">270 ms<tspan fill="#898781" font-weight="400">  ·  2,19×</tspan></text>
+<path d="M566.0,857.0 h45.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-45.0 z" fill="#c3c2b7"/>
+<text x="623.0" y="867.0" font-size="12" fill="#0b0b0b">153 ms<tspan fill="#898781" font-weight="400">  ·  0,89×</tspan></text>
 </g>
-<g><title>JavaScript: 376 ms 3,04×</title>
-<text x="484.0" y="889.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M566.0,879.0 h135.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-135.9 z" fill="#c3c2b7"/>
-<text x="713.9" y="889.0" font-size="12" fill="#0b0b0b">376 ms<tspan fill="#898781" font-weight="400">  ·  3,04×</tspan></text>
+<g><title>OIDA: 172 ms </title>
+<text x="484.0" y="889.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
+<path d="M566.0,879.0 h51.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-51.0 z" fill="#2a78d6"/>
+<text x="629.0" y="889.0" font-size="12" fill="#0b0b0b" font-weight="600">172 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>Java: 483 ms 3,91×</title>
+<g><title>Java: 184 ms 1,07×</title>
 <text x="484.0" y="911.0" font-size="12" fill="#0b0b0b">Java</text>
-<path d="M566.0,901.0 h175.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-175.7 z" fill="#c3c2b7"/>
-<text x="753.7" y="911.0" font-size="12" fill="#0b0b0b">483 ms<tspan fill="#898781" font-weight="400">  ·  3,91×</tspan></text>
+<path d="M566.0,901.0 h54.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-54.8 z" fill="#c3c2b7"/>
+<text x="632.8" y="911.0" font-size="12" fill="#0b0b0b">184 ms<tspan fill="#898781" font-weight="400">  ·  1,07×</tspan></text>
 </g>
-<g><title>C: 538 ms 4,35×</title>
-<text x="484.0" y="933.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M566.0,923.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="774.0" y="933.0" font-size="12" fill="#0b0b0b">538 ms<tspan fill="#898781" font-weight="400">  ·  4,35×</tspan></text>
+<g><title>Rust: 235 ms 1,37×</title>
+<text x="484.0" y="933.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M566.0,923.0 h71.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-71.3 z" fill="#c3c2b7"/>
+<text x="649.3" y="933.0" font-size="12" fill="#0b0b0b">235 ms<tspan fill="#898781" font-weight="400">  ·  1,37×</tspan></text>
 </g>
-<g><title>Python: 4,99 s 40×</title>
+<g><title>Python: 624 ms 3,64×</title>
 <text x="484.0" y="955.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M566.0,945.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<path d="M744.0,944.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<path d="M752.0,944.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="774.0" y="955.0" font-size="12" fill="#0b0b0b">4,99 s<tspan fill="#898781" font-weight="400">  ·  40×</tspan></text>
+<text x="774.0" y="955.0" font-size="12" fill="#0b0b0b">624 ms<tspan fill="#898781" font-weight="400">  ·  3,64×</tspan></text>
 </g>
 <line x1="566.0" y1="806.0" x2="566.0" y2="964.0" stroke="#898781" stroke-width="1"/>
 <line x1="28" y1="974.0" x2="904.0" y2="974.0" stroke="#e1e0d9" stroke-width="1"/>
-<text x="28.0" y="1004.0" font-size="14" fill="#0b0b0b" font-weight="600">Mittel über alle Programme</text>
-<text x="28.0" y="1021.0" font-size="11.5" fill="#52514e">Zeit im Verhältnis zu OIDA (geometrisches Mittel).</text>
-<g><title>OIDA: 1,00× </title>
+<text x="28.0" y="1004.0" font-size="14" fill="#0b0b0b" font-weight="600">ausgabe</text>
+<text x="28.0" y="1021.0" font-size="11.5" fill="#52514e">Zwei Millionen Zeilen ausgeben.</text>
+<g><title>OIDA: 118 ms </title>
 <text x="28.0" y="1049.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M110.0,1039.0 h72.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-72.8 z" fill="#2a78d6"/>
-<text x="194.8" y="1049.0" font-size="12" fill="#0b0b0b" font-weight="600">1,00×<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M110.0,1039.0 h41.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-41.4 z" fill="#2a78d6"/>
+<text x="163.4" y="1049.0" font-size="12" fill="#0b0b0b" font-weight="600">118 ms<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>Rust: 1,02× </title>
+<g><title>Rust: 198 ms 1,69×</title>
 <text x="28.0" y="1071.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M110.0,1061.0 h74.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-74.1 z" fill="#c3c2b7"/>
-<text x="196.1" y="1071.0" font-size="12" fill="#0b0b0b">1,02×<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M110.0,1061.0 h72.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-72.5 z" fill="#c3c2b7"/>
+<text x="194.5" y="1071.0" font-size="12" fill="#0b0b0b">198 ms<tspan fill="#898781" font-weight="400">  ·  1,69×</tspan></text>
 </g>
-<g><title>C: 1,14× </title>
-<text x="28.0" y="1093.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M110.0,1083.0 h83.6 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-83.6 z" fill="#c3c2b7"/>
-<text x="205.6" y="1093.0" font-size="12" fill="#0b0b0b">1,14×<tspan fill="#898781" font-weight="400"></tspan></text>
+<g><title>C#: 283 ms 2,40×</title>
+<text x="28.0" y="1093.0" font-size="12" fill="#0b0b0b">C#</text>
+<path d="M110.0,1083.0 h105.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-105.1 z" fill="#c3c2b7"/>
+<text x="227.1" y="1093.0" font-size="12" fill="#0b0b0b">283 ms<tspan fill="#898781" font-weight="400">  ·  2,40×</tspan></text>
 </g>
-<g><title>C#: 1,80× </title>
-<text x="28.0" y="1115.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M110.0,1105.0 h134.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-134.4 z" fill="#c3c2b7"/>
-<text x="256.4" y="1115.0" font-size="12" fill="#0b0b0b">1,80×<tspan fill="#898781" font-weight="400"></tspan></text>
+<g><title>JavaScript: 391 ms 3,32×</title>
+<text x="28.0" y="1115.0" font-size="12" fill="#0b0b0b">JavaScript</text>
+<path d="M110.0,1105.0 h146.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-146.8 z" fill="#c3c2b7"/>
+<text x="268.8" y="1115.0" font-size="12" fill="#0b0b0b">391 ms<tspan fill="#898781" font-weight="400">  ·  3,32×</tspan></text>
 </g>
-<g><title>Java: 2,18× </title>
+<g><title>Java: 462 ms 3,93×</title>
 <text x="28.0" y="1137.0" font-size="12" fill="#0b0b0b">Java</text>
-<path d="M110.0,1127.0 h163.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-163.2 z" fill="#c3c2b7"/>
-<text x="285.2" y="1137.0" font-size="12" fill="#0b0b0b">2,18×<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M110.0,1127.0 h174.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-174.3 z" fill="#c3c2b7"/>
+<text x="296.3" y="1137.0" font-size="12" fill="#0b0b0b">462 ms<tspan fill="#898781" font-weight="400">  ·  3,93×</tspan></text>
 </g>
-<g><title>JavaScript: 2,61× </title>
-<text x="28.0" y="1159.0" font-size="12" fill="#0b0b0b">JavaScript</text>
+<g><title>C: 518 ms 4,41×</title>
+<text x="28.0" y="1159.0" font-size="12" fill="#0b0b0b">C</text>
 <path d="M110.0,1149.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="318.0" y="1159.0" font-size="12" fill="#0b0b0b">2,61×<tspan fill="#898781" font-weight="400"></tspan></text>
+<text x="318.0" y="1159.0" font-size="12" fill="#0b0b0b">518 ms<tspan fill="#898781" font-weight="400">  ·  4,41×</tspan></text>
 </g>
-<g><title>Python: 38× </title>
+<g><title>Python: 5,37 s 46×</title>
 <text x="28.0" y="1181.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M110.0,1171.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
 <path d="M288.0,1170.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
 <path d="M296.0,1170.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
-<text x="318.0" y="1181.0" font-size="12" fill="#0b0b0b">38×<tspan fill="#898781" font-weight="400"></tspan></text>
+<text x="318.0" y="1181.0" font-size="12" fill="#0b0b0b">5,37 s<tspan fill="#898781" font-weight="400">  ·  46×</tspan></text>
 </g>
 <line x1="110.0" y1="1032.0" x2="110.0" y2="1190.0" stroke="#898781" stroke-width="1"/>
+<text x="484.0" y="1004.0" font-size="14" fill="#0b0b0b" font-weight="600">Mittel über alle Programme</text>
+<text x="484.0" y="1021.0" font-size="11.5" fill="#52514e">Zeit im Verhältnis zu OIDA (geometrisches Mittel).</text>
+<g><title>OIDA: 1,00× </title>
+<text x="484.0" y="1049.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
+<path d="M566.0,1039.0 h77.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-77.2 z" fill="#2a78d6"/>
+<text x="655.2" y="1049.0" font-size="12" fill="#0b0b0b" font-weight="600">1,00×<tspan fill="#898781" font-weight="400"></tspan></text>
+</g>
+<g><title>Rust: 1,02× </title>
+<text x="484.0" y="1071.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M566.0,1061.0 h79.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-79.0 z" fill="#c3c2b7"/>
+<text x="657.0" y="1071.0" font-size="12" fill="#0b0b0b">1,02×<tspan fill="#898781" font-weight="400"></tspan></text>
+</g>
+<g><title>C: 1,17× </title>
+<text x="484.0" y="1093.0" font-size="12" fill="#0b0b0b">C</text>
+<path d="M566.0,1083.0 h91.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-91.1 z" fill="#c3c2b7"/>
+<text x="669.1" y="1093.0" font-size="12" fill="#0b0b0b">1,17×<tspan fill="#898781" font-weight="400"></tspan></text>
+</g>
+<g><title>C#: 1,77× </title>
+<text x="484.0" y="1115.0" font-size="12" fill="#0b0b0b">C#</text>
+<path d="M566.0,1105.0 h139.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-139.8 z" fill="#c3c2b7"/>
+<text x="717.8" y="1115.0" font-size="12" fill="#0b0b0b">1,77×<tspan fill="#898781" font-weight="400"></tspan></text>
+</g>
+<g><title>Java: 2,17× </title>
+<text x="484.0" y="1137.0" font-size="12" fill="#0b0b0b">Java</text>
+<path d="M566.0,1127.0 h172.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-172.2 z" fill="#c3c2b7"/>
+<text x="750.2" y="1137.0" font-size="12" fill="#0b0b0b">2,17×<tspan fill="#898781" font-weight="400"></tspan></text>
+</g>
+<g><title>JavaScript: 2,46× </title>
+<text x="484.0" y="1159.0" font-size="12" fill="#0b0b0b">JavaScript</text>
+<path d="M566.0,1149.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
+<text x="774.0" y="1159.0" font-size="12" fill="#0b0b0b">2,46×<tspan fill="#898781" font-weight="400"></tspan></text>
+</g>
+<g><title>Python: 41× </title>
+<text x="484.0" y="1181.0" font-size="12" fill="#0b0b0b">Python</text>
+<path d="M566.0,1171.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
+<path d="M744.0,1170.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
+<path d="M752.0,1170.0 h3.5 l-4,14.0 h-3.5 z" fill="#fcfcfb"/>
+<text x="774.0" y="1181.0" font-size="12" fill="#0b0b0b">41×<tspan fill="#898781" font-weight="400"></tspan></text>
+</g>
+<line x1="566.0" y1="1032.0" x2="566.0" y2="1190.0" stroke="#898781" stroke-width="1"/>
 <text x="28.0" y="1220.0" font-size="11.5" fill="#898781">Hinter dem Punkt steht die Zeit im Verhältnis zu OIDA: 2× heißt doppelt so lang. Jedes Feld hat seinen eigenen Maßstab.</text>
 <text x="28.0" y="1238.0" font-size="11.5" fill="#898781">Balken mit Bruchstelle sind abgeschnitten: Sie wären mehr als 10-mal so lang wie der kürzeste im Feld.</text>
 <text x="28.0" y="1256.0" font-size="11.5" fill="#898781">Gemessen am 18.11.2026 auf: AMD Ryzen 5 8645HS w/ Radeon 760M Graphics.</text>

@@ -1,0 +1,44 @@
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = 100
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK SÖWA.name OIDA
+    PASST SCHO
+    FUNKTIAUN triff(schaden ZOI)
+        SÖWA.lebn -= schaden OIDA
+    PASST SCHO
+PASST SCHO
+KLASSE Gegner ERBT VON Wesen
+    staerke ZOI
+    FUNKTIAUN sog() GIBT ZRUCK ZOI
+        GIB ZRUCK 1 OIDA
+    PASST SCHO
+    FUNKTIAUN name()
+    PASST SCHO
+PASST SCHO
+KLASSE Geist ERBT VON Gespenst
+    lebn ZOI
+PASST SCHO
+KLASSE Kreis ERBT VON Kreis
+PASST SCHO
+SOG AU w = Wesen() OIDA
+SOG AU g = Gegner("Sepp", "stoak") OIDA
+SOG AU h = Gegner("Sepp", 5) OIDA
+SCHREIB(w.gibts_ned) OIDA
+w.spring() OIDA
+w.triff("fest") OIDA
+w.triff() OIDA
+SCHREIB(w.sog) OIDA
+SCHREIB(w.name()) OIDA
+SOG AU falsch Gegner = Wesen("Hansi") OIDA
+SOG AU zahl = 5 OIDA
+zahl.triff(1) OIDA
+SCHREIB(SÖWA.name) OIDA
+SCHREIB(w == zahl) OIDA
+SCHREIB(w < h) OIDA
+SOG AU p Wesen = h OIDA
+SCHREIB(p.staerke) OIDA
+FUNKTIAUN frei()
+    DE OIDN.sog() OIDA
+PASST SCHO
+h.name OIDA

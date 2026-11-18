@@ -1,0 +1,57 @@
+# Hunderttausend Objekte aus drei Klassen, 200 Runden lang bewegt. Misst Klassen und überschriebene Methoden.
+
+KLASSE Wesen
+    x ZOI
+    y ZOI
+    tempo ZOI
+
+    FUNKTIAUN beweg()
+        SÖWA.x = (SÖWA.x + SÖWA.tempo) % 1000 OIDA
+    PASST SCHO
+
+    FUNKTIAUN wert() GIBT ZRUCK ZOI
+        GIB ZRUCK SÖWA.x + SÖWA.y OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Hupfa ERBT VON Wesen
+    hoch ZOI = 0
+
+    FUNKTIAUN beweg()
+        DE OIDN.beweg() OIDA
+        SÖWA.hoch = (SÖWA.hoch + 7) % 50 OIDA
+        SÖWA.y = (SÖWA.y + SÖWA.hoch) % 1000 OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Kreisla ERBT VON Wesen
+    FUNKTIAUN beweg()
+        SOG AU oid = SÖWA.x OIDA
+        SÖWA.x = (SÖWA.y + SÖWA.tempo) % 1000 OIDA
+        SÖWA.y = oid OIDA
+    PASST SCHO
+
+    FUNKTIAUN wert() GIBT ZRUCK ZOI
+        GIB ZRUCK SÖWA.x * 2 + SÖWA.y OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU alle LISTN VON Wesen = [] OIDA
+FIA i VON 0 BIS 99999 TUA
+    WENN i % 3 == 0 DAUN
+        HAU EINE(alle, Wesen(i * 37 % 1000, i * 91 % 1000, i % 7 + 1)) OIDA
+    SUNST WENN i % 3 == 1 DAUN
+        HAU EINE(alle, Hupfa(i * 37 % 1000, i * 91 % 1000, i % 7 + 1)) OIDA
+    SUNST
+        HAU EINE(alle, Kreisla(i * 37 % 1000, i * 91 % 1000, i % 7 + 1)) OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU summe = 0 OIDA
+FIA runde VON 1 BIS 200 TUA
+    FIA JEDE w IN alle TUA
+        w.beweg() OIDA
+        summe = (summe + w.wert()) % 1000000007 OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(summe) OIDA

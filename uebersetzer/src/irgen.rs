@@ -14,20 +14,34 @@
 //!    der Variable, im Feld oder in der Liste. Zuweisen heißt kopieren.
 //!  - Ein Text und eine Liste sind Zeiger auf Speicher am Heap. Zuweisen
 //!    heißt: Beide zeigen auf dasselbe.
+//!  - Ein Objekt einer Klasse ist ein Zeiger auf einen Verbund `%kN` am Heap:
+//!    Zähler, Zeiger auf die Angaben zur Klasse, dann die Felder (die
+//!    geerbten zuerst; darum passt ein Objekt auch dort, wo die Elternklasse
+//!    verlangt ist).
+//!
+//! # Klassen und Methoden
+//!
+//! Eine Methode ist eine Funktion, die das Objekt als ersten Wert bekommt
+//! (`SÖWA`, nur geliehen). Zu jeder Klasse gibt es Angaben `@oida.klasse.N`:
+//! wie man ein Objekt freigibt, wie man es ausgibt, und die Sprungtabelle.
+//! In der Tabelle stehen nur Methoden, die irgendwo in der Familie
+//! überschrieben werden; bei allen anderen (und überall, wo es darunter keine
+//! andere Fassung gibt) steht schon beim Übersetzen fest, welche läuft.
 //!
 //! # Referenzzählung
 //!
 //! Texte und Listen tragen einen Zähler: wie viele Stellen sie gerade
 //! brauchen. Fällt er auf 0, werden sie freigegeben. "Verwaltet" heißt ein
-//! Typ, an dem so etwas hängt: Texte, Listen und Strukturen, die welche
-//! enthalten. Die Regeln:
+//! Typ, an dem so etwas hängt: Texte, Listen, Objekte und Strukturen, die
+//! welche enthalten. Die Regeln:
 //!
 //!  - Ein Ausdruck liefert einen Wert, der dem Empfänger **gehört** (schon
 //!    mitgezählt): [`FunktionsBau::ausdruck`].
 //!  - Wer nur liest (vergleichen, zusammenhängen, ausgeben), kann **leihen**:
 //!    [`FunktionsBau::geliehen`]. Eine Variable, ein Feld davon oder ein
-//!    fester Text wird dann nicht gezählt. Aus einer Liste wird nie geliehen,
-//!    weil eine aufgerufene Funktion die Liste ändern könnte.
+//!    fester Text wird dann nicht gezählt. Aus einer Liste und aus dem Feld
+//!    eines Objekts wird nie geliehen, weil eine aufgerufene Funktion die
+//!    Liste oder das Objekt ändern könnte.
 //!  - Eine Variable besitzt ihren Wert. Beim Zuweisen wird der alte
 //!    losgelassen, am Ende des Blocks der letzte.
 //!  - Eine Funktion besitzt ihre Parameter und lässt sie am Ende los. Was sie
@@ -76,6 +90,10 @@ declare ptr @oida_liste_neu(i64, i64)
 declare ptr @oida_liste_neuer_platz(ptr, i64)
 declare void @oida_liste_raus(ptr, i64, i64, i64)
 declare void @oida_liste_frei(ptr, i64)
+
+; Objekte
+declare ptr @oida_objekt_neu(i64)
+declare void @oida_objekt_frei(ptr, i64)
 
 ; Eingebaute Funktionen: Eingabe, Texte, Zufall
 declare ptr @oida_lies(ptr)
@@ -179,6 +197,51 @@ ende:
   ret void
 }
 
+; Ein Objekt wird an einer weiteren Stelle gebraucht. Objekte liegen immer
+; am Heap, der Zähler ist nie negativ.
+define internal void @oida.behalt.objekt(ptr %objekt) alwaysinline {
+start:
+  %z = load i64, ptr %objekt
+  %mehr = add i64 %z, 1
+  store i64 %mehr, ptr %objekt
+  ret void
+}
+
+; Ein Objekt loslassen, von dem erst beim Laufen feststeht, von welcher
+; Klasse es genau ist. Wie es freigegeben wird, steht in den Angaben zu
+; seiner Klasse ganz vorne.
+define internal void @oida.lass.objekt(ptr %objekt) {
+start:
+  %z = load i64, ptr %objekt
+  %weniger = sub i64 %z, 1
+  store i64 %weniger, ptr %objekt
+  %keiner = icmp eq i64 %weniger, 0
+  br i1 %keiner, label %frei, label %ende
+frei:
+  %kp = getelementptr inbounds { i64, ptr }, ptr %objekt, i32 0, i32 1
+  %klasse = load ptr, ptr %kp
+  %freigeben = load ptr, ptr %klasse
+  call void %freigeben(ptr %objekt)
+  br label %ende
+ende:
+  ret void
+}
+
+; Ein Objekt ausgeben, so wie es seine Klasse vorgibt.
+define internal void @oida.schreib.objekt(ptr %objekt) {
+start:
+  %kp = getelementptr inbounds { i64, ptr }, ptr %objekt, i32 0, i32 1
+  %klasse = load ptr, ptr %kp
+  %sp = getelementptr inbounds ptr, ptr %klasse, i64 1
+  %schreiben = load ptr, ptr %sp
+  call void %schreiben(ptr %objekt)
+  ret void
+}
+
+; Wie viele Objekte gerade ineinander ausgegeben werden. Ab einer gewissen
+; Tiefe steht nur noch <Name> da: Objekte können im Kreis aufeinander zeigen.
+@oida.schreib.tiefe = internal global i64 0
+
 ; Die Daten einer Liste, nachdem geprüft ist, dass es die Stelle gibt.
 define internal ptr @oida.stelle(ptr %liste, i64 %stelle, i64 %zeile) alwaysinline {
 start:
@@ -229,7 +292,7 @@ fn ir_typ(typ: Typ) -> String {
         Typ::Zoi => "i64".to_string(),
         Typ::Kommazoi => "double".to_string(),
         Typ::Jona => "i1".to_string(),
-        Typ::Kettn | Typ::Liste(_) | Typ::LeereListe => "ptr".to_string(),
+        Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) => "ptr".to_string(),
         Typ::Struktur(n) => format!("%s{n}"),
         Typ::Nix => "void".to_string(),
         Typ::Fehler => unreachable!("nach der Typprüfung gibt es keine Fehler-Typen mehr"),
@@ -242,10 +305,35 @@ fn groesse(typ: Typ) -> String {
     format!("ptrtoint (ptr getelementptr ({}, ptr null, i32 1) to i64)", ir_typ(typ))
 }
 
+/// Wie viele Bytes ein Objekt der Klasse am Heap braucht.
+fn objekt_groesse(klasse: u32) -> String {
+    format!("ptrtoint (ptr getelementptr (%k{klasse}, ptr null, i32 1) to i64)")
+}
+
+/// Der Aufbau der Angaben zu einer Klasse: freigeben, ausgeben, Sprungtabelle.
+fn klassen_angaben(plaetze: usize) -> String {
+    format!("{{ ptr, ptr, [{plaetze} x ptr] }}")
+}
+
+/// Gibt es eine Klasse, die von dieser erbt?
+fn hat_kinder(typen: &Typen, klasse: u32) -> bool {
+    typen.klassen.iter().any(|k| k.eltern == Some(klasse))
+}
+
+/// Gibt es unterhalb der Klasse eine eigene Fassung der Methode? Nur dann
+/// muss beim Aufruf in der Sprungtabelle nachgeschaut werden.
+fn weiter_unten_ersetzt(typen: &Typen, klasse: u32, name: &str) -> bool {
+    typen.klassen.iter().enumerate().any(|(n, k)| {
+        let n = n as u32;
+        n != klasse && typen.erbt_von(n, klasse) && k.methoden.iter().any(|m| m.klasse == n && m.name == name)
+    })
+}
+
 /// Der Befehl, der den Wert für eine weitere Stelle mitzählt (keiner, wenn es nichts zu zählen gibt).
 fn behalt_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
     match typ {
         Typ::Kettn | Typ::Liste(_) => Some(format!("call void @oida.behalt(ptr {wert})")),
+        Typ::Klasse(_) => Some(format!("call void @oida.behalt.objekt(ptr {wert})")),
         Typ::Struktur(n) if typen.verwaltet(typ) => Some(format!("call void @oida.behalt.s{n}(%s{n} {wert})")),
         _ => None,
     }
@@ -256,6 +344,9 @@ fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
     match typ {
         Typ::Kettn => Some(format!("call void @oida.lass(ptr {wert})")),
         Typ::Liste(n) => Some(format!("call void @oida.lass.l{n}(ptr {wert})")),
+        // Kann es nur genau diese Klasse sein, steht fest, wie freigegeben wird.
+        Typ::Klasse(n) if hat_kinder(typen, n) => Some(format!("call void @oida.lass.objekt(ptr {wert})")),
+        Typ::Klasse(n) => Some(format!("call void @oida.lass.k{n}(ptr {wert})")),
         Typ::Struktur(n) if typen.verwaltet(typ) => Some(format!("call void @oida.lass.s{n}(%s{n} {wert})")),
         _ => None,
     }
@@ -264,12 +355,24 @@ fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
 /// Der Name einer OIDA-Funktion im IR. Der Vorsatz verhindert, dass sich
 /// eine OIDA-Funktion mit einer aus C (`main`, `printf` ...) verwechselt.
 fn funktions_name(name: &str) -> String {
-    let mut aus = String::from("@\"oida.f.");
-    for b in name.bytes() {
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            aus.push(b as char);
-        } else {
-            let _ = write!(aus, "\\{b:02X}");
+    ir_name("f", &[name])
+}
+
+/// Der Name einer Methode im IR.
+fn methoden_name(klasse: &str, name: &str) -> String {
+    ir_name("m", &[klasse, name])
+}
+
+fn ir_name(art: &str, teile: &[&str]) -> String {
+    let mut aus = format!("@\"oida.{art}");
+    for teil in teile {
+        aus.push('.');
+        for b in teil.bytes() {
+            if b.is_ascii_alphanumeric() || b == b'_' {
+                aus.push(b as char);
+            } else {
+                let _ = write!(aus, "\\{b:02X}");
+            }
         }
     }
     aus.push('"');
@@ -283,6 +386,8 @@ struct Modul<'t> {
     woahr: String,
     foisch: String,
     typen: &'t Typen,
+    /// Die Klassen, wie sie im Programm stehen (für die Werte, mit denen Felder beginnen).
+    klassen: &'t [KlassenDef],
 }
 
 impl Modul<'_> {
@@ -318,15 +423,95 @@ impl Modul<'_> {
             }
             Typ::Struktur(n) => format!("  call void @oida.schreib.s{n}(%s{n} {wert})\n"),
             Typ::Liste(n) => format!("  call void @oida.schreib.l{n}(ptr {wert})\n"),
+            Typ::Klasse(_) => format!("  call void @oida.schreib.objekt(ptr {wert})\n"),
             Typ::LeereListe | Typ::Nix | Typ::Fehler => unreachable!("von der Typprüfung abgelehnt"),
         }
     }
 
-    /// Die Hilfsfunktionen je Struktur und je Listentyp: mitzählen,
-    /// loslassen und ausgeben.
+    /// Die Hilfsfunktionen je Struktur, je Klasse und je Listentyp:
+    /// mitzählen, loslassen und ausgeben.
     fn hilfsfunktionen(&mut self) -> String {
         let typen = self.typen;
         let mut aus = String::new();
+
+        for (n, k) in typen.klassen.iter().enumerate() {
+            // Freigeben: erst loslassen, was in den Feldern steckt, dann das Objekt selbst.
+            let _ = writeln!(aus, "define internal void @oida.frei.k{n}(ptr %objekt) {{\nstart:");
+            for (i, feld) in k.felder.iter().enumerate() {
+                if let Some(befehl) = lass_befehl(typen, feld.typ, &format!("%f{i}")) {
+                    let _ = writeln!(
+                        aus,
+                        "  %p{i} = getelementptr inbounds %k{n}, ptr %objekt, i32 0, i32 {}\n  \
+                         %f{i} = load {}, ptr %p{i}\n  {befehl}",
+                        i + 2,
+                        ir_typ(feld.typ)
+                    );
+                }
+            }
+            let _ = writeln!(
+                aus,
+                "  call void @oida_objekt_frei(ptr %objekt, i64 {})\n  ret void\n}}\n",
+                objekt_groesse(n as u32)
+            );
+
+            // Loslassen, wenn feststeht, dass es genau diese Klasse ist.
+            if !hat_kinder(typen, n as u32) {
+                let _ = writeln!(
+                    aus,
+                    "define internal void @oida.lass.k{n}(ptr %objekt) {{\nstart:\n  \
+                     %z = load i64, ptr %objekt\n  %weniger = sub i64 %z, 1\n  store i64 %weniger, ptr %objekt\n  \
+                     %keiner = icmp eq i64 %weniger, 0\n  br i1 %keiner, label %frei, label %ende\nfrei:\n  \
+                     call void @oida.frei.k{n}(ptr %objekt)\n  br label %ende\nende:\n  ret void\n}}\n"
+                );
+            }
+
+            // Ausgeben: Name(feld, feld, ...), zu tief drinnen nur <Name>.
+            let kurz = self.text(&format!("<{}>", k.name));
+            let anfang = self.text(&format!("{}(", k.name));
+            let (komma, ende) = (self.text(", "), self.text(")"));
+            let _ = writeln!(
+                aus,
+                "define internal void @oida.schreib.k{n}(ptr %objekt) {{\nstart:\n  \
+                 %tiefe = load i64, ptr @oida.schreib.tiefe\n  %zu_tief = icmp sgt i64 %tiefe, 3\n  \
+                 br i1 %zu_tief, label %kurz, label %ganz\nkurz:\n  \
+                 call void @oida_schreib_text(ptr {kurz})\n  ret void\nganz:\n  \
+                 %tiefer = add i64 %tiefe, 1\n  store i64 %tiefer, ptr @oida.schreib.tiefe\n  \
+                 call void @oida_schreib_text(ptr {anfang})"
+            );
+            for (i, feld) in k.felder.iter().enumerate() {
+                if i > 0 {
+                    let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {komma})");
+                }
+                let _ = writeln!(
+                    aus,
+                    "  %p{i} = getelementptr inbounds %k{n}, ptr %objekt, i32 0, i32 {}\n  %f{i} = load {}, ptr %p{i}",
+                    i + 2,
+                    ir_typ(feld.typ)
+                );
+                aus.push_str(&self.schreib_befehle(feld.typ, &format!("%f{i}"), true, &format!("j{i}")));
+            }
+            let _ = writeln!(
+                aus,
+                "  call void @oida_schreib_text(ptr {ende})\n  store i64 %tiefe, ptr @oida.schreib.tiefe\n  ret void\n}}\n"
+            );
+
+            // Die Angaben zur Klasse. In der Sprungtabelle steht je Platz die
+            // Fassung der Methode, die für diese Klasse gilt.
+            let mut tabelle: Vec<String> = vec!["ptr null".to_string(); k.plaetze];
+            for m in &k.methoden {
+                if let Some(platz) = m.platz {
+                    tabelle[platz] = format!("ptr {}", methoden_name(&typen.klassen[m.klasse as usize].name, &m.name));
+                }
+            }
+            let tabelle =
+                if tabelle.is_empty() { "zeroinitializer".to_string() } else { format!("[{}]", tabelle.join(", ")) };
+            let _ = writeln!(
+                aus,
+                "@oida.klasse.{n} = internal constant {} {{ ptr @oida.frei.k{n}, ptr @oida.schreib.k{n}, [{} x ptr] {tabelle} }}\n",
+                klassen_angaben(k.plaetze),
+                k.plaetze
+            );
+        }
 
         for (n, s) in typen.strukturen.iter().enumerate() {
             let typ = Typ::Struktur(n as u32);
@@ -428,6 +613,8 @@ struct FunktionsBau<'m, 't> {
     verwaltet: Vec<Vec<(String, Typ)>>,
     /// Die Schleifen, in denen wir gerade stecken, die innerste hinten.
     schleifen: Vec<Schleife>,
+    /// In einer Methode: die Nummer von SÖWA (sein Platz heißt `%v<nummer>`).
+    selbst: Option<usize>,
 }
 
 /// Was HAU OB und WEIDA über ihre Schleife wissen müssen.
@@ -454,12 +641,14 @@ fn feste_zoi(ausdruck: &Ausdruck) -> Option<i64> {
     }
 }
 
-/// Ist das eine Variable oder ein Feld (von einem Feld ...) einer Variable?
-/// Daraus darf geliehen werden: Niemand außer dieser Funktion kommt an ihre Variablen.
+/// Ist das eine Variable (oder SÖWA) oder ein Feld (von einem Feld ...) einer
+/// Variable mit einer Struktur? Daraus darf geliehen werden: Niemand außer
+/// dieser Funktion kommt an ihre Variablen. Das Feld eines Objekts zählt
+/// nicht dazu: Das Objekt kann auch jemand anderer in der Hand haben.
 fn feld_einer_variable(ausdruck: &Ausdruck) -> bool {
     match &ausdruck.art {
-        AusdruckArt::Variable { .. } => true,
-        AusdruckArt::Feld { objekt, .. } => feld_einer_variable(objekt),
+        AusdruckArt::Variable { .. } | AusdruckArt::Selbst { .. } => true,
+        AusdruckArt::Feld { objekt, .. } => matches!(objekt.typ, Typ::Struktur(_)) && feld_einer_variable(objekt),
         _ => false,
     }
 }
@@ -474,6 +663,7 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             block: "start".to_string(),
             verwaltet: vec![Vec::new()],
             schleifen: Vec::new(),
+            selbst: None,
         }
     }
 
@@ -852,7 +1042,7 @@ impl<'m, 't> FunktionsBau<'m, 't> {
         schritte.reverse();
 
         let (mut zeiger, eigen) = match &wurzel.art {
-            AusdruckArt::Variable { id, .. } => (format!("%v{id}"), None),
+            AusdruckArt::Variable { id, .. } | AusdruckArt::Selbst { id } => (format!("%v{id}"), None),
             _ => {
                 let w = self.ausdruck(wurzel);
                 let t = ir_typ(wurzel.typ);
@@ -875,10 +1065,18 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             match &schritt.art {
                 AusdruckArt::Feld { objekt, nummer, .. } => {
                     let t = self.temp();
-                    self.zeile(&format!(
-                        "{t} = getelementptr inbounds {}, ptr {zeiger}, i32 0, i32 {nummer}",
-                        ir_typ(objekt.typ)
-                    ));
+                    if let Typ::Klasse(k) = objekt.typ {
+                        // Am Platz steht nur der Zeiger auf das Objekt; die Felder
+                        // liegen dort hinter dem Zähler und den Angaben zur Klasse.
+                        let o = self.temp();
+                        self.zeile(&format!("{o} = load ptr, ptr {zeiger}, !tbaa !4"));
+                        self.zeile(&format!("{t} = getelementptr inbounds %k{k}, ptr {o}, i32 0, i32 {}", nummer + 2));
+                    } else {
+                        self.zeile(&format!(
+                            "{t} = getelementptr inbounds {}, ptr {zeiger}, i32 0, i32 {nummer}",
+                            ir_typ(objekt.typ)
+                        ));
+                    }
                     zeiger = t;
                 }
                 AusdruckArt::Stelle { .. } => {
@@ -921,7 +1119,9 @@ impl<'m, 't> FunktionsBau<'m, 't> {
         }
         match &ausdruck.art {
             AusdruckArt::Text(inhalt) => (self.modul.text(inhalt), false),
-            AusdruckArt::Variable { .. } | AusdruckArt::Feld { .. } if feld_einer_variable(ausdruck) => {
+            AusdruckArt::Variable { .. } | AusdruckArt::Feld { .. } | AusdruckArt::Selbst { .. }
+                if feld_einer_variable(ausdruck) =>
+            {
                 let (zeiger, _) = self.ort(ausdruck);
                 let t = self.temp();
                 self.zeile(&format!(
@@ -945,7 +1145,10 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             AusdruckArt::Kommazoi(wert) => format!("0x{:016X}", wert.to_bits()),
             AusdruckArt::Jona(wert) => wert.to_string(),
             AusdruckArt::Text(inhalt) => self.modul.text(inhalt),
-            AusdruckArt::Variable { .. } | AusdruckArt::Feld { .. } | AusdruckArt::Stelle { .. } => {
+            AusdruckArt::Variable { .. }
+            | AusdruckArt::Feld { .. }
+            | AusdruckArt::Stelle { .. }
+            | AusdruckArt::Selbst { .. } => {
                 let (zeiger, wurzel) = self.ort(ausdruck);
                 let t = self.temp();
                 self.zeile(&format!(
@@ -1006,7 +1209,7 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.eingebaut(*funktion, argumente, ausdruck.typ, ausdruck.pos.zeile)
             }
             AusdruckArt::Umwandlung { ziel, innen } => {
-                if innen.typ == *ziel {
+                if innen.typ == *ziel || matches!(ziel, Typ::Klasse(_)) {
                     return self.ausdruck(innen);
                 }
                 // Aus einem Text wird beim Umwandeln nur gelesen.
@@ -1042,6 +1245,91 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                     self.zeile(&format!("store {t} {w}, ptr {p}{}", wert_hinweis(element)));
                 }
                 l
+            }
+            AusdruckArt::Neu { klasse, argumente } => {
+                let (typen, klassen) = (self.modul.typen, self.modul.klassen);
+                let o = self.temp();
+                self.zeile(&format!("{o} = call ptr @oida_objekt_neu(i64 {})", objekt_groesse(*klasse)));
+                let kp = self.temp();
+                self.zeile(&format!("{kp} = getelementptr inbounds %k{klasse}, ptr {o}, i32 0, i32 1"));
+                self.zeile(&format!("store ptr @oida.klasse.{klasse}, ptr {kp}"));
+                // Die Felder der Reihe nach: entweder der Wert, der bei der
+                // Klasse dabeisteht, oder der nächste angegebene.
+                let mut angegeben = argumente.iter();
+                for (i, feld) in typen.klassen[*klasse as usize].felder.iter().enumerate() {
+                    let wert = if feld.hat_standard {
+                        klassen[feld.klasse as usize].felder[feld.stelle]
+                            .standard
+                            .as_ref()
+                            .expect("die Typprüfung hat sich gemerkt, dass ein Wert dabeisteht")
+                    } else {
+                        angegeben.next().expect("die Typprüfung zählt die Werte nach")
+                    };
+                    let w = self.ausdruck(wert);
+                    let p = self.temp();
+                    self.zeile(&format!("{p} = getelementptr inbounds %k{klasse}, ptr {o}, i32 0, i32 {}", i + 2));
+                    self.zeile(&format!("store {} {w}, ptr {p}{}", ir_typ(feld.typ), wert_hinweis(feld.typ)));
+                }
+                o
+            }
+            AusdruckArt::Methode { objekt, name, argumente, nummer } => {
+                let typen = self.modul.typen;
+                let Typ::Klasse(k) = objekt.typ else { unreachable!("die Typprüfung verlangt ein Objekt") };
+                let methode = &typen.klassen[k as usize].methoden[*nummer];
+                // Das Objekt wird der Methode nur geliehen.
+                let (o, o_eigen) = self.geliehen(objekt);
+                let mut werte = vec![format!("ptr {o}")];
+                for a in argumente {
+                    let w = self.ausdruck(a);
+                    werte.push(format!("{} {w}", ir_typ(a.typ)));
+                }
+                let ziel = match methode.platz {
+                    // Welche Fassung läuft, hängt davon ab, was für ein Objekt es wirklich ist.
+                    Some(platz) if weiter_unten_ersetzt(typen, k, name) => {
+                        let (kp, klasse, mp, m) = (self.temp(), self.temp(), self.temp(), self.temp());
+                        self.zeile(&format!("{kp} = getelementptr inbounds {{ i64, ptr }}, ptr {o}, i32 0, i32 1"));
+                        self.zeile(&format!("{klasse} = load ptr, ptr {kp}"));
+                        self.zeile(&format!(
+                            "{mp} = getelementptr inbounds {}, ptr {klasse}, i32 0, i32 2, i64 {platz}",
+                            klassen_angaben(typen.klassen[k as usize].plaetze)
+                        ));
+                        self.zeile(&format!("{m} = load ptr, ptr {mp}"));
+                        m
+                    }
+                    _ => methoden_name(&typen.klassen[methode.klasse as usize].name, name),
+                };
+                let aufruf = format!("call {} {ziel}({})", ir_typ(ausdruck.typ), werte.join(", "));
+                let t = if ausdruck.typ == Typ::Nix {
+                    self.zeile(&aufruf);
+                    String::new()
+                } else {
+                    let t = self.temp();
+                    self.zeile(&format!("{t} = {aufruf}"));
+                    t
+                };
+                self.lass_wenn_eigen(&o, objekt.typ, o_eigen);
+                t
+            }
+            AusdruckArt::ElternAufruf { name, argumente, klasse } => {
+                let typen = self.modul.typen;
+                let selbst = self.selbst.expect("die Typprüfung lässt das nur in Methoden zu");
+                let o = self.temp();
+                self.zeile(&format!("{o} = load ptr, ptr %v{selbst}, !tbaa !4"));
+                let mut werte = vec![format!("ptr {o}")];
+                for a in argumente {
+                    let w = self.ausdruck(a);
+                    werte.push(format!("{} {w}", ir_typ(a.typ)));
+                }
+                let ziel = methoden_name(&typen.klassen[*klasse as usize].name, name);
+                let aufruf = format!("call {} {ziel}({})", ir_typ(ausdruck.typ), werte.join(", "));
+                if ausdruck.typ == Typ::Nix {
+                    self.zeile(&aufruf);
+                    String::new()
+                } else {
+                    let t = self.temp();
+                    self.zeile(&format!("{t} = {aufruf}"));
+                    t
+                }
             }
         }
     }
@@ -1235,6 +1523,8 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             (Typ::Zoi, _) => format!("icmp {} i64 {l}, {r}", vergleich_ganz(op)),
             (Typ::Jona, _) => format!("icmp {} i1 {l}, {r}", vergleich_ganz(op)),
             (Typ::Kommazoi, _) => format!("fcmp {} double {l}, {r}", vergleich_komma(op)),
+            // Zwei Objekte sind gleich, wenn es dasselbe Objekt ist.
+            (Typ::Klasse(_), _) => format!("icmp {} ptr {l}, {r}", vergleich_ganz(op)),
             (Typ::Kettn, _) => {
                 let v = self.temp();
                 self.zeile(&format!("{v} = call i32 @oida_text_vergleich(ptr {l}, ptr {r})"));
@@ -1316,12 +1606,23 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         woahr: wb.wort(Schluessel::True).to_string(),
         foisch: wb.wort(Schluessel::False).to_string(),
         typen: &programm.typen,
+        klassen: &programm.klassen,
     };
     let mut funktionen = String::new();
 
-    for f in &programm.funktionen {
+    // Erst die Funktionen (ohne Klasse), dann die Methoden jeder Klasse.
+    let ohne_klasse = programm.funktionen.iter().map(|f| (None, f));
+    let methoden = programm.klassen.iter().flat_map(|k| k.methoden.iter().map(move |m| (Some(k.name.as_str()), m)));
+    for (klasse, f) in ohne_klasse.chain(methoden) {
         let mut bau = FunktionsBau::neu(&mut modul);
         let mut kopf = Vec::new();
+        if klasse.is_some() {
+            // SÖWA ist nur geliehen: Wer die Methode aufruft, hält das Objekt fest.
+            kopf.push("ptr %selbst".to_string());
+            let _ = writeln!(bau.plaetze, "  %v{} = alloca ptr", f.selbst_id);
+            bau.zeile(&format!("store ptr %selbst, ptr %v{}", f.selbst_id));
+            bau.selbst = Some(f.selbst_id);
+        }
         for (i, p) in f.parameter.iter().enumerate() {
             kopf.push(format!("{} %p{i}", ir_typ(p.typ)));
             // Die Funktion besitzt ihre Parameter wie eigene Variablen.
@@ -1342,7 +1643,10 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
             funktionen,
             "define internal {} {}({}) {{\nstart:\n{}{}}}\n\n",
             ir_typ(f.rueckgabe),
-            funktions_name(&f.name),
+            match klasse {
+                Some(klasse) => methoden_name(klasse, &f.name),
+                None => funktions_name(&f.name),
+            },
             kopf.join(", "),
             bau.plaetze,
             bau.code
@@ -1367,6 +1671,11 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         let felder: Vec<String> = s.felder.iter().map(|(_, typ)| ir_typ(*typ)).collect();
         let _ = writeln!(aus, "%s{n} = type {{ {} }}", felder.join(", "));
     }
+    // Ein Objekt: Zähler, Angaben zur Klasse, dann die Felder.
+    for (n, k) in programm.typen.klassen.iter().enumerate() {
+        let felder: String = k.felder.iter().map(|feld| format!(", {}", ir_typ(feld.typ))).collect();
+        let _ = writeln!(aus, "%k{n} = type {{ i64, ptr{felder} }}");
+    }
     aus.push('\n');
     for (nummer, inhalt) in modul.texte.iter().enumerate() {
         aus.push_str(&text_konstante(nummer, inhalt));
@@ -1376,4 +1685,67 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     aus.push_str(&funktionen);
     aus.push_str(FUSS);
     aus
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::treiber::zu_ir;
+    use crate::woerterbuch::Woerterbuch;
+
+    fn ir(quelltext: &str) -> String {
+        zu_ir(quelltext, &Woerterbuch::eingebaut()).unwrap_or_else(|f| panic!("unerwartete Fehler: {f:?}"))
+    }
+
+    const FAMILIE: &str = "KLASSE Wesen\n name KETTN\n \
+        FUNKTIAUN sog() GIBT ZRUCK KETTN\n  GIB ZRUCK SÖWA.name OIDA\n PASST SCHO\n \
+        FUNKTIAUN lang() GIBT ZRUCK ZOI\n  GIB ZRUCK LÄNGN(SÖWA.name) OIDA\n PASST SCHO\nPASST SCHO\n\
+        KLASSE Gegner ERBT VON Wesen\n \
+        FUNKTIAUN sog() GIBT ZRUCK KETTN\n  GIB ZRUCK \"Grr\" OIDA\n PASST SCHO\nPASST SCHO\n";
+
+    /// Die Zeilen des Hauptprogramms.
+    fn haupt(ir: &str) -> &str {
+        let anfang = ir.find("define i32 @main()").expect("jedes Programm hat ein main");
+        let ende = ir[anfang..].find("\n}\n").expect("main hört auf");
+        &ir[anfang..anfang + ende]
+    }
+
+    #[test]
+    fn aufbau_von_objekt_und_klasse() {
+        let ir = ir(&format!("{FAMILIE}SOG AU g = Gegner(\"Sepp\") OIDA"));
+        // Zähler, Angaben zur Klasse, dann die Felder.
+        assert!(ir.contains("%k0 = type { i64, ptr, ptr }"), "{ir}");
+        assert!(ir.contains("%k1 = type { i64, ptr, ptr }"), "{ir}");
+        // Ein Platz in der Sprungtabelle (für sog); jede Klasse trägt ihre Fassung ein.
+        assert!(ir.contains(
+            "@oida.klasse.0 = internal constant { ptr, ptr, [1 x ptr] } \
+             { ptr @oida.frei.k0, ptr @oida.schreib.k0, [1 x ptr] [ptr @\"oida.m.Wesen.sog\"] }"
+        ));
+        assert!(ir.contains("[1 x ptr] [ptr @\"oida.m.Gegner.sog\"] }"));
+        assert!(ir.contains("define internal ptr @\"oida.m.Gegner.sog\"(ptr %selbst)"));
+        assert!(haupt(&ir).contains("store ptr @oida.klasse.1, ptr"));
+    }
+
+    #[test]
+    fn nur_ueberschriebene_methoden_gehen_ueber_die_tabelle() {
+        let ir = ir(&format!(
+            "{FAMILIE}SOG AU w Wesen = Gegner(\"a\") OIDA\nSOG AU g = Gegner(\"b\") OIDA\n\
+             SCHREIB(w.sog(), w.lang(), g.sog()) OIDA"
+        ));
+        let haupt = haupt(&ir);
+        // w könnte ein Wesen oder ein Gegner sein: nachschauen.
+        assert!(haupt.contains("getelementptr inbounds { ptr, ptr, [1 x ptr] }"), "{haupt}");
+        assert_eq!(haupt.matches("getelementptr inbounds { ptr, ptr, [1 x ptr] }").count(), 1, "{haupt}");
+        // lang() gibt es nur einmal, und unter Gegner gibt es keine andere Fassung von sog().
+        assert!(haupt.contains("call i64 @\"oida.m.Wesen.lang\"(ptr"), "{haupt}");
+        assert!(haupt.contains("call ptr @\"oida.m.Gegner.sog\"(ptr"), "{haupt}");
+        // Bei w steht erst beim Laufen fest, wie freigegeben wird; bei g schon jetzt.
+        assert!(haupt.contains("call void @oida.lass.objekt(ptr"), "{haupt}");
+        assert!(haupt.contains("call void @oida.lass.k1(ptr"), "{haupt}");
+    }
+
+    #[test]
+    fn namen_mit_umlauten() {
+        let ir = ir("KLASSE Bär\n FUNKTIAUN grüß()\n PASST SCHO\nPASST SCHO\nBär().grüß() OIDA");
+        assert!(ir.contains("define internal void @\"oida.m.B\\C3\\A4r.gr\\C3\\BC\\C3\\9F\"(ptr %selbst)"), "{ir}");
+    }
 }

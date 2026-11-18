@@ -1,0 +1,180 @@
+# Objekte und ihr Speicher: Hier darf am Ende nichts übrig bleiben, und
+# nichts darf zu früh freigegeben werden (der Test läuft auch im Prüfmodus).
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+KLASSE Ding
+    name KETTN
+    wo Punkt
+    zettel LISTN VON KETTN = []
+    wert ZOI = 1
+
+    FUNKTIAUN merk(text KETTN)
+        HAU EINE(SÖWA.zettel, text) OIDA
+    PASST SCHO
+
+    FUNKTIAUN ollas() GIBT ZRUCK KETTN
+        SOG AU aus = SÖWA.name + ":" OIDA
+        FIA JEDE z IN SÖWA.zettel TUA
+            aus += " " + z OIDA
+        PASST SCHO
+        GIB ZRUCK aus OIDA
+    PASST SCHO
+
+    FUNKTIAUN erster() GIBT ZRUCK KETTN
+        # Hört mitten in der Schleife auf: z und die Liste müssen trotzdem losgelassen werden.
+        FIA JEDE z IN SÖWA.zettel TUA
+            WENN LÄNGN(z) > 3 DAUN
+                GIB ZRUCK z OIDA
+            PASST SCHO
+        PASST SCHO
+        GIB ZRUCK "nix" OIDA
+    PASST SCHO
+
+    FUNKTIAUN tauf(neich KETTN) GIBT ZRUCK KETTN
+        SÖWA.name = neich + "!" OIDA
+        GIB ZRUCK "tauft" OIDA
+    PASST SCHO
+
+    # Lässt sich selbst austauschen und redet danach noch von sich.
+    FUNKTIAUN wechsl_und_sog(w Wechsler) GIBT ZRUCK KETTN
+        SOG AU wos = w.wechsl() OIDA
+        GIB ZRUCK SÖWA.name + " " + wos + " " + KETTN(LÄNGN(SÖWA.zettel)) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Kistn
+    inhalt Ding
+    mehr LISTN VON Ding = []
+
+    FUNKTIAUN tausch(neich Ding) GIBT ZRUCK Ding
+        SOG AU oid = SÖWA.inhalt OIDA
+        SÖWA.inhalt = neich OIDA
+        GIB ZRUCK oid OIDA
+    PASST SCHO
+
+    FUNKTIAUN pack(d Ding)
+        HAU EINE(SÖWA.mehr, d) OIDA
+    PASST SCHO
+
+    FUNKTIAUN leer()
+        SOLONG LÄNGN(SÖWA.mehr) > 0 TUA
+            HAU AUSSE(SÖWA.mehr, 0) OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+KLASSE Wechsler
+    kistn Kistn
+
+    # Wirft das Ding weg, an dem die Methode ollas() gerade hängt.
+    FUNKTIAUN wechsl() GIBT ZRUCK KETTN
+        SÖWA.kistn.inhalt = Ding("neich", Punkt(0, 0)) OIDA
+        GIB ZRUCK "gwechslt" OIDA
+    PASST SCHO
+PASST SCHO
+
+STRUKTUR Paar
+    links Ding
+    rechts Ding
+PASST SCHO
+
+FUNKTIAUN bau(name KETTN, n ZOI) GIBT ZRUCK Ding
+    SOG AU d = Ding(name, Punkt(n, n * 2)) OIDA
+    FIA i VON 1 BIS n TUA
+        d.merk(name + KETTN(i)) OIDA
+    PASST SCHO
+    GIB ZRUCK d OIDA
+PASST SCHO
+
+FUNKTIAUN laenger(a Ding, b Ding) GIBT ZRUCK Ding
+    WENN LÄNGN(a.zettel) >= LÄNGN(b.zettel) DAUN
+        GIB ZRUCK a OIDA
+    PASST SCHO
+    GIB ZRUCK b OIDA
+PASST SCHO
+
+SCHREIB("--- Felder") OIDA
+SOG AU a = bau("a", 3) OIDA
+SCHREIB(a.ollas(), a.wo.x, a.wo.y, a.wert) OIDA
+a.name = a.name + a.name OIDA
+a.name += "!" OIDA
+a.wo.x += 10 OIDA
+a.wo = Punkt(a.wo.y, a.wo.x) OIDA
+a.zettel[1] = "zwa" OIDA
+a.zettel = a.zettel OIDA
+a = a OIDA
+SCHREIB(a) OIDA
+SCHREIB(a.erster(), bau("langer", 2).erster(), bau("x", 1).erster()) OIDA
+
+SCHREIB("--- Objekte in Objekten") OIDA
+SOG AU k = Kistn(a) OIDA
+SCHREIB(k.inhalt.name, k.inhalt.zettel[0], k.inhalt.ollas()) OIDA
+SOG AU oid = k.tausch(bau("b", 2)) OIDA
+SCHREIB(oid == a, k.inhalt.name, k.inhalt.wo) OIDA
+k.tausch(bau("c", 1)).merk("weg") OIDA
+k.tausch(k.inhalt).merk("bleibt") OIDA
+SCHREIB(k.inhalt.ollas()) OIDA
+k.inhalt.wert = 5 OIDA
+k.inhalt.wo.y = k.inhalt.wert * 2 OIDA
+SCHREIB(k) OIDA
+
+SCHREIB("--- Listen in Objekten") OIDA
+FIA i VON 1 BIS 4 TUA
+    k.pack(bau("p" + KETTN(i), i)) OIDA
+PASST SCHO
+k.pack(a) OIDA
+k.pack(a) OIDA
+k.mehr[0] = k.mehr[3] OIDA
+k.mehr[1].merk("dazua") OIDA
+SCHREIB(LÄNGN(k.mehr), k.mehr[0].name, k.mehr[1].ollas(), k.mehr[5] == a) OIDA
+SCHREIB(laenger(k.mehr[2], k.mehr[3]).name, laenger(a, bau("kurz", 0)).name) OIDA
+SOG AU summe = 0 OIDA
+FIA JEDE d IN k.mehr TUA
+    WENN d == a DAUN
+        HAU OB OIDA
+    PASST SCHO
+    summe += LÄNGN(d.zettel) OIDA
+PASST SCHO
+SCHREIB(summe) OIDA
+k.leer() OIDA
+SCHREIB(LÄNGN(k.mehr), a.name) OIDA
+
+SCHREIB("--- Wegwerfen, während es gebraucht wird") OIDA
+SOG AU w = Wechsler(Kistn(bau("oid", 2))) OIDA
+# ollas() läuft am alten Ding; mittendrin tauscht wechsl() es aus.
+SCHREIB(w.kistn.inhalt.ollas() + " / " + w.wechsl() + " / " + w.kistn.inhalt.ollas()) OIDA
+SCHREIB(w.kistn.inhalt.name + w.wechsl(), w.kistn.inhalt.name) OIDA
+w.kistn.inhalt = bau("letzter", 3) OIDA
+# Die Methode läuft an einem Ding, das währenddessen aus der Kistn fliegt.
+SCHREIB(w.kistn.inhalt.wechsl_und_sog(w), w.kistn.inhalt.name) OIDA
+# Der Name wird gelesen und gleich darauf ersetzt.
+SCHREIB(a.name + " " + a.tauf("z") + " " + a.name) OIDA
+
+SCHREIB("--- Strukturen mit Objekten") OIDA
+SOG AU paar = Paar(a, bau("r", 1)) OIDA
+SOG AU kopie = paar OIDA
+kopie.rechts = a OIDA
+kopie.links.merk("über die Kopie") OIDA
+SCHREIB(paar.links == kopie.rechts, paar.rechts.name, LÄNGN(a.zettel)) OIDA
+SOG AU paare = [paar, kopie, Paar(bau("s", 0), bau("t", 0))] OIDA
+paare[2].links.name = "S" OIDA
+paare[0] = paare[2] OIDA
+SCHREIB(paare[0].links.name, paare[1].rechts == a, LÄNGN(paare)) OIDA
+
+SCHREIB("--- vü auf amoi") OIDA
+SOG AU vü LISTN VON Ding = [] OIDA
+FIA i VON 1 BIS 2000 TUA
+    HAU EINE(vü, bau("n", i % 3)) OIDA
+    WENN i % 2 == 0 DAUN
+        HAU AUSSE(vü, 0) OIDA
+    PASST SCHO
+PASST SCHO
+SOG AU zettel = 0 OIDA
+FIA JEDE d IN vü TUA
+    zettel += LÄNGN(d.zettel) OIDA
+PASST SCHO
+SCHREIB(LÄNGN(vü), zettel) OIDA

@@ -34,8 +34,8 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.3.** Zahlen, Texte, Strukturen, Listen, Schleifen, Funktionen, Eingabe und Ausgabe sind da;
-Klassen fehlen noch. Wohin es geht, steht unten im [Fahrplan](#fahrplan).
+**Stand: v0.4.** Zahlen, Texte, Strukturen, Listen, Klassen mit Vererbung, Schleifen, Funktionen,
+Eingabe und Ausgabe sind da. Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
 
@@ -130,7 +130,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.3)
+## Die Sprache (v0.4)
 
 ### Typen
 
@@ -268,6 +268,72 @@ SCHREIB(p.x, p) OIDA              # 11.5 Punkt(11.5, 2.0)
   Struktur nicht enthalten (über eine Liste geht es).
 - Strukturen stehen ganz außen wie Funktionen, die Reihenfolge ist egal.
 
+### Klassen
+
+Eine Klasse hat Felder wie eine Struktur und dazu **Methoden**: Funktionen, die zu ihr gehören.
+
+```
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = 100                # mit Wert: muss man beim Anlegen nicht angeben
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK "I bin " + SÖWA.name OIDA
+    PASST SCHO
+
+    FUNKTIAUN kriag(schaden ZOI)
+        SÖWA.lebn -= schaden OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU hansi = Wesen("Hansi") OIDA    # die Felder ohne Wert, der Reihe nach
+hansi.kriag(30) OIDA
+SCHREIB(hansi.sog(), hansi.lebn) OIDA # I bin Hansi 70
+```
+
+- In einer Methode ist `SÖWA` (auch: `MEI`) das Objekt, an dem sie aufgerufen wurde. Felder und
+  andere Methoden erreicht man nur darüber: `SÖWA.lebn`, `SÖWA.sog()`.
+- Ein Objekt ist ein **Verweis**, anders als eine Struktur: Nach `SOG AU a = hansi OIDA` meinen `a`
+  und `hansi` dasselbe Wesen, und eine Funktion, die ein Objekt bekommt, ändert das Original.
+  `a == hansi` fragt, ob es dasselbe Objekt ist.
+- Klassen stehen ganz außen, die Reihenfolge ist egal.
+
+**Erben.** Eine Klasse kann von einer anderen erben. Sie hat dann deren Felder und Methoden, kann
+eigene dazugeben und geerbte Methoden durch eine eigene Fassung ersetzen:
+
+```
+KLASSE Gegner ERBT VON Wesen
+    staerke ZOI
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN              # ersetzt sog() von Wesen
+        GIB ZRUCK "Grr! " + DE OIDN.sog() OIDA    # DE OIDN: die Fassung der Elternklasse
+    PASST SCHO
+PASST SCHO
+
+SOG AU sepp = Gegner("Sepp", 30) OIDA             # erst die geerbten Felder, dann die eigenen
+SOG AU olle LISTN VON Wesen = [hansi, sepp] OIDA
+FIA JEDE w IN olle TUA
+    SCHREIB(w.sog()) OIDA                         # I bin Hansi / Grr! I bin Sepp
+PASST SCHO
+```
+
+- Wo ein `Wesen` verlangt ist, passt auch ein `Gegner` (in einer Variable, als Parameter, in einer
+  Liste). Umgekehrt nicht.
+- Welche Fassung einer Methode läuft, richtet sich danach, was das Objekt wirklich ist, nicht nach
+  dem Typ der Variable: `w.sog()` ruft bei einem Gegner die Fassung von `Gegner`.
+- Eine ersetzte Methode muss dieselben Parameter und denselben Rückgabetyp haben wie die geerbte.
+- Über eine Variable vom Typ `Wesen` erreicht man nur, was jedes Wesen hat (`w.staerke` geht nicht).
+- `SCHREIB(sepp)` gibt `Gegner("Sepp", 100, 30)` aus.
+- Um den Speicher kümmert sich OIDA: Ein Objekt wird freigegeben, sobald es niemand mehr braucht.
+  Eine Ausnahme gibt es noch: Zeigen zwei Objekte gegenseitig aufeinander, bleiben beide bis zum
+  Ende des Programms liegen.
+
+Ein größeres Beispiel steht in [`beispiele/arena.oida`](beispiele/arena.oida).
+
+**Struktur oder Klasse?** Eine Struktur für kleine Werte, die man kopiert (ein Punkt, eine Farbe);
+eine Klasse für Dinge, die es einmal gibt und die sich ändern (ein Spieler, ein Gegner), und
+überall, wo man erben will.
+
 ### Listen
 
 ```
@@ -373,7 +439,8 @@ Greift man bei `STICKL` über den Text hinaus, bricht das Programm mit einer Mel
 
 Namen bestehen aus Buchstaben (auch ä, ö, ü, ß), Ziffern und `_`. Groß und klein wird bei Namen
 unterschieden (`alter` ist nicht `Alter`), bei den Wörtern der Sprache nicht (`wenn` = `WENN`).
-Ein Wort der Sprache kann kein Name sein.
+Ein Wort der Sprache kann kein Name sein, auch kleingeschrieben nicht (`klasse`, `schritt`);
+nur direkt nach einem Punkt geht jeder Name (`ding.schritt`).
 
 
 ## Die Wörter ändern
@@ -439,7 +506,7 @@ Heast! Zeile 3: Durch nix kaun ma ned teilen.
 
 ## Wie schnell ist das?
 
-So schnell wie C und Rust, und ein Programm braucht zum Laufen rund 5 MB. Gemessen an sieben
+So schnell wie C und Rust, und ein Programm braucht zum Laufen rund 5 MB. Gemessen an neun
 Programmen gegen C, Rust, C#, Java, JavaScript und Python:
 
 ![Laufzeit je Programm und Sprache](leistung/ergebnis.svg)
@@ -466,7 +533,8 @@ uebersetzer/           der Compiler (Rust), ergibt oida.exe
   build.rs               baut die Laufzeit und packt sie in die oida.exe
   tests/                 Tests von Anfang bis Ende (.oida -> .exe -> Ausgabe)
 laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt:
-                       Ausgabe, Texte samt Freigeben, Umwandlungen, Fehler beim Laufen
+                       Ausgabe, Texte, Listen und Objekte samt Freigeben, Umwandlungen,
+                       Fehler beim Laufen
 vscode/                Erweiterung für VS Code
 leistung/              Leistungsvergleich mit anderen Sprachen
 ```
@@ -477,7 +545,12 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 
 ## Was OIDA noch nicht kann
 
-- Keine Klassen und Methoden. Strukturen und Listen kann man nicht mit `=` vergleichen.
+- Einen fehlenden Wert ("kein Objekt") gibt es noch nicht; ein Feld mit einer Klasse als Typ
+  braucht immer ein Objekt. Darum gehen verkettete Dinge (ein Knoten, der auf den nächsten zeigt)
+  vorerst nur über Listen.
+- Aus einem `Wesen` wieder einen `Gegner` machen (fragen, was es wirklich ist) geht noch nicht.
+- Objekte, die im Kreis aufeinander zeigen, werden erst am Ende des Programms freigegeben.
+- Strukturen und Listen kann man nicht mit `=` vergleichen.
 - Listen kann man nicht sortieren oder durchsuchen lassen; das schreibt man vorerst selbst.
 - Keine Dateien, kein Fenster, keine Grafik.
 - Fehler beim Laufen (etwa `ZOI("abc")`) brechen das Programm ab; abfangen kann man sie noch nicht.
@@ -499,7 +572,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 0 | Grundgerüst: Typen, Variablen, `WENN`, `SOLONG`, Funktionen, `SCHREIB`; Texte werden freigegeben | fertig |
 | 1 | Zählschleife, `HAU OB`, `WEIDA`, `+=`, Eingabe, Text- und Rechenfunktionen, Zufall | fertig |
 | 2 | Strukturen als direkte Werte und Listen, `FIA JEDE` | fertig |
-| 3 | Klassen mit Feldern, Methoden und Vererbung | offen |
+| 3 | Klassen mit Feldern, Methoden und Vererbung | fertig |
 | 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | offen |
 | 5 | Generics für eigene Typen, Funktionen als Werte, ein Wörterbuch-Typ | offen |
 | 6 | Programme aus mehreren Dateien, Standardbibliothek in OIDA | offen |

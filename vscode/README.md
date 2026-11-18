@@ -4,7 +4,7 @@ Damit schreibt und startet man [OIDA](https://github.com/lelewithheart)-Programm
 
 ## Was die Erweiterung kann
 
-- **Einfärben** von `.oida`-Dateien: Wörter der Sprache, Typen (auch eigene Strukturen), Funktionen, Variablen, Felder, Zahlen, Texte, Kommentare.
+- **Einfärben** von `.oida`-Dateien: Wörter der Sprache, Typen (auch eigene Strukturen und Klassen), Funktionen und Methoden, Variablen, Felder, Zahlen, Texte, Kommentare.
 - **Fehler beim Tippen**: rot unterstrichen, mit der Meldung vom Compiler (`Heast, wo is des OIDA?`).
 - **Starten mit F5** (oder dem Pfeil rechts oben): übersetzt das Programm und lässt es unten im Terminal laufen.
 - **Übersetzen mit Strg+Umschalt+B**: legt die `.exe` neben die `.oida`-Datei.

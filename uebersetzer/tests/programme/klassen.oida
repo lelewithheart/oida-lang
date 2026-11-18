@@ -1,0 +1,167 @@
+# Klassen: Felder, Methoden, Vererbung, überschriebene Methoden.
+
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = 100
+    x KOMMAZOI = 0.0
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK "I bin " + SÖWA.name + "." OIDA
+    PASST SCHO
+
+    FUNKTIAUN beschreib()
+        # sog() ist überschrieben: Es läuft die Fassung des echten Objekts.
+        SCHREIB(SÖWA.sog(), "Lebn:", SÖWA.lebn) OIDA
+    PASST SCHO
+
+    FUNKTIAUN triff(schaden ZOI)
+        SÖWA.lebn -= schaden OIDA
+        WENN SÖWA.lebn < 0 DAUN
+            SÖWA.lebn = 0 OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN lebt() GIBT ZRUCK JONA
+        GIB ZRUCK SÖWA.lebn > 0 OIDA
+    PASST SCHO
+
+    FUNKTIAUN i() GIBT ZRUCK Wesen
+        GIB ZRUCK SÖWA OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Gegner ERBT VON Wesen
+    staerke ZOI
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK "Grr, i bin " + SÖWA.name + " (" + KETTN(SÖWA.staerke) + ")." OIDA
+    PASST SCHO
+
+    FUNKTIAUN hau(wen Wesen)
+        wen.triff(SÖWA.staerke) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Boss ERBT VON Gegner
+    titel KETTN = "da Boss"
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK DE OIDN.sog() + " Und " + SÖWA.titel + "!" OIDA
+    PASST SCHO
+
+    FUNKTIAUN triff(schaden ZOI)
+        # Ein Boss hält doppelt so viel aus.
+        DE OIDN.triff(schaden / 2) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN stell_vor(w Wesen)
+    w.beschreib() OIDA
+PASST SCHO
+
+# Gibt einmal dies, einmal das zurück; nach außen ist es ein Wesen.
+FUNKTIAUN irgendans(nummer ZOI) GIBT ZRUCK Wesen
+    WENN nummer % 2 == 0 DAUN
+        GIB ZRUCK Boss("Grod", nummer) OIDA
+    PASST SCHO
+    GIB ZRUCK Gegner("Ungrod", nummer) OIDA
+PASST SCHO
+
+# Schachteln in Schachteln: Beim Ausgeben ist nach ein paar Stufen Schluss.
+KLASSE Schochtl
+    nummer ZOI
+    drin LISTN VON Schochtl = []
+
+    FUNKTIAUN pack(wos Schochtl) GIBT ZRUCK Schochtl
+        HAU EINE(SÖWA.drin, wos) OIDA
+        GIB ZRUCK SÖWA OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN neuer_gegner(nummer ZOI) GIBT ZRUCK Gegner
+    GIB ZRUCK Gegner("Nummer " + KETTN(nummer), nummer * 10) OIDA
+PASST SCHO
+
+SOG AU hansi = Wesen("Hansi") OIDA
+SOG AU sepp = Gegner("Sepp", 30) OIDA
+SOG AU chef = Boss("Franz", 50) OIDA
+
+SCHREIB("--- vorstellen") OIDA
+hansi.beschreib() OIDA
+sepp.beschreib() OIDA
+chef.beschreib() OIDA
+stell_vor(sepp) OIDA
+stell_vor(chef) OIDA
+
+SCHREIB("--- hauen") OIDA
+sepp.hau(hansi) OIDA
+chef.hau(hansi) OIDA
+sepp.hau(chef) OIDA
+SCHREIB(hansi.lebn, chef.lebn, hansi.lebt()) OIDA
+chef.hau(hansi) OIDA
+SCHREIB(hansi.lebn, hansi.lebt()) OIDA
+
+SCHREIB("--- dasselbe Objekt") OIDA
+SOG AU aa = hansi OIDA
+aa.name = "Hans" OIDA
+aa.lebn += 7 OIDA
+SCHREIB(hansi.name, hansi.lebn) OIDA
+SCHREIB(aa == hansi, aa != hansi, hansi == Wesen("Hans")) OIDA
+SOG AU w Wesen = sepp OIDA
+SCHREIB(w == sepp, w.i() == sepp, w.i().i().name) OIDA
+
+SCHREIB("--- ausgeben") OIDA
+SCHREIB(hansi) OIDA
+SCHREIB(sepp) OIDA
+SCHREIB(w) OIDA
+SCHREIB(chef) OIDA
+
+SCHREIB("--- Listen") OIDA
+SOG AU olle LISTN VON Wesen = [hansi, sepp, chef] OIDA
+HAU EINE(olle, Boss("Resi", 99)) OIDA
+HAU EINE(olle, neuer_gegner(4)) OIDA
+FIA JEDE einer IN olle TUA
+    SCHREIB(einer.sog()) OIDA
+PASST SCHO
+olle[0].triff(1) OIDA
+olle[1].name = "Seppl" OIDA
+SCHREIB(olle[0].lebn, sepp.name, LÄNGN(olle)) OIDA
+SOG AU gemischt = [Gegner("A", 1), Boss("B", 2), Gegner("C", 3)] OIDA
+SOG AU summe = 0 OIDA
+FIA JEDE g IN gemischt TUA
+    summe += g.staerke OIDA
+    g.hau(olle[3]) OIDA
+PASST SCHO
+SCHREIB(summe, olle[3].lebn) OIDA
+HAU AUSSE(olle, 1) OIDA
+SCHREIB(LÄNGN(olle), olle[1].name) OIDA
+SCHREIB(gemischt) OIDA
+
+SCHREIB("--- Wegwerfen") OIDA
+SCHREIB(neuer_gegner(7).sog()) OIDA
+SCHREIB(neuer_gegner(8).name, Boss("Kurz", 1).titel) OIDA
+neuer_gegner(9).triff(3) OIDA
+w = Boss("Neich", 5) OIDA
+SCHREIB(w.sog()) OIDA
+w = w.i() OIDA
+SCHREIB(w.name) OIDA
+
+SCHREIB("--- amoi des, amoi des") OIDA
+# Die Variable ist ein Wesen; was wirklich drinsteckt, wechselt.
+SOG AU irgendwer Wesen = Boss("Erster", 1) OIDA
+SOG AU no_wer Wesen = Gegner("Zweiter", 2) OIDA
+SCHREIB(irgendwer.sog(), no_wer.sog()) OIDA
+irgendwer = Gegner("Dritter", 3) OIDA
+no_wer = Boss("Vierter", 4) OIDA
+SCHREIB(irgendwer.sog(), no_wer.sog()) OIDA
+irgendwer = Wesen("Fünfter") OIDA
+SCHREIB(irgendwer.sog(), irgendwer) OIDA
+SCHREIB(irgendans(1).sog(), irgendans(2).sog()) OIDA
+
+SCHREIB("--- Schochtln") OIDA
+SOG AU schochtl = Schochtl(1) OIDA
+FIA i VON 2 BIS 6 TUA
+    schochtl = Schochtl(i).pack(schochtl) OIDA
+PASST SCHO
+SCHREIB(schochtl) OIDA
+SCHREIB(schochtl.drin[0].drin[0]) OIDA

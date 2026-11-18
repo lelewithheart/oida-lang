@@ -92,7 +92,7 @@ fn zustand() -> &'static mut Zustand {
 /// [`neuer_text`] erzeugt).
 unsafe fn bytes<'a>(text: *const TextKopf) -> &'a [u8] {
     unsafe {
-        if (*text).zaehler == TOT {
+        if (*text).zaehler <= TOT {
             abbruch_compiler("a Text wird no verwendet, obwohl er scho freigebn is");
         }
         let laenge = (*text).laenge as usize;
@@ -406,7 +406,7 @@ fn neue_daten(platz: i64, groesse: i64) -> *mut u8 {
 /// Prüft, dass die Liste noch lebt.
 unsafe fn liste<'a>(liste: *mut ListenKopf) -> &'a mut ListenKopf {
     let liste = unsafe { &mut *liste };
-    if liste.zaehler == TOT {
+    if liste.zaehler <= TOT {
         abbruch_compiler("a LISTN wird no verwendet, obwohl sie scho freigebn is");
     }
     liste
@@ -490,6 +490,71 @@ pub unsafe extern "C" fn oida_liste_frei(liste_zeiger: *mut ListenKopf, groesse:
             dealloc(l.daten, layout);
         }
         drop(Box::from_raw(liste_zeiger));
+    }
+}
+
+// ------------------------------------------------------------------ Objekte
+
+/// So beginnt jedes Objekt einer Klasse: Zähler, dann der Zeiger auf die
+/// Angaben zur Klasse. Dahinter liegen die Felder; die kennt nur der Compiler.
+#[repr(C)]
+struct ObjektKopf {
+    zaehler: i64,
+    klasse: *const u8,
+}
+
+fn objekt_layout(groesse: i64) -> Layout {
+    Layout::from_size_align(groesse as usize, std::mem::align_of::<ObjektKopf>()).expect("Objekt zu groß")
+}
+
+/// Legt Speicher für ein neues Objekt mit `groesse` Bytes an (Zähler 1). Die
+/// Angaben zur Klasse und die Felder trägt der erzeugte Code ein.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_objekt_neu(groesse: i64) -> *mut u8 {
+    let layout = objekt_layout(groesse);
+    unsafe {
+        let zeiger = alloc(layout);
+        if zeiger.is_null() {
+            handle_alloc_error(layout);
+        }
+        (*(zeiger as *mut ObjektKopf)).zaehler = 1;
+        zustand().lebende_texte += 1;
+        zeiger
+    }
+}
+
+/// Dorthin zeigt im Prüfmodus alles, was ein freigegebenes Objekt über seine
+/// Klasse wusste (freigeben, ausgeben, Sprungtabelle).
+extern "C" fn objekt_tot() {
+    abbruch_compiler("a Objekt wird no verwendet, obwohl's scho freigebn is");
+}
+
+static TOTE_KLASSE: [extern "C" fn(); 256] = [objekt_tot; 256];
+
+/// Gibt ein Objekt frei. Der erzeugte Code ruft das auf, sobald der Zähler auf
+/// 0 gefallen ist und er losgelassen hat, was in den Feldern steckt.
+///
+/// # Safety
+/// `objekt` muss ein Objekt dieser Größe sein, das niemand mehr braucht.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_objekt_frei(objekt: *mut u8, groesse: i64) {
+    unsafe {
+        let kopf = objekt as *mut ObjektKopf;
+        if (*kopf).zaehler != 0 {
+            abbruch_compiler("a Objekt wird freigebn, obwohl's no braucht wird");
+        }
+        let z = zustand();
+        z.lebende_texte -= 1;
+        if z.pruefen {
+            // Als tot markieren und die Felder überschreiben: Wer das Objekt
+            // noch verwendet, fällt auf.
+            (*kopf).zaehler = TOT;
+            (*kopf).klasse = TOTE_KLASSE.as_ptr() as *const u8;
+            let kopf_groesse = std::mem::size_of::<ObjektKopf>();
+            std::ptr::write_bytes(objekt.add(kopf_groesse), 0xDD, groesse as usize - kopf_groesse);
+        } else {
+            dealloc(objekt, objekt_layout(groesse));
+        }
     }
 }
 
@@ -583,7 +648,7 @@ pub extern "C" fn oida_start() {
 pub extern "C" fn oida_ende() {
     leeren();
     if zustand().pruefen {
-        eprintln!("OIDA: {} Texte und Listen übrig", zustand().lebende_texte);
+        eprintln!("OIDA: {} Texte, Listen und Objekte übrig", zustand().lebende_texte);
     }
 }
 
@@ -816,6 +881,25 @@ mod tests {
         unsafe {
             (*l).zaehler = 0;
             oida_liste_frei(l, 0);
+        }
+    }
+
+    #[test]
+    fn objekt_anlegen_und_freigeben() {
+        let objekt = oida_objekt_neu(40);
+        let kopf = objekt as *mut ObjektKopf;
+        unsafe {
+            assert_eq!((*kopf).zaehler, 1);
+            // Der Platz hinter dem Kopf gehört den Feldern.
+            std::ptr::write_bytes(objekt.add(std::mem::size_of::<ObjektKopf>()), 7, 24);
+            (*kopf).zaehler = 0;
+            oida_objekt_frei(objekt, 40);
+        }
+        // Auch ein Objekt ohne Felder braucht Platz für den Kopf.
+        let leer = oida_objekt_neu(std::mem::size_of::<ObjektKopf>() as i64);
+        unsafe {
+            (*(leer as *mut ObjektKopf)).zaehler = 0;
+            oida_objekt_frei(leer, std::mem::size_of::<ObjektKopf>() as i64);
         }
     }
 

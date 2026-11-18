@@ -3,8 +3,10 @@
 //! Grammatik (grob):
 //!
 //! ```text
-//! programm   = { struktur | funktion | anweisung }
+//! programm   = { struktur | klasse | funktion | anweisung }
 //! struktur   = STRUKTUR name { name typ [ OIDA ] } PASST SCHO [ OIDA ]
+//! klasse     = KLASSE name [ ERBT VON name ]
+//!              { name typ [ "=" ausdruck ] [ OIDA ] | funktion } PASST SCHO [ OIDA ]
 //! funktion   = FUNKTIAUN name "(" [ name typ { "," name typ } ] ")" [ GIBT ZRUCK typ ]
 //!              { anweisung } PASST SCHO [ OIDA ]
 //! typ        = ZOI | KOMMAZOI | JONA | KETTN | name | LISTN VON typ
@@ -26,12 +28,13 @@
 //! summe      = produkt { ( "+" | "-" ) produkt }
 //! produkt    = unaer { ( "*" | "/" | "%" ) unaer }
 //! unaer      = "-" unaer | primaer
-//! primaer    = atom { "." name | "[" ausdruck "]" }
+//! primaer    = atom { "." name [ "(" argumente ")" ] | "[" ausdruck "]" }
 //! atom       = zahl | text | WOAHR | FOISCH | PI | name [ "(" argumente ")" ]
+//!            | SÖWA | DE OIDN "." name "(" argumente ")"
 //!            | eingebaute_funktion "(" argumente ")"
 //!            | ( ZOI | KOMMAZOI | JONA | KETTN ) "(" ausdruck ")"
 //!            | "[" [ ausdruck { "," ausdruck } ] "]" | "(" ausdruck ")"
-//! ziel       = name { "." name | "[" ausdruck "]" }
+//! ziel       = ( name | SÖWA ) { "." name | "[" ausdruck "]" }
 //! ```
 
 use crate::ast::*;
@@ -238,6 +241,10 @@ impl Parser<'_> {
                     let struktur = self.struktur()?;
                     programm.strukturen.push(struktur);
                 }
+                TokenArt::Schluessel(Schluessel::Class) => {
+                    let klasse = self.klasse()?;
+                    programm.klassen.push(klasse);
+                }
                 TokenArt::Schluessel(Schluessel::End) => {
                     return Err(Fehler::neu(
                         token.pos,
@@ -280,6 +287,39 @@ impl Parser<'_> {
         Ok(StrukturDef { name, felder, pos })
     }
 
+    fn klasse(&mut self) -> Result<KlassenDef, Fehler> {
+        let pos = self.weiter().pos; // KLASSE
+        let wofuer = format!("de {}", self.wort(Schluessel::Class));
+        let (name, _) = self.name(&wofuer)?;
+        let eltern = if self.nimm(Schluessel::Extends) {
+            let wofuer = format!("de {}, von der '{name}' erbt", self.wort(Schluessel::Class));
+            Some(self.name(&wofuer)?)
+        } else {
+            None
+        };
+        let mut felder = Vec::new();
+        let mut methoden = Vec::new();
+        while !self.ist(Schluessel::End) && self.aktuell().art != TokenArt::DateiEnde {
+            if self.ist(Schluessel::Function) {
+                methoden.push(self.funktion()?);
+                continue;
+            }
+            let (feld, feld_pos) = self.name("des Föd")?;
+            let angabe = self.typ_angabe()?;
+            let standard = if self.aktuell().art == TokenArt::Gleich {
+                self.weiter();
+                Some(self.ausdruck()?)
+            } else {
+                None
+            };
+            // Ein OIDA hinter dem Feld darf sein, muss aber nicht.
+            self.nimm(Schluessel::Oida);
+            felder.push(KlassenFeldDef { name: feld, angabe, standard, pos: feld_pos });
+        }
+        self.erwarte_end(pos, Schluessel::Class)?;
+        Ok(KlassenDef { name, eltern, felder, methoden, pos })
+    }
+
     fn funktion(&mut self) -> Result<Funktion, Fehler> {
         let pos = self.weiter().pos; // FUNKTIAUN
         let wofuer = format!("de {}", self.wort(Schluessel::Function));
@@ -304,7 +344,7 @@ impl Parser<'_> {
         let rueckgabe = rueckgabe_angabe.as_ref().map_or(Typ::Nix, einfacher_typ);
         let rumpf = self.block()?;
         self.erwarte_end(pos, Schluessel::Function)?;
-        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos })
+        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0 })
     }
 
     /// Anweisungen bis PASST SCHO, SUNST oder zum Ende der Datei.
@@ -316,7 +356,7 @@ impl Parser<'_> {
                 TokenArt::DateiEnde
                 | TokenArt::Schluessel(Schluessel::End)
                 | TokenArt::Schluessel(Schluessel::Else) => return Ok(anweisungen),
-                TokenArt::Schluessel(wort @ (Schluessel::Function | Schluessel::Struct)) => {
+                TokenArt::Schluessel(wort @ (Schluessel::Function | Schluessel::Struct | Schluessel::Class)) => {
                     return Err(Fehler::neu(
                         token.pos,
                         format!("A {} kaunst ned in wos aundas einebaun, de ghört gaunz noch außn.", self.wort(wort)),
@@ -427,8 +467,8 @@ impl Parser<'_> {
                 AnweisungArt::Schreib { argumente }
             }
             _ => {
-                // Zuweisung? Dann steht vorne ein Ziel (x, p.x, liste[i]) und danach = oder +=.
-                if matches!(token.art, TokenArt::Name(_)) {
+                // Zuweisung? Dann steht vorne ein Ziel (x, p.x, liste[i], SÖWA.x) und danach = oder +=.
+                if matches!(token.art, TokenArt::Name(_) | TokenArt::Schluessel(Schluessel::This)) {
                     let anfang = self.i;
                     if let Ok(ziel) = self.primaer() {
                         let op = match &self.aktuell().art {
@@ -523,7 +563,15 @@ impl Parser<'_> {
             | TokenArt::EckigAuf
             | TokenArt::Minus => true,
             TokenArt::Schluessel(s) => {
-                matches!(s, Schluessel::True | Schluessel::False | Schluessel::Not | Schluessel::Pi)
+                matches!(
+                    s,
+                    Schluessel::True
+                        | Schluessel::False
+                        | Schluessel::Not
+                        | Schluessel::Pi
+                        | Schluessel::This
+                        | Schluessel::Super
+                )
                     || s.ist_funktion()
                     || self.typ_hier().is_some()
             }
@@ -634,8 +682,16 @@ impl Parser<'_> {
             match self.aktuell().art {
                 TokenArt::Punkt => {
                     self.weiter();
-                    let (name, pos) = self.name("des Föd")?;
-                    ausdruck = Ausdruck::neu(AusdruckArt::Feld { objekt: Box::new(ausdruck), name, nummer: 0 }, pos);
+                    let (name, pos) = self.name("des Föd oda de Methode")?;
+                    let objekt = Box::new(ausdruck);
+                    ausdruck = if self.aktuell().art == TokenArt::KlammerAuf {
+                        // objekt.name(...): eine Methode
+                        self.weiter();
+                        let argumente = self.argumente()?;
+                        Ausdruck::neu(AusdruckArt::Methode { objekt, name, argumente, nummer: 0 }, pos)
+                    } else {
+                        Ausdruck::neu(AusdruckArt::Feld { objekt, name, nummer: 0 }, pos)
+                    };
                 }
                 TokenArt::EckigAuf => {
                     let pos = self.weiter().pos;
@@ -678,6 +734,19 @@ impl Parser<'_> {
             TokenArt::Schluessel(Schluessel::Pi) => {
                 self.weiter();
                 AusdruckArt::Kommazoi(std::f64::consts::PI)
+            }
+            TokenArt::Schluessel(Schluessel::This) => {
+                self.weiter();
+                AusdruckArt::Selbst { id: 0 }
+            }
+            TokenArt::Schluessel(Schluessel::Super) => {
+                // DE OIDN.name(...): die Fassung der Elternklasse
+                self.weiter();
+                self.erwarte(TokenArt::Punkt, "a '.'")?;
+                let (name, name_pos) = self.name("de Methode")?;
+                self.erwarte(TokenArt::KlammerAuf, "a '('")?;
+                let argumente = self.argumente()?;
+                return Ok(Ausdruck::neu(AusdruckArt::ElternAufruf { name, argumente, klasse: 0 }, name_pos));
             }
             TokenArt::Schluessel(s) if eingebaut(s).is_some() => {
                 // Der Lexer lässt so ein Wort nur durch, wenn die Klammer folgt.
@@ -831,7 +900,16 @@ mod tests {
             AusdruckArt::ListenWert { elemente } => {
                 format!("[{}]", elemente.iter().map(klammern).collect::<Vec<_>>().join(", "))
             }
-            AusdruckArt::Bau { .. } => unreachable!("entsteht erst in der Typprüfung"),
+            AusdruckArt::Selbst { .. } => "SÖWA".to_string(),
+            AusdruckArt::Methode { objekt, name, argumente, .. } => format!(
+                "{}.{name}({})",
+                klammern(objekt),
+                argumente.iter().map(klammern).collect::<Vec<_>>().join(", ")
+            ),
+            AusdruckArt::ElternAufruf { name, argumente, .. } => {
+                format!("OIDN.{name}({})", argumente.iter().map(klammern).collect::<Vec<_>>().join(", "))
+            }
+            AusdruckArt::Bau { .. } | AusdruckArt::Neu { .. } => unreachable!("entsteht erst in der Typprüfung"),
         }
     }
 
@@ -990,6 +1068,37 @@ mod tests {
         let AnweisungArt::FiaJede { name, liste, rumpf, .. } = &p.haupt[0].art else { panic!() };
         assert_eq!((name.as_str(), klammern(liste), rumpf.len()), ("g", "gegner".to_string(), 1));
         assert_eq!(fehler("FIA JEDE g gegner TUA PASST SCHO").meldung, "Do ghört IN her, ned 'gegner'.");
+    }
+
+    #[test]
+    fn klasse_mit_feldern_und_methoden() {
+        let p = parse(
+            "KLASSE Gegner ERBT VON Wesen\n  staerke ZOI\n  lebn ZOI = 100 OIDA\n  beute LISTN VON KETTN = []\n\
+             \n  FUNKTIAUN treffer(schaden ZOI) GIBT ZRUCK JONA\n    SÖWA.lebn -= schaden OIDA\n    GIB ZRUCK SÖWA.lebn <= 0 OIDA\n  PASST SCHO\n\
+             \n  FUNKTIAUN beweg()\n    DE OIDN.beweg() OIDA\n  PASST SCHO\nPASST SCHO",
+        );
+        let k = &p.klassen[0];
+        assert_eq!(k.name, "Gegner");
+        assert_eq!(k.eltern.as_ref().map(|(n, _)| n.as_str()), Some("Wesen"));
+        assert_eq!(k.felder.iter().map(|f| (f.name.as_str(), f.standard.is_some())).collect::<Vec<_>>(), vec![
+            ("staerke", false),
+            ("lebn", true),
+            ("beute", true)
+        ]);
+        assert_eq!(k.methoden.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), vec!["treffer", "beweg"]);
+        let AnweisungArt::Zuweisung { ziel, op: Some(BinaerOp::Minus), .. } = &k.methoden[0].rumpf[0].art else { panic!() };
+        assert_eq!(klammern(ziel), "SÖWA.lebn");
+        let AnweisungArt::Ausdruck(a) = &k.methoden[1].rumpf[0].art else { panic!() };
+        assert_eq!(klammern(a), "OIDN.beweg()");
+    }
+
+    #[test]
+    fn methoden_aufrufen() {
+        assert_eq!(ausdruck("g.treffer(10) UND liste[0].pos.laenge() > 1"), "(g.treffer(10) UND (liste[0].pos.laenge() > 1))");
+        assert_eq!(ausdruck("mach().name"), "mach().name");
+        let p = parse("g.treffer(10) OIDA\nSÖWA.schritt() OIDA");
+        assert!(matches!(&p.haupt[0].art, AnweisungArt::Ausdruck(a) if klammern(a) == "g.treffer(10)"));
+        assert!(matches!(&p.haupt[1].art, AnweisungArt::Ausdruck(a) if klammern(a) == "SÖWA.schritt()"));
     }
 
     #[test]

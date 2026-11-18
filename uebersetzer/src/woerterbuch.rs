@@ -69,11 +69,16 @@ pub enum Schluessel {
     In,
     Add,
     Remove,
+    // Klassen
+    Class,
+    Extends,
+    This,
+    Super,
 }
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 56] = [
+    pub const ALLE: [(Schluessel, &'static str); 60] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -130,6 +135,10 @@ impl Schluessel {
         (Schluessel::In, "IN"),
         (Schluessel::Add, "ADD"),
         (Schluessel::Remove, "REMOVE"),
+        (Schluessel::Class, "CLASS"),
+        (Schluessel::Extends, "EXTENDS"),
+        (Schluessel::This, "THIS"),
+        (Schluessel::Super, "SUPER"),
     ];
 
     /// Ist das der Name einer eingebauten Funktion (LÄNGN, WURZL ...)?

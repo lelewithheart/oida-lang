@@ -26,7 +26,7 @@ pub enum Art {
     Text = 5,
     Wahrheitswert = 6,
     Endwort = 7,
-    /// Ein Feld einer Struktur: das `x` in `punkt.x`
+    /// Ein Feld einer Struktur oder eines Objekts: das `x` in `punkt.x`
     Feld = 8,
 }
 
@@ -130,11 +130,14 @@ pub fn untersuche(quelltext: &str, wb: &Woerterbuch) -> String {
         );
     }
 
-    // Die Namen der Strukturen: das Wort hinter STRUKTUR. Sie werden überall als Typ eingefärbt.
+    // Die Namen der Strukturen und Klassen: das Wort hinter STRUKTUR oder KLASSE.
+    // Sie werden überall als Typ eingefärbt.
     let strukturen: Vec<&str> = tokens
         .windows(2)
         .filter_map(|paar| match (&paar[0].art, &paar[1].art) {
-            (TokenArt::Schluessel(Schluessel::Struct), TokenArt::Name(name)) => Some(name.as_str()),
+            (TokenArt::Schluessel(Schluessel::Struct | Schluessel::Class), TokenArt::Name(name)) => {
+                Some(name.as_str())
+            }
             _ => None,
         })
         .collect();
@@ -148,7 +151,8 @@ pub fn untersuche(quelltext: &str, wb: &Woerterbuch) -> String {
                 let aufruf = tokens.get(i + 1).is_some_and(|t| t.art == TokenArt::KlammerAuf);
                 let nach_punkt = i > 0 && tokens[i - 1].art == TokenArt::Punkt;
                 if nach_punkt {
-                    Art::Feld
+                    // objekt.feld oder objekt.methode(...)
+                    if aufruf { Art::Funktion } else { Art::Feld }
                 } else if strukturen.contains(&name.as_str()) {
                     Art::Typ
                 } else if aufruf {
@@ -288,12 +292,12 @@ fn grammatik(wb: &Woerterbuch) -> String {
 fn sprach_einstellungen(wb: &Woerterbuch) -> String {
     let davor = format!("(?<!{WORTZEICHEN})");
     let danach = format!("(?!{WORTZEICHEN})");
-    let funktion = auswahl(wb, &[Schluessel::Function, Schluessel::Struct]);
+    let funktion = auswahl(wb, &[Schluessel::Function, Schluessel::Struct, Schluessel::Class]);
     let oeffner = auswahl(wb, &[Schluessel::Then, Schluessel::Do]);
     // (Auch die Zählschleife hört in der ersten Zeile mit TUA auf.)
     let sunst = auswahl(wb, &[Schluessel::Else]);
     let ende = auswahl(wb, &[Schluessel::End]);
-    // Eine Zeile weiter einrücken nach: FUNKTIAUN ..., STRUKTUR ..., ... DAUN, ... TUA, SUNST
+    // Eine Zeile weiter einrücken nach: FUNKTIAUN ..., STRUKTUR ..., KLASSE ..., ... DAUN, ... TUA, SUNST
     let mehr = format!(
         r"^\s*(?:{funktion}{danach}.*|.*{davor}{oeffner}|{sunst})\s*(?:#.*)?$"
     );
@@ -383,6 +387,30 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             "Struktur mit Feldern",
         ),
         (
+            w(Class).to_string(),
+            w(Class).to_string(),
+            vec![
+                format!("{} ${{1:Name}}", w(Class)),
+                format!("\t${{2:feld}} ${{3:{}}}", w(Int)),
+                String::new(),
+                format!("\t{} ${{4:methode}}()", w(Function)),
+                "\t\t$0".into(),
+                format!("\t{}", w(End)),
+                w(End).to_string(),
+            ],
+            "Klasse mit einem Feld und einer Methode",
+        ),
+        (
+            format!("{} {}", w(Class), w(Extends)),
+            format!("{}{}", w(Class), w(Extends).replace(' ', "")),
+            vec![
+                format!("{} ${{1:Name}} {} ${{2:Eltern}}", w(Class), w(Extends)),
+                "\t$0".into(),
+                w(End).to_string(),
+            ],
+            "Klasse, die von einer anderen erbt",
+        ),
+        (
             w(Function).to_string(),
             w(Function).to_string(),
             vec![
@@ -465,6 +493,23 @@ mod tests {
             "[[0,0,6,0],[0,7,1,3],[0,11,1,4],[0,13,4,7],\
              [1,0,7,0],[1,8,1,2],[1,10,1,3],[1,14,3,5],[1,19,5,6],[1,26,3,1],[1,30,3,4],[1,36,4,7]]"
         );
+    }
+
+    #[test]
+    fn klassen_und_methoden() {
+        let json = untersuche(
+            "KLASSE Wesen\n lebn ZOI\n FUNKTIAUN sog()\n  SCHREIB(SÖWA.lebn) OIDA\n PASST SCHO\nPASST SCHO\n\
+             SOG AU w = Wesen(1) OIDA\nw.sog() OIDA",
+            &wb(),
+        );
+        assert_eq!(feld(&json, "fehler"), "[]");
+        let tokens = feld(&json, "tokens");
+        // Der Name der Klasse ist überall ein Typ.
+        assert!(tokens.contains("[0,7,5,1]") && tokens.contains("[6,11,5,1]"), "{tokens}");
+        // SÖWA ist ein Wort der Sprache, lebn dahinter ein Feld.
+        assert!(tokens.contains("[3,10,4,0],[3,15,4,8]"), "{tokens}");
+        // w.sog(): eine Variable und eine Methode.
+        assert!(tokens.contains("[7,0,1,3],[7,2,3,2]"), "{tokens}");
     }
 
     #[test]

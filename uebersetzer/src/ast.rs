@@ -19,6 +19,9 @@ pub enum Typ {
     Struktur(u32),
     /// Eine Liste: Nummer in [`Typen::listen`], dort steht der Typ der Elemente.
     Liste(u32),
+    /// Eine Klasse: Nummer in [`Typen::klassen`]. Ein Verweis auf ein Objekt am
+    /// Heap; mehrere Variablen können dasselbe Objekt meinen.
+    Klasse(u32),
     /// Die leere Liste `[]`, solange noch nicht klar ist, wovon sie eine Liste ist.
     LeereListe,
     /// Kein Wert (Funktion ohne Rückgabe; vor der Typprüfung auch "noch unbekannt").
@@ -35,11 +38,52 @@ pub struct StrukturInfo {
     pub felder: Vec<(String, Typ)>,
 }
 
-/// Alle Strukturen und Listentypen eines Programms. Die Typprüfung füllt die
-/// Tabelle, die IR-Erzeugung liest sie.
+/// Ein Feld einer Klasse.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KlassenFeldInfo {
+    pub name: String,
+    pub typ: Typ,
+    /// Die Klasse, in der das Feld angesagt ist, und seine Stelle dort
+    /// (in [`KlassenDef::felder`]).
+    pub klasse: u32,
+    pub stelle: usize,
+    /// Hat das Feld einen Wert dabeistehen (`lebn ZOI = 100`)? Dann gibt man
+    /// es beim Anlegen eines Objekts nicht an.
+    pub hat_standard: bool,
+}
+
+/// Eine Methode, wie man sie an einem Objekt aufrufen kann.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodenInfo {
+    pub name: String,
+    pub parameter: Vec<Typ>,
+    pub rueckgabe: Typ,
+    /// Die Klasse, in der diese Fassung steht (bei geerbten: eine Elternklasse).
+    pub klasse: u32,
+    /// Die Stelle in der Sprungtabelle, wenn die Methode irgendwo in der
+    /// Familie überschrieben wird. Sonst wird sie direkt aufgerufen.
+    pub platz: Option<usize>,
+}
+
+/// Eine Klasse, wie die Typprüfung sie kennt.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct KlassenInfo {
+    pub name: String,
+    pub eltern: Option<u32>,
+    /// Alle Felder, die geerbten zuerst. So liegen sie auch im Objekt.
+    pub felder: Vec<KlassenFeldInfo>,
+    /// Alle Methoden, die man an einem Objekt dieser Klasse aufrufen kann, auch die geerbten.
+    pub methoden: Vec<MethodenInfo>,
+    /// Wie viele Plätze die Sprungtabelle hat (für alle Klassen einer Familie gleich viele).
+    pub plaetze: usize,
+}
+
+/// Alle Strukturen, Klassen und Listentypen eines Programms. Die Typprüfung
+/// füllt die Tabelle, die IR-Erzeugung liest sie.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Typen {
     pub strukturen: Vec<StrukturInfo>,
+    pub klassen: Vec<KlassenInfo>,
     /// Der Typ der Elemente je Listentyp.
     pub listen: Vec<Typ>,
 }
@@ -72,11 +116,32 @@ impl Typen {
         }
     }
 
+    pub fn klasse(&self, typ: Typ) -> Option<&KlassenInfo> {
+        match typ {
+            Typ::Klasse(n) => self.klassen.get(n as usize),
+            _ => None,
+        }
+    }
+
+    /// Ist `kind` dieselbe Klasse wie `eltern` oder erbt (über wie viele Stufen auch immer) von ihr?
+    pub fn erbt_von(&self, kind: u32, eltern: u32) -> bool {
+        let mut aktuell = Some(kind);
+        // Die Zählung schützt vor einem Kreis, falls der gerade erst als Fehler gemeldet wird.
+        for _ in 0..=self.klassen.len() {
+            match aktuell {
+                Some(k) if k == eltern => return true,
+                Some(k) => aktuell = self.klassen.get(k as usize).and_then(|info| info.eltern),
+                None => return false,
+            }
+        }
+        false
+    }
+
     /// Hängt an Werten dieses Typs Speicher, der gezählt und freigegeben
     /// werden muss? Das sind Texte, Listen und Strukturen, die so etwas enthalten.
     pub fn verwaltet(&self, typ: Typ) -> bool {
         match typ {
-            Typ::Kettn | Typ::Liste(_) | Typ::LeereListe => true,
+            Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) => true,
             Typ::Struktur(_) => self.struktur(typ).is_some_and(|s| s.felder.iter().any(|(_, t)| self.verwaltet(*t))),
             Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Nix | Typ::Fehler => false,
         }
@@ -235,6 +300,18 @@ pub enum AusdruckArt {
     /// `Punkt(1.5, 2.0)`: ein neuer Wert einer Struktur, die Felder der Reihe nach.
     /// Entsteht in der Typprüfung aus einem Aufruf.
     Bau { struktur: u32, argumente: Vec<Ausdruck> },
+    /// `SÖWA`: das Objekt, an dem die Methode gerade läuft. `id` ist seine
+    /// Nummer wie bei einer Variable, die Typprüfung trägt sie ein.
+    Selbst { id: usize },
+    /// `objekt.name(argumente)`: Aufruf einer Methode. `nummer` ist ihre
+    /// Stelle in [`KlassenInfo::methoden`] der Klasse von `objekt`.
+    Methode { objekt: Box<Ausdruck>, name: String, argumente: Vec<Ausdruck>, nummer: usize },
+    /// `DE OIDN.name(argumente)`: die Fassung der Elternklasse aufrufen.
+    /// `klasse` ist die Klasse, in der diese Fassung steht.
+    ElternAufruf { name: String, argumente: Vec<Ausdruck>, klasse: u32 },
+    /// `Gegner("Hansi", 100)`: ein neues Objekt; die Felder ohne eigenen
+    /// Wert der Reihe nach. Entsteht in der Typprüfung aus einem Aufruf.
+    Neu { klasse: u32, argumente: Vec<Ausdruck> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -294,6 +371,9 @@ pub struct Funktion {
     pub rueckgabe: Typ,
     pub rumpf: Vec<Anweisung>,
     pub pos: Position,
+    /// Bei einer Methode: die Nummer von `SÖWA` (wie bei einer Variable).
+    /// Die Typprüfung trägt sie ein.
+    pub selbst_id: usize,
 }
 
 /// Ein Feld in `STRUKTUR ... PASST SCHO`.
@@ -311,9 +391,31 @@ pub struct StrukturDef {
     pub pos: Position,
 }
 
+/// Ein Feld in `KLASSE ... PASST SCHO`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KlassenFeldDef {
+    pub name: String,
+    pub angabe: TypAngabe,
+    /// Der Wert, mit dem das Feld beginnt, wenn einer dabeisteht (`lebn ZOI = 100`).
+    pub standard: Option<Ausdruck>,
+    pub pos: Position,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct KlassenDef {
+    pub name: String,
+    /// Der Name hinter `ERBT VON`.
+    pub eltern: Option<(String, Position)>,
+    pub felder: Vec<KlassenFeldDef>,
+    pub methoden: Vec<Funktion>,
+    pub pos: Position,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Programm {
     pub strukturen: Vec<StrukturDef>,
+    /// Die Klassen. Ihre Stelle hier ist ihre Nummer in [`Typen::klassen`].
+    pub klassen: Vec<KlassenDef>,
     pub funktionen: Vec<Funktion>,
     /// Die Anweisungen außerhalb von Funktionen: das Hauptprogramm.
     pub haupt: Vec<Anweisung>,

@@ -1,0 +1,14 @@
+:6:16: Des Föd 'lebn' is a ZOI, da Wert dahinta is oba a KETTN.
+:8:17: 'Wesen' erbt von kana KLASSE, do gibt's kane DE OIDN.
+:10:5: De Methode 'sog' gibt's in 'Wesen' scho. Zwamoi geht ned.
+:14:5: Des Föd 'name' gibt's in 'Gegner' scho.
+:16:17: A Methode 'hau' gibt's in 'Wesen' ned. Es gibt: sog.
+:17:17: 'sog' wü kan Wert hom, du gibst eam an Wert.
+:20:1: De KLASSE 'Wesen' gibt's scho. Zwamoi geht ned.
+:22:1: 'Punkt' gibt's scho ois STRUKTUR, des kaun ned a no a KLASSE sei.
+:24:21: 'Punkt' is a STRUKTUR, erbn kaun ma nur von ana KLASSE.
+:26:1: De KLASSE 'Henne' erbt im Kreis von si söwa.
+:30:1: 'Gegner' gibt's scho ois KLASSE, des kaun ned a no a FUNKTIAUN sei.
+:33:32: 'wesen' soll a LISTN VON Wesen sei, oba des do is a LISTN VON Gegner.
+:34:29: In ana LISTN muass ollas vom gleichn Typ sei: do steht a Punkt, davua oba a Wesen.
+Na, des wird nix: 13 Fehler.

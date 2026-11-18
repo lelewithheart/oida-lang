@@ -1,0 +1,41 @@
+--- vorstellen
+I bin Hansi. Lebn: 100
+Grr, i bin Sepp (30). Lebn: 100
+Grr, i bin Franz (50). Und da Boss! Lebn: 100
+Grr, i bin Sepp (30). Lebn: 100
+Grr, i bin Franz (50). Und da Boss! Lebn: 100
+--- hauen
+20 85 WOAHR
+0 FOISCH
+--- dasselbe Objekt
+Hans 7
+WOAHR FOISCH FOISCH
+WOAHR WOAHR Sepp
+--- ausgeben
+Wesen("Hans", 7, 0.0)
+Gegner("Sepp", 100, 0.0, 30)
+Gegner("Sepp", 100, 0.0, 30)
+Boss("Franz", 85, 0.0, 50, "da Boss")
+--- Listen
+I bin Hans.
+Grr, i bin Sepp (30).
+Grr, i bin Franz (50). Und da Boss!
+Grr, i bin Resi (99). Und da Boss!
+Grr, i bin Nummer 4 (40).
+6 Seppl 5
+6 98
+4 Franz
+[Gegner("A", 100, 0.0, 1), Boss("B", 100, 0.0, 2, "da Boss"), Gegner("C", 100, 0.0, 3)]
+--- Wegwerfen
+Grr, i bin Nummer 7 (70).
+Nummer 8 da Boss
+Grr, i bin Neich (5). Und da Boss!
+Neich
+--- amoi des, amoi des
+Grr, i bin Erster (1). Und da Boss! Grr, i bin Zweiter (2).
+Grr, i bin Dritter (3). Grr, i bin Vierter (4). Und da Boss!
+I bin Fünfter. Wesen("Fünfter", 100, 0.0)
+Grr, i bin Ungrod (1). Grr, i bin Grod (2). Und da Boss!
+--- Schochtln
+Schochtl(6, [Schochtl(5, [Schochtl(4, [Schochtl(3, [<Schochtl>])])])])
+Schochtl(4, [Schochtl(3, [Schochtl(2, [Schochtl(1, [])])])])

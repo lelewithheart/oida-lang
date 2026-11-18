@@ -1,0 +1,21 @@
+:13:5: De Methode 'sog' in 'Gegner' passt ned zu der in 'Wesen': Sie muass de gleichn Werte nehma und des Gleiche zruckgebn.
+:16:5: 'name' is in 'Gegner' scho a Föd, des kaun ned a no a Methode sei.
+:19:23: De KLASSE 'Gespenst' kenn i ned.
+:22:23: De KLASSE 'Kreis' kaun ned von si söwa erbn.
+:24:12: 'Wesen' braucht an Wert (name), du gibst eam kan Wert.
+:25:27: 'Gegner' wü fia des Föd 'staerke' a ZOI, du gibst eam a KETTN.
+:27:11: A Föd 'gibts_ned' gibt's in 'Wesen' ned. Es gibt: name, lebn.
+:28:3: A Methode 'spring' gibt's in 'Wesen' ned. Es gibt: sog, triff.
+:29:9: 'triff' wü ois 1. Wert a ZOI, du gibst eam a KETTN.
+:30:3: 'triff' wü an Wert hom, du gibst eam kan Wert.
+:31:11: 'sog' is in 'Wesen' a Methode: Schreib sog(...).
+:32:11: 'name' is in 'Wesen' a Föd, ka Methode. Loss de Klammern weg.
+:33:24: 'falsch' soll a Gegner sei, oba des do is a Wesen.
+:35:6: A ZOI hot kane Methodn.
+:36:9: SÖWA gibt's nur in ana Methode.
+:37:11: A Wesen == a ZOI? Des geht si ned aus.
+:38:11: A Wesen < a Gegner? Des geht si ned aus.
+:40:11: A Föd 'staerke' gibt's in 'Wesen' ned. Es gibt: name, lebn.
+:42:13: DE OIDN gibt's nur in ana Methode.
+:44:3: Des rechnet wos aus und schmeißt's glei wieda weg. Wos soll des?
+Na, des wird nix: 20 Fehler.

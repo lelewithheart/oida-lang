@@ -18,33 +18,33 @@ PASST SCHO
 
 # Sortiert die Klasse nach dem Schnitt, die Besten zuerst.
 # Die Funktion bekommt dieselbe Liste, nicht eine Kopie.
-FUNKTIAUN sortier(klasse LISTN VON Schuela)
-    FIA i VON 0 BIS LÄNGN(klasse) - 2 TUA
-        FIA j VON 0 BIS LÄNGN(klasse) - 2 - i TUA
-            WENN schnitt(klasse[j]) > schnitt(klasse[j + 1]) DAUN
-                SOG AU merk = klasse[j] OIDA
-                klasse[j] = klasse[j + 1] OIDA
-                klasse[j + 1] = merk OIDA
+FUNKTIAUN sortier(schuela LISTN VON Schuela)
+    FIA i VON 0 BIS LÄNGN(schuela) - 2 TUA
+        FIA j VON 0 BIS LÄNGN(schuela) - 2 - i TUA
+            WENN schnitt(schuela[j]) > schnitt(schuela[j + 1]) DAUN
+                SOG AU merk = schuela[j] OIDA
+                schuela[j] = schuela[j + 1] OIDA
+                schuela[j + 1] = merk OIDA
             PASST SCHO
         PASST SCHO
     PASST SCHO
 PASST SCHO
 
-SOG AU klasse = [
+SOG AU schuela = [
     Schuela("Resi", [2, 3, 4]),
     Schuela("Franz", [1, 1, 2]),
     Schuela("Schurli", [5, 4, 5])
 ] OIDA
 
 # Eine Neue kommt dazu, und Resi bessert sich aus.
-HAU EINE(klasse, Schuela("Mitzi", [])) OIDA
-HAU EINE(klasse[3].noten, 1) OIDA
-klasse[0].noten[2] = 1 OIDA
+HAU EINE(schuela, Schuela("Mitzi", [])) OIDA
+HAU EINE(schuela[3].noten, 1) OIDA
+schuela[0].noten[2] = 1 OIDA
 
-sortier(klasse) OIDA
+sortier(schuela) OIDA
 
 SOG AU platz = 1 OIDA
-FIA JEDE s IN klasse TUA
+FIA JEDE s IN schuela TUA
     SCHREIB(KETTN(platz) + ".", s.name, "- Schnitt", schnitt(s), "- Noten", s.noten) OIDA
     platz += 1 OIDA
 PASST SCHO

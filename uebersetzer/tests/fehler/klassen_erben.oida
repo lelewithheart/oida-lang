@@ -1,0 +1,34 @@
+STRUKTUR Punkt
+    x ZOI
+PASST SCHO
+KLASSE Wesen
+    name KETTN
+    lebn ZOI = "vü"
+    FUNKTIAUN sog()
+        DE OIDN.sog() OIDA
+    PASST SCHO
+    FUNKTIAUN sog()
+    PASST SCHO
+PASST SCHO
+KLASSE Gegner ERBT VON Wesen
+    name KETTN
+    FUNKTIAUN hau()
+        DE OIDN.hau() OIDA
+        DE OIDN.sog(1) OIDA
+    PASST SCHO
+PASST SCHO
+KLASSE Wesen
+PASST SCHO
+KLASSE Punkt
+PASST SCHO
+KLASSE Eck ERBT VON Punkt
+PASST SCHO
+KLASSE Henne ERBT VON Ei
+PASST SCHO
+KLASSE Ei ERBT VON Henne
+PASST SCHO
+FUNKTIAUN Gegner()
+PASST SCHO
+SOG AU gegner LISTN VON Gegner = [Gegner("a")] OIDA
+SOG AU wesen LISTN VON Wesen = gegner OIDA
+SOG AU misch = [Wesen("a"), Punkt(1)] OIDA

@@ -30,6 +30,16 @@
     "body": ["STRUKTUR ${1:Name}", "\t${2:feld} ${3:ZOI}", "PASST SCHO"],
     "description": "Struktur mit Feldern"
   },
+  "KLASSE": {
+    "prefix": "klasse",
+    "body": ["KLASSE ${1:Name}", "\t${2:feld} ${3:ZOI}", "", "\tFUNKTIAUN ${4:methode}()", "\t\t$0", "\tPASST SCHO", "PASST SCHO"],
+    "description": "Klasse mit einem Feld und einer Methode"
+  },
+  "KLASSE ERBT VON": {
+    "prefix": "klasseerbtvon",
+    "body": ["KLASSE ${1:Name} ERBT VON ${2:Eltern}", "\t$0", "PASST SCHO"],
+    "description": "Klasse, die von einer anderen erbt"
+  },
   "FUNKTIAUN": {
     "prefix": "funktiaun",
     "body": ["FUNKTIAUN ${1:name}(${2:x} ${3:ZOI}) GIBT ZRUCK ${4:ZOI}", "\tGIB ZRUCK ${0:x} OIDA", "PASST SCHO"],

@@ -959,7 +959,7 @@ fn main() -> std::process::ExitCode {
         .filter(|n| nur.is_empty() || nur.contains(n))
         .collect();
     // Die Reihenfolge im Bericht: erst das Kleine, dann Rechnen, dann Texte und Ausgabe.
-    let reihenfolge = ["hallo", "fib", "primzahlen", "collatz", "mandelbrot", "teilchen", "texte", "ausgabe"];
+    let reihenfolge = ["hallo", "fib", "primzahlen", "collatz", "mandelbrot", "teilchen", "objekte", "texte", "ausgabe"];
     namen.sort_by_key(|n| (reihenfolge.iter().position(|r| r == n).unwrap_or(usize::MAX), n.clone()));
 
     let mut ergebnisse = Vec::new();

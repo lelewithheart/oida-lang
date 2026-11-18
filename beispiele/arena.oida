@@ -1,0 +1,96 @@
+# Arena: Klassen, Vererbung und überschriebene Methoden.
+#
+# Ein Held kämpft der Reihe nach gegen alles, was in der Arena steht.
+# Jedes Wesen haut auf seine Art zu: Das ist dieselbe Methode `hau`,
+# aber je nach Klasse läuft eine andere Fassung.
+
+KLASSE Wesen
+    name KETTN
+    lebn ZOI
+    kroft ZOI
+
+    FUNKTIAUN lebt() GIBT ZRUCK JONA
+        GIB ZRUCK SÖWA.lebn > 0 OIDA
+    PASST SCHO
+
+    # Wie viel Schaden das Wesen in dieser Runde macht.
+    FUNKTIAUN hau(runde ZOI) GIBT ZRUCK ZOI
+        GIB ZRUCK SÖWA.kroft OIDA
+    PASST SCHO
+
+    FUNKTIAUN kriag(schaden ZOI)
+        SÖWA.lebn = GRÖSSTA(0, SÖWA.lebn - schaden) OIDA
+    PASST SCHO
+
+    FUNKTIAUN wia_gehts() GIBT ZRUCK KETTN
+        GIB ZRUCK SÖWA.name + " (" + KETTN(SÖWA.lebn) + ")" OIDA
+    PASST SCHO
+PASST SCHO
+
+# Ein Ratz ist schwach, haut aber zweimal zu.
+KLASSE Ratz ERBT VON Wesen
+    FUNKTIAUN hau(runde ZOI) GIBT ZRUCK ZOI
+        GIB ZRUCK SÖWA.kroft * 2 OIDA
+    PASST SCHO
+PASST SCHO
+
+# Ein Drache speit jede dritte Runde Feuer, und seine Schuppen halten etwas ab.
+KLASSE Droch ERBT VON Wesen
+    schuppn ZOI = 3
+
+    FUNKTIAUN hau(runde ZOI) GIBT ZRUCK ZOI
+        WENN runde % 3 == 0 DAUN
+            GIB ZRUCK SÖWA.kroft * 3 OIDA
+        PASST SCHO
+        GIB ZRUCK DE OIDN.hau(runde) OIDA
+    PASST SCHO
+
+    FUNKTIAUN kriag(schaden ZOI)
+        DE OIDN.kriag(GRÖSSTA(1, schaden - SÖWA.schuppn)) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Der Held merkt sich, wen er besiegt hat, und erholt sich nach jedem Kampf.
+KLASSE Höd ERBT VON Wesen
+    besiegt LISTN VON KETTN = []
+
+    FUNKTIAUN rost()
+        SÖWA.lebn += 15 OIDA
+    PASST SCHO
+PASST SCHO
+
+# Lässt die zwei kämpfen, bis einer umfällt. Gibt zurück, ob der Held gewonnen hat.
+FUNKTIAUN kaumpf(höd Höd, gegna Wesen) GIBT ZRUCK JONA
+    SOG AU runde = 1 OIDA
+    SOLONG höd.lebt() UND gegna.lebt() TUA
+        gegna.kriag(höd.hau(runde)) OIDA
+        WENN gegna.lebt() DAUN
+            höd.kriag(gegna.hau(runde)) OIDA
+        PASST SCHO
+        SCHREIB("  Runde", runde, "-", höd.wia_gehts(), "gegn", gegna.wia_gehts()) OIDA
+        runde += 1 OIDA
+    PASST SCHO
+    GIB ZRUCK höd.lebt() OIDA
+PASST SCHO
+
+SOG AU höd = Höd("Hansi", 60, 9) OIDA
+SOG AU arena LISTN VON Wesen = [
+    Ratz("da Ratz", 14, 2),
+    Wesen("da Räuba", 30, 5),
+    Droch("da Droch", 40, 4)
+] OIDA
+
+FIA JEDE gegna IN arena TUA
+    SCHREIB(höd.name, "gegn", gegna.name) OIDA
+    WENN kaumpf(höd, gegna) DAUN
+        HAU EINE(höd.besiegt, gegna.name) OIDA
+        höd.rost() OIDA
+    SUNST
+        SCHREIB(höd.name, "liegt am Bodn.") OIDA
+        HAU OB OIDA
+    PASST SCHO
+PASST SCHO
+
+SCHREIB() OIDA
+SCHREIB("Besiegt:", höd.besiegt) OIDA
+SCHREIB(höd) OIDA
