@@ -37,6 +37,17 @@ struct Variable {
     pos: Position,
 }
 
+/// Was die Typprüfung über eine Funktion ohne Namen weiß, in der sie gerade steckt.
+struct LambdaKontext {
+    /// So viele Bereiche waren offen, als sie begonnen hat: Alles darunter liegt außerhalb.
+    grenze: usize,
+    /// Was sie von außen mitnimmt.
+    fang: Vec<Fang>,
+    /// Die Nummer, unter der sie SÖWA mitgenommen hat.
+    selbst: Option<usize>,
+    pos: Position,
+}
+
 struct Pruefer<'a> {
     wb: &'a Woerterbuch,
     fehler: Vec<Fehler>,
@@ -65,6 +76,9 @@ struct Pruefer<'a> {
     /// Das geht nur ganz vorne in einer Anweisung: Dort hängt noch kein
     /// Zwischenwert in der Luft, wenn die Funktion mittendrin aufhört.
     probier_erlaubt: bool,
+    /// Die Funktionen ohne Namen, in denen wir gerade stecken, die innerste hinten.
+    lambdas: Vec<LambdaKontext>,
+    naechste_lambda: usize,
 }
 
 /// Das Wort, unter dem eine eingebaute Funktion im Wörterbuch steht.
@@ -165,6 +179,8 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         selbst: None,
         sicher: HashSet::new(),
         probier_erlaubt: false,
+        lambdas: Vec::new(),
+        naechste_lambda: 0,
     };
 
     p.strukturen(&programm.strukturen, &programm.klassen);
@@ -271,6 +287,26 @@ impl Pruefer<'_> {
             }
             Typ::Fehla => self.wort(Schluessel::Error).to_string(),
             Typ::NixWert => self.wort(Schluessel::Null).to_string(),
+            Typ::Funktion(_) => {
+                let Some(f) = self.typen.funktions_typ(typ) else { return self.wort(Schluessel::Function).to_string() };
+                let parameter: Vec<String> = f.parameter.iter().map(|t| self.typ_wort(*t)).collect();
+                let mut text = format!("{}({})", self.wort(Schluessel::Function), parameter.join(", "));
+                if f.rueckgabe != Typ::Nix {
+                    text.push_str(&format!(" {} {}", self.wort(Schluessel::Returns), self.typ_wort(f.rueckgabe)));
+                }
+                text
+            }
+            Typ::Verzeichnis(_) => {
+                let (schluessel, wert) = self.typen.verzeichnis(typ).unwrap_or((Typ::Fehler, Typ::Fehler));
+                format!(
+                    "{} {} {} {} {}",
+                    self.wort(Schluessel::Map),
+                    self.wort(Schluessel::From),
+                    self.typ_wort(schluessel),
+                    self.wort(Schluessel::And),
+                    self.typ_wort(wert)
+                )
+            }
             Typ::Nix | Typ::Fehler => "nix".to_string(),
         }
     }
@@ -335,6 +371,19 @@ impl Pruefer<'_> {
                 }
                 wert => self.typen.ergebnis_von(wert),
             },
+            TypAngabe::Funktion { parameter, rueckgabe, .. } => {
+                let parameter: Vec<Typ> = parameter.iter().map(|a| self.typ_aus(a)).collect();
+                let rueckgabe = rueckgabe.as_ref().map_or(Typ::Nix, |a| self.typ_aus(a));
+                if parameter.contains(&Typ::Fehler) || rueckgabe == Typ::Fehler {
+                    Typ::Fehler
+                } else {
+                    self.typen.funktion_von(parameter, rueckgabe)
+                }
+            }
+            TypAngabe::Generisch { pos, .. } | TypAngabe::Verzeichnis { pos, .. } => {
+                self.melde(*pos, "Des kummt no.");
+                Typ::Fehler
+            }
         }
     }
 
@@ -781,6 +830,15 @@ impl Pruefer<'_> {
             self.melde(pos, meldung);
             return None;
         };
+        if !self.lambdas.is_empty() {
+            let meldung = format!(
+                "{} geht ned in ana {} ohne Nom. Ruaf de Methode vorher auf und nimm des Ergebnis mit.",
+                self.wort(Schluessel::Super),
+                self.wort(Schluessel::Function)
+            );
+            self.melde(pos, meldung);
+            return None;
+        }
         let Some(eltern) = self.typen.klassen[klasse as usize].eltern else {
             let meldung = format!(
                 "'{}' erbt von kana {}, do gibt's kane {}.",
@@ -812,6 +870,176 @@ impl Pruefer<'_> {
 
     fn finde_variable(&self, name: &str) -> Option<&Variable> {
         self.bereiche.iter().rev().find_map(|b| b.get(name))
+    }
+
+    /// Sucht eine Variable von der Stelle aus, an der `ebene` Funktionen ohne
+    /// Namen offen sind. Liegt sie außerhalb der innersten, wird sie
+    /// mitgenommen: Die Funktion bekommt eine eigene Kopie mit eigener Nummer.
+    fn hol_variable(&mut self, name: &str, ebene: usize) -> Option<(usize, Typ)> {
+        let oben = if ebene < self.lambdas.len() { self.lambdas[ebene].grenze } else { self.bereiche.len() };
+        let unten = if ebene > 0 { self.lambdas[ebene - 1].grenze } else { 0 };
+        if let Some(v) = self.bereiche[unten..oben].iter().rev().find_map(|b| b.get(name)) {
+            return Some((v.id, v.typ));
+        }
+        if ebene == 0 {
+            return None;
+        }
+        if let Some(f) = self.lambdas[ebene - 1].fang.iter().find(|f| f.name == name) {
+            return Some((f.id, f.typ));
+        }
+        let (aussen, typ) = self.hol_variable(name, ebene - 1)?;
+        let id = self.naechste_id;
+        self.naechste_id += 1;
+        let pos = self.lambdas[ebene - 1].pos;
+        let wert = Ausdruck { art: AusdruckArt::Variable { name: name.to_string(), id: aussen }, pos, typ };
+        self.lambdas[ebene - 1].fang.push(Fang { name: name.to_string(), wert, id, typ });
+        Some((id, typ))
+    }
+
+    /// Wie [`Self::hol_variable`], für SÖWA.
+    fn hol_selbst(&mut self, ebene: usize) -> Option<(u32, usize)> {
+        let (klasse, basis) = self.selbst?;
+        if ebene == 0 {
+            return Some((klasse, basis));
+        }
+        if let Some(id) = self.lambdas[ebene - 1].selbst {
+            return Some((klasse, id));
+        }
+        let (_, aussen) = self.hol_selbst(ebene - 1)?;
+        let id = self.naechste_id;
+        self.naechste_id += 1;
+        let pos = self.lambdas[ebene - 1].pos;
+        let typ = Typ::Klasse(klasse);
+        let wert = Ausdruck { art: AusdruckArt::Selbst { id: aussen }, pos, typ };
+        let name = self.wort(Schluessel::This).to_string();
+        self.lambdas[ebene - 1].fang.push(Fang { name, wert, id, typ });
+        self.lambdas[ebene - 1].selbst = Some(id);
+        Some((klasse, id))
+    }
+
+    /// Würde die Zuweisung an `ziel` einen Wert ändern, den die Funktion ohne
+    /// Namen von außen mitgenommen hat? Das ist nur eine Kopie; die Änderung ginge verloren.
+    fn aendert_fang(&self, ziel: &Ausdruck) -> Option<String> {
+        let kontext = self.lambdas.last()?;
+        match &ziel.art {
+            AusdruckArt::Variable { name, id } => kontext.fang.iter().any(|f| f.id == *id).then(|| name.clone()),
+            AusdruckArt::Feld { objekt, .. } if matches!(objekt.typ, Typ::Struktur(_)) => self.aendert_fang(objekt),
+            AusdruckArt::Sicher { innen } => self.aendert_fang(innen),
+            _ => None,
+        }
+    }
+
+    /// Prüft eine Funktion ohne Namen. Gibt ihren Typ zurück und was sie von außen mitnimmt.
+    fn lambda(&mut self, f: &mut Funktion, kurz: bool, pos: Position) -> (Typ, Vec<Fang>) {
+        for parameter in &mut f.parameter {
+            parameter.typ = self.typ_aus(&parameter.angabe);
+        }
+        f.rueckgabe = f.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| self.typ_aus(angabe));
+        let name = "ohne Nom".to_string();
+
+        // Was für die Funktion rundherum gilt, hat drinnen nichts verloren.
+        let alt_funktion = self.funktion.take();
+        let alt_schleifen = std::mem::replace(&mut self.schleifen, 0);
+        let alt_sicher = std::mem::take(&mut self.sicher);
+        self.lambdas.push(LambdaKontext { grenze: self.bereiche.len(), fang: Vec::new(), selbst: None, pos });
+        self.bereiche.push(HashMap::new());
+        for parameter in &mut f.parameter {
+            parameter.id = self.neue_variable(&parameter.name, parameter.typ, parameter.pos);
+        }
+        if kurz {
+            // FUNKTIAUN(x ZOI) => x * 2: Was der Ausdruck ergibt, gibt die Funktion zurück.
+            let AnweisungArt::GibZruck { wert } = &mut f.rumpf[0].art else { unreachable!("so baut es der Parser") };
+            let mut ausdruck = wert.take().expect("so baut es der Parser");
+            self.funktion = Some((name, Typ::Fehler));
+            let mut typ = self.ausdruck(&mut ausdruck);
+            if typ == Typ::Nix {
+                f.rumpf[0].art = AnweisungArt::Ausdruck(ausdruck);
+            } else {
+                if typ != Typ::Fehler && !self.fertig_verlangt(&ausdruck) {
+                    typ = Typ::Fehler;
+                }
+                f.rumpf[0].art = AnweisungArt::GibZruck { wert: Some(ausdruck) };
+            }
+            f.rueckgabe = typ;
+        } else {
+            self.funktion = Some((name, f.rueckgabe));
+            for a in &mut f.rumpf {
+                self.anweisung(a);
+            }
+            let ohne_wert = f.rueckgabe == Typ::Nix || self.typen.wert_von(f.rueckgabe) == Some(Typ::Nix);
+            if !ohne_wert && f.rueckgabe != Typ::Fehler && !gibt_sicher_zruck(&f.rumpf) {
+                let meldung = format!(
+                    "De {} muass {} zruckgebn, oba ned jeda Weg hört mit {} auf.",
+                    self.wort(Schluessel::Function),
+                    self.typ_name(f.rueckgabe),
+                    self.wort(Schluessel::Return)
+                );
+                self.melde(pos, meldung);
+            }
+        }
+        self.bereiche.pop();
+        let kontext = self.lambdas.pop().expect("gerade angelegt");
+        self.funktion = alt_funktion;
+        self.schleifen = alt_schleifen;
+        self.sicher = alt_sicher;
+
+        let parameter: Vec<Typ> = f.parameter.iter().map(|p| p.typ).collect();
+        let typ = if parameter.contains(&Typ::Fehler) || f.rueckgabe == Typ::Fehler {
+            Typ::Fehler
+        } else {
+            self.typen.funktion_von(parameter, f.rueckgabe)
+        };
+        (typ, kontext.fang)
+    }
+
+    /// Prüft den Aufruf einer Funktion, die ein Wert ist.
+    fn wert_aufruf(
+        &mut self,
+        funktion: &Ausdruck,
+        f_typ: Typ,
+        argumente: &mut [Ausdruck],
+        typen: &[Typ],
+        pos: Position,
+    ) -> Typ {
+        if f_typ == Typ::Fehler {
+            return Typ::Fehler;
+        }
+        let Some(f) = self.typen.funktions_typ(f_typ).cloned() else {
+            let meldung = self.nix_hinweis(funktion, f_typ).unwrap_or_else(|| {
+                format!(
+                    "{} kaun ma ned aufruafn, des is ka {}.",
+                    self.typ_name(f_typ).replacen("a ", "A ", 1),
+                    self.wort(Schluessel::Function)
+                )
+            });
+            self.melde(funktion.pos, meldung);
+            return Typ::Fehler;
+        };
+        let wer = match ziel_text(funktion).as_str() {
+            "des" => format!("De {}", self.wort(Schluessel::Function)),
+            name => format!("'{name}'"),
+        };
+        if typen.contains(&Typ::Fehler) {
+            return f.rueckgabe;
+        }
+        if f.parameter.len() != argumente.len() {
+            let meldung =
+                format!("{wer} wü {} hom, du gibst eam {}.", anzahl(f.parameter.len()), anzahl(argumente.len()));
+            self.melde(pos, meldung);
+            return f.rueckgabe;
+        }
+        for (i, (argument, ziel)) in argumente.iter_mut().zip(&f.parameter).enumerate() {
+            if !self.anpassen(argument, *ziel) {
+                let meldung = format!(
+                    "{wer} wü ois {}. Wert {}, du gibst eam {}.",
+                    i + 1,
+                    self.typ_name(*ziel),
+                    self.typ_name(typen[i])
+                );
+                self.melde(argument.pos, meldung);
+            }
+        }
+        f.rueckgabe
     }
 
     fn unbekannte_variable(&mut self, name: &str, pos: Position) {
@@ -913,6 +1141,16 @@ impl Pruefer<'_> {
                     }
                 }
                 if ziel_typ == Typ::Fehler || wert_typ == Typ::Fehler {
+                    return;
+                }
+                if let Some(name) = self.aendert_fang(ziel) {
+                    let meldung = format!(
+                        "'{name}' kummt von außn: In ana {} ohne Nom host nur a Kopie davon, de kaunst lesn, oba ned ändern. \
+                         (Wos in an Objekt oda ana {} steht, auf des '{name}' zeigt, kaunst scho ändern.)",
+                        self.wort(Schluessel::Function),
+                        self.wort(Schluessel::List)
+                    );
+                    self.melde(ziel.pos, meldung);
                     return;
                 }
                 if !ist_ziel(ziel) {
@@ -1152,6 +1390,7 @@ impl Pruefer<'_> {
                         | AusdruckArt::Methode { .. }
                         | AusdruckArt::ElternAufruf { .. }
                         | AusdruckArt::Probier { .. }
+                        | AusdruckArt::WertAufruf { .. }
                 );
                 if matches!(typ, Typ::Ergebnis(_)) {
                     // Einen Fehler darf man nicht einfach übersehen.
@@ -1374,23 +1613,53 @@ impl Pruefer<'_> {
             if let Some(&nummer) = self.klassen_nummern.get(name) {
                 return self.neu(ausdruck, nummer);
             }
+            // Heißt so eine Variable, in der eine Funktion steckt, wird die aufgerufen.
+            let name = name.clone();
+            let variable = self.hol_variable(&name, self.lambdas.len());
+            let ist_funktion = variable.is_some_and(|(_, typ)| {
+                matches!(typ, Typ::Funktion(_)) || matches!(self.typen.innen(typ), Some(Typ::Funktion(_)))
+            });
+            if ist_funktion || (variable.is_some() && !self.signaturen.contains_key(&name)) {
+                let AusdruckArt::Aufruf { name, argumente } = std::mem::replace(&mut ausdruck.art, AusdruckArt::Nix)
+                else {
+                    unreachable!()
+                };
+                let funktion = Box::new(Ausdruck::neu(AusdruckArt::Variable { name, id: 0 }, pos));
+                ausdruck.art = AusdruckArt::WertAufruf { funktion, argumente };
+            }
         }
+        // Was erst nach dem Blick in den Ausdruck umgebaut werden kann.
+        let mut ist_funktions_wert = false;
+        let mut feld_aufruf: Option<(usize, Typ)> = None;
         let typ = match &mut ausdruck.art {
             AusdruckArt::Zoi(_) => Typ::Zoi,
             AusdruckArt::Kommazoi(_) => Typ::Kommazoi,
             AusdruckArt::Jona(_) => Typ::Jona,
             AusdruckArt::Text(_) => Typ::Kettn,
-            AusdruckArt::Variable { name, id } => match self.finde_variable(name).map(|v| (v.id, v.typ)) {
-                Some((var_id, typ)) => {
-                    *id = var_id;
-                    typ
+            AusdruckArt::Variable { name, id } => {
+                let name = name.clone();
+                match self.hol_variable(&name, self.lambdas.len()) {
+                    Some((var_id, typ)) => {
+                        *id = var_id;
+                        typ
+                    }
+                    // Keine Variable, aber eine Funktion mit dem Namen: die Funktion als Wert.
+                    None if self.signaturen.contains_key(&name) => {
+                        ist_funktions_wert = true;
+                        let signatur = &self.signaturen[&name];
+                        let (parameter, rueckgabe) = (signatur.parameter.clone(), signatur.rueckgabe);
+                        if parameter.contains(&Typ::Fehler) || rueckgabe == Typ::Fehler {
+                            Typ::Fehler
+                        } else {
+                            self.typen.funktion_von(parameter, rueckgabe)
+                        }
+                    }
+                    None => {
+                        self.unbekannte_variable(&name, pos);
+                        Typ::Fehler
+                    }
                 }
-                None => {
-                    let name = name.clone();
-                    self.unbekannte_variable(&name, pos);
-                    Typ::Fehler
-                }
-            },
+            }
             AusdruckArt::Unaer { op, innen } => {
                 let innen_typ = self.ausdruck(innen);
                 match (*op, innen_typ) {
@@ -1570,7 +1839,7 @@ impl Pruefer<'_> {
             AusdruckArt::ListenWert { elemente } => self.listen_wert(elemente),
             AusdruckArt::Bau { struktur, .. } => Typ::Struktur(*struktur),
             AusdruckArt::Neu { klasse, .. } => Typ::Klasse(*klasse),
-            AusdruckArt::Selbst { id } => match self.selbst {
+            AusdruckArt::Selbst { id } => match self.hol_selbst(self.lambdas.len()) {
                 Some((klasse, selbst_id)) => {
                     *id = selbst_id;
                     Typ::Klasse(klasse)
@@ -1587,6 +1856,23 @@ impl Pruefer<'_> {
                 let name = name.clone();
                 if let Some(meldung) = self.nix_hinweis(objekt, objekt_typ) {
                     self.melde(pos, meldung);
+                    objekt_typ = Typ::Fehler;
+                }
+                // Keine Methode, aber ein Feld, in dem eine Funktion steckt: die wird aufgerufen.
+                if let Some(klasse) = self.typen.klasse(objekt_typ)
+                    && !klasse.methoden.iter().any(|m| m.name == name)
+                    && let Some(stelle) = klasse.felder.iter().position(|f| f.name == name)
+                    && matches!(klasse.felder[stelle].typ, Typ::Funktion(_))
+                {
+                    feld_aufruf = Some((stelle, klasse.felder[stelle].typ));
+                }
+                if let Some(struktur) = self.typen.struktur(objekt_typ)
+                    && let Some(stelle) = struktur.felder.iter().position(|(feld, _)| *feld == name)
+                    && matches!(struktur.felder[stelle].1, Typ::Funktion(_))
+                {
+                    feld_aufruf = Some((stelle, struktur.felder[stelle].1));
+                }
+                if feld_aufruf.is_some() {
                     objekt_typ = Typ::Fehler;
                 }
                 match self.methode(objekt_typ, &name, argumente, &typen, pos) {
@@ -1608,9 +1894,26 @@ impl Pruefer<'_> {
                 }
             }
             AusdruckArt::Nix => Typ::NixWert,
-            // Die zwei entstehen erst hier; ein zweites Mal kommt niemand vorbei.
+            // Die drei entstehen erst hier; ein zweites Mal kommt niemand vorbei.
             AusdruckArt::IstNix { .. } => Typ::Jona,
-            AusdruckArt::Sicher { .. } => ausdruck.typ,
+            AusdruckArt::Sicher { .. } | AusdruckArt::FunktionsWert { .. } => ausdruck.typ,
+            AusdruckArt::Lambda { funktion, kurz, fang, nummer } => {
+                let kurz = *kurz;
+                let (typ, gefangen) = self.lambda(funktion, kurz, pos);
+                *fang = gefangen;
+                *nummer = self.naechste_lambda;
+                self.naechste_lambda += 1;
+                typ
+            }
+            AusdruckArt::WertAufruf { funktion, argumente } => {
+                let f_typ = self.ausdruck(funktion);
+                let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+                self.wert_aufruf(funktion, f_typ, argumente, &typen, pos)
+            }
+            AusdruckArt::Erzeug { .. } => {
+                self.melde(pos, "Des kummt no.");
+                Typ::Fehler
+            }
             AusdruckArt::OdaHoid { links, rechts } => {
                 let mut l = self.ausdruck(links);
                 if matches!(links.art, AusdruckArt::Sicher { .. }) {
@@ -1705,6 +2008,27 @@ impl Pruefer<'_> {
             }
         };
         ausdruck.typ = typ;
+        if ist_funktions_wert {
+            let AusdruckArt::Variable { name, .. } = std::mem::replace(&mut ausdruck.art, AusdruckArt::Nix) else {
+                unreachable!()
+            };
+            ausdruck.art = AusdruckArt::FunktionsWert { name };
+            return typ;
+        }
+        if let Some((stelle, feld_typ)) = feld_aufruf {
+            // objekt.feld(...): erst das Feld holen, dann die Funktion darin aufrufen.
+            let AusdruckArt::Methode { objekt, name, mut argumente, .. } =
+                std::mem::replace(&mut ausdruck.art, AusdruckArt::Nix)
+            else {
+                unreachable!()
+            };
+            let typen: Vec<Typ> = argumente.iter().map(|a| a.typ).collect();
+            let feld = Ausdruck { art: AusdruckArt::Feld { objekt, name, nummer: stelle }, pos, typ: feld_typ };
+            let typ = self.wert_aufruf(&feld, feld_typ, &mut argumente, &typen, pos);
+            ausdruck.art = AusdruckArt::WertAufruf { funktion: Box::new(feld), argumente };
+            ausdruck.typ = typ;
+            return typ;
+        }
         // Eine Variable, von der hier feststeht, dass sie nicht NIX ist, zählt als ihr Wert.
         if let AusdruckArt::Variable { id, .. } = &ausdruck.art
             && self.sicher.contains(id)

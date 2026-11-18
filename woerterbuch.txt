@@ -65,6 +65,8 @@ IN        = IN
 ADD       = HAU EINE, DAZUA
 REMOVE    = HAU AUSSE
 
+# --- Verzeichnis (Schlüssel -> Wert):  VAZEICHNIS VON KETTN UND ZOI ----------
+MAP       = VAZEICHNIS, VERZEICHNIS
 # --- Klassen:  KLASSE Gegner ERBT VON Wesen ... PASST SCHO -------------------
 #     SÖWA ist das Objekt selbst (SÖWA.lebn), DE OIDN die Elternklasse.
 CLASS     = KLASSE

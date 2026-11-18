@@ -26,6 +26,11 @@
 //!    null, gilt der Wert, sonst zeigt er auf den Text mit der Meldung.
 //!    Ein `FEHLA` allein ist dieser Text.
 //!
+//!  - Eine Funktion als Wert ist ein Zeiger auf eine Hülle am Heap, die wie
+//!    ein Objekt beginnt: `%hN { i64 zaehler, ptr angaben, ptr code, ... }`.
+//!    Dahinter liegen die Werte, die eine Funktion ohne Namen von außen
+//!    mitgenommen hat. Der Code bekommt die Hülle als ersten Wert.
+//!
 //! # Klassen und Methoden
 //!
 //! Eine Methode ist eine Funktion, die das Objekt als ersten Wert bekommt
@@ -302,6 +307,7 @@ fn ir_typ(typ: Typ) -> String {
         Typ::Kommazoi => "double".to_string(),
         Typ::Jona => "i1".to_string(),
         Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) | Typ::Fehla => "ptr".to_string(),
+        Typ::Funktion(_) | Typ::Verzeichnis(_) => "ptr".to_string(),
         Typ::Vielleicht { zeiger: true, .. } => "ptr".to_string(),
         Typ::Vielleicht { nummer, zeiger: false } => format!("%v{nummer}"),
         Typ::Ergebnis(n) => format!("%e{n}"),
@@ -351,7 +357,8 @@ fn weiter_unten_ersetzt(typen: &Typen, klasse: u32, name: &str) -> bool {
 fn behalt_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
     match typ {
         Typ::Kettn | Typ::Liste(_) | Typ::Fehla => Some(format!("call void @oida.behalt(ptr {wert})")),
-        Typ::Klasse(_) => Some(format!("call void @oida.behalt.objekt(ptr {wert})")),
+        // Die Hülle einer Funktion beginnt wie ein Objekt.
+        Typ::Klasse(_) | Typ::Funktion(_) => Some(format!("call void @oida.behalt.objekt(ptr {wert})")),
         Typ::Vielleicht { nummer, .. } if typen.verwaltet(typ) => {
             Some(format!("call void @oida.behalt.v{nummer}({} {wert})", ir_typ(typ)))
         }
@@ -370,6 +377,7 @@ fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
         }
         Typ::Ergebnis(n) => Some(format!("call void @oida.lass.e{n}(%e{n} {wert})")),
         Typ::Liste(n) => Some(format!("call void @oida.lass.l{n}(ptr {wert})")),
+        Typ::Funktion(_) => Some(format!("call void @oida.lass.objekt(ptr {wert})")),
         // Kann es nur genau diese Klasse sein, steht fest, wie freigegeben wird.
         Typ::Klasse(n) if hat_kinder(typen, n) => Some(format!("call void @oida.lass.objekt(ptr {wert})")),
         Typ::Klasse(n) => Some(format!("call void @oida.lass.k{n}(ptr {wert})")),
@@ -411,9 +419,17 @@ struct Modul<'t> {
     text_nummer: HashMap<String, usize>,
     woahr: String,
     foisch: String,
-    /// Die Wörter für NIX und FEHLA (fürs Ausgeben).
+    /// Die Wörter für NIX, FEHLA und FUNKTIAUN (fürs Ausgeben).
     nix: String,
     fehla: String,
+    funktion_wort: String,
+    /// Was beim Übersetzen der Funktionen noch dazukommt: der Code der
+    /// Funktionen ohne Namen, ihre Hüllen und die Umwege für Funktionen mit Namen.
+    zusatz: String,
+    /// Die Funktionen ohne Namen, deren Code schon erzeugt ist.
+    lambdas_gebaut: std::collections::HashSet<usize>,
+    /// Die Funktionen mit Namen, für die es den Umweg als Wert schon gibt.
+    werte_gebaut: std::collections::HashSet<String>,
     typen: &'t Typen,
     /// Die Klassen, wie sie im Programm stehen (für die Werte, mit denen Felder beginnen).
     klassen: &'t [KlassenDef],
@@ -452,7 +468,8 @@ impl Modul<'_> {
             }
             Typ::Struktur(n) => format!("  call void @oida.schreib.s{n}(%s{n} {wert})\n"),
             Typ::Liste(n) => format!("  call void @oida.schreib.l{n}(ptr {wert})\n"),
-            Typ::Klasse(_) => format!("  call void @oida.schreib.objekt(ptr {wert})\n"),
+            Typ::Klasse(_) | Typ::Funktion(_) => format!("  call void @oida.schreib.objekt(ptr {wert})\n"),
+            Typ::Verzeichnis(_) => unreachable!("kommt mit dem Verzeichnis-Typ"),
             Typ::Fehla => {
                 let anfang = format!("{}(", self.fehla);
                 let (anfang, ende) = (self.text(&anfang), self.text(")"));
@@ -476,6 +493,18 @@ impl Modul<'_> {
             [("behalt", behalt_befehl), ("lass", lass_befehl)];
         let nix = self.nix.clone();
         let nix = self.text(&nix);
+
+        // Funktionen als Werte: ausgeben, und die Hülle einer Funktion mit Namen (ohne mitgenommene Werte).
+        let funktion = format!("<{}>", self.funktion_wort);
+        let funktion = self.text(&funktion);
+        let _ = writeln!(
+            aus,
+            "define internal void @oida.schreib.funktion(ptr %huelle) {{\nstart:\n  \
+             call void @oida_schreib_text(ptr {funktion})\n  ret void\n}}\n\n\
+             define internal void @oida.frei.fest(ptr %huelle) {{\nstart:\n  \
+             call void @oida_objekt_frei(ptr %huelle, i64 24)\n  ret void\n}}\n\n\
+             @oida.huelle.fest = internal constant {{ ptr, ptr }} {{ ptr @oida.frei.fest, ptr @oida.schreib.funktion }}\n"
+        );
 
         // VIELLEICHT: nur etwas tun, wenn etwas da ist.
         for (n, innen) in typen.vielleicht.iter().enumerate() {
@@ -538,6 +567,9 @@ impl Modul<'_> {
         }
 
         for (n, k) in typen.klassen.iter().enumerate() {
+            if k.vorlage {
+                continue; // Aus einer Vorlage entsteht selbst kein Code.
+            }
             // Freigeben: erst loslassen, was in den Feldern steckt, dann das Objekt selbst.
             let _ = writeln!(aus, "define internal void @oida.frei.k{n}(ptr %objekt) {{\nstart:");
             for (i, feld) in k.felder.iter().enumerate() {
@@ -1516,6 +1548,104 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_wenn_eigen(&o, objekt.typ, o_eigen);
                 t
             }
+            AusdruckArt::Lambda { funktion, fang, nummer, .. } => {
+                let n = *nummer;
+                if self.modul.lambdas_gebaut.insert(n) {
+                    // Die Hülle: wie ein Objekt, dann der Code, dann die mitgenommenen Werte.
+                    let typen = self.modul.typen;
+                    let felder: String = fang.iter().map(|f| format!(", {}", ir_typ(f.typ))).collect();
+                    let mut text = format!("%h{n} = type {{ i64, ptr, ptr{felder} }}\n\n");
+                    let _ = writeln!(text, "define internal void @oida.frei.h{n}(ptr %huelle) {{\nstart:");
+                    for (i, f) in fang.iter().enumerate() {
+                        if let Some(befehl) = lass_befehl(typen, f.typ, &format!("%f{i}")) {
+                            let _ = writeln!(
+                                text,
+                                "  %p{i} = getelementptr inbounds %h{n}, ptr %huelle, i32 0, i32 {}\n  \
+                                 %f{i} = load {}, ptr %p{i}\n  {befehl}",
+                                i + 3,
+                                ir_typ(f.typ)
+                            );
+                        }
+                    }
+                    let _ = writeln!(
+                        text,
+                        "  call void @oida_objekt_frei(ptr %huelle, i64 {})\n  ret void\n}}\n\n\
+                         @oida.huelle.{n} = internal constant {{ ptr, ptr }} {{ ptr @oida.frei.h{n}, ptr @oida.schreib.funktion }}\n",
+                        huellen_groesse(n)
+                    );
+                    let code = baue_funktion(&mut *self.modul, funktion, FunktionsArt::Lambda { nummer: n, fang });
+                    self.modul.zusatz.push_str(&text);
+                    self.modul.zusatz.push_str(&code);
+                }
+                let h = self.temp();
+                self.zeile(&format!("{h} = call ptr @oida_objekt_neu(i64 {})", huellen_groesse(n)));
+                let (ap, cp) = (self.temp(), self.temp());
+                self.zeile(&format!("{ap} = getelementptr inbounds %h{n}, ptr {h}, i32 0, i32 1"));
+                self.zeile(&format!("store ptr @oida.huelle.{n}, ptr {ap}"));
+                self.zeile(&format!("{cp} = getelementptr inbounds %h{n}, ptr {h}, i32 0, i32 2"));
+                self.zeile(&format!("store ptr @oida.l.{n}, ptr {cp}"));
+                // Was die Funktion von außen braucht, wird jetzt kopiert und gehört dann der Hülle.
+                for (i, f) in fang.iter().enumerate() {
+                    let w = self.ausdruck(&f.wert);
+                    let p = self.temp();
+                    self.zeile(&format!("{p} = getelementptr inbounds %h{n}, ptr {h}, i32 0, i32 {}", i + 3));
+                    self.zeile(&format!("store {} {w}, ptr {p}{}", ir_typ(f.typ), wert_hinweis(f.typ)));
+                }
+                h
+            }
+            AusdruckArt::FunktionsWert { name } => {
+                let f = self.modul.typen.funktions_typ(ausdruck.typ).expect("die Typprüfung kennt den Typ").clone();
+                let umweg = ir_name("fw", &[name]);
+                if self.modul.werte_gebaut.insert(name.clone()) {
+                    // Der Umweg nimmt die Hülle entgegen (und braucht sie nicht) und ruft die Funktion.
+                    let parameter: String =
+                        f.parameter.iter().enumerate().map(|(i, t)| format!(", {} %p{i}", ir_typ(*t))).collect();
+                    let werte: Vec<String> =
+                        f.parameter.iter().enumerate().map(|(i, t)| format!("{} %p{i}", ir_typ(*t))).collect();
+                    let rt = ir_typ(f.rueckgabe);
+                    let aufruf = format!("call {rt} {}({})", funktions_name(name), werte.join(", "));
+                    let rumpf = if f.rueckgabe == Typ::Nix {
+                        format!("  {aufruf}\n  ret void")
+                    } else {
+                        format!("  %r = {aufruf}\n  ret {rt} %r")
+                    };
+                    let _ = writeln!(
+                        self.modul.zusatz,
+                        "define internal {rt} {umweg}(ptr %huelle{parameter}) {{\nstart:\n{rumpf}\n}}\n"
+                    );
+                }
+                let (h, ap, cp) = (self.temp(), self.temp(), self.temp());
+                self.zeile(&format!("{h} = call ptr @oida_objekt_neu(i64 24)"));
+                self.zeile(&format!("{ap} = getelementptr inbounds {{ i64, ptr, ptr }}, ptr {h}, i32 0, i32 1"));
+                self.zeile(&format!("store ptr @oida.huelle.fest, ptr {ap}"));
+                self.zeile(&format!("{cp} = getelementptr inbounds {{ i64, ptr, ptr }}, ptr {h}, i32 0, i32 2"));
+                self.zeile(&format!("store ptr {umweg}, ptr {cp}"));
+                h
+            }
+            AusdruckArt::WertAufruf { funktion, argumente } => {
+                // Die Hülle wird der Funktion nur geliehen.
+                let (h, h_eigen) = self.geliehen(funktion);
+                let mut werte = vec![format!("ptr {h}")];
+                for a in argumente {
+                    let w = self.ausdruck(a);
+                    werte.push(format!("{} {w}", ir_typ(a.typ)));
+                }
+                let (cp, code) = (self.temp(), self.temp());
+                self.zeile(&format!("{cp} = getelementptr inbounds {{ i64, ptr, ptr }}, ptr {h}, i32 0, i32 2"));
+                self.zeile(&format!("{code} = load ptr, ptr {cp}"));
+                let aufruf = format!("call {} {code}({})", ir_typ(ausdruck.typ), werte.join(", "));
+                let t = if ausdruck.typ == Typ::Nix {
+                    self.zeile(&aufruf);
+                    String::new()
+                } else {
+                    let t = self.temp();
+                    self.zeile(&format!("{t} = {aufruf}"));
+                    t
+                };
+                self.lass_wenn_eigen(&h, funktion.typ, h_eigen);
+                t
+            }
+            AusdruckArt::Erzeug { .. } => unreachable!("die Typprüfung macht daraus einen Bau oder ein neues Objekt"),
             AusdruckArt::Nix => match ausdruck.typ {
                 Typ::Vielleicht { zeiger: true, .. } => "null".to_string(),
                 _ => "zeroinitializer".to_string(),
@@ -1929,6 +2059,81 @@ fn text_konstante(nummer: usize, inhalt: &str) -> String {
     )
 }
 
+/// Wie viele Bytes die Hülle einer Funktion ohne Namen braucht.
+fn huellen_groesse(nummer: usize) -> String {
+    format!("ptrtoint (ptr getelementptr (%h{nummer}, ptr null, i32 1) to i64)")
+}
+
+/// Wozu eine Funktion gehört.
+enum FunktionsArt<'a> {
+    /// Eine Funktion mit Namen, ganz außen.
+    Frei,
+    /// Eine Methode der Klasse mit diesem Namen.
+    Methode(&'a str),
+    /// Eine Funktion ohne Namen mit dem, was sie von außen mitnimmt.
+    Lambda { nummer: usize, fang: &'a [Fang] },
+}
+
+/// Erzeugt den Code einer Funktion.
+fn baue_funktion(modul: &mut Modul, f: &Funktion, art: FunktionsArt) -> String {
+    let typen = modul.typen;
+    let mut bau = FunktionsBau::neu(modul);
+    bau.rueckgabe = f.rueckgabe;
+    let mut kopf = Vec::new();
+    let name = match art {
+        FunktionsArt::Frei => funktions_name(&f.name),
+        FunktionsArt::Methode(klasse) => {
+            // SÖWA ist nur geliehen: Wer die Methode aufruft, hält das Objekt fest.
+            kopf.push("ptr %selbst".to_string());
+            let _ = writeln!(bau.plaetze, "  %v{} = alloca ptr", f.selbst_id);
+            bau.zeile(&format!("store ptr %selbst, ptr %v{}", f.selbst_id));
+            bau.selbst = Some(f.selbst_id);
+            methoden_name(klasse, &f.name)
+        }
+        FunktionsArt::Lambda { nummer, fang } => {
+            // Was die Funktion mitgenommen hat, liegt in der Hülle. Solange die
+            // Funktion läuft, hält der Aufrufer die Hülle fest: Die Werte sind nur geliehen.
+            kopf.push("ptr %huelle".to_string());
+            for (i, wert) in fang.iter().enumerate() {
+                let t = ir_typ(wert.typ);
+                let _ = writeln!(bau.plaetze, "  %v{} = alloca {t}", wert.id);
+                let (p, w) = (bau.temp(), bau.temp());
+                bau.zeile(&format!("{p} = getelementptr inbounds %h{nummer}, ptr %huelle, i32 0, i32 {}", i + 3));
+                bau.zeile(&format!("{w} = load {t}, ptr {p}{}", wert_hinweis(wert.typ)));
+                bau.zeile(&format!("store {t} {w}, ptr %v{}{}", wert.id, wert_hinweis(wert.typ)));
+            }
+            format!("@oida.l.{nummer}")
+        }
+    };
+    for (i, p) in f.parameter.iter().enumerate() {
+        kopf.push(format!("{} %p{i}", ir_typ(p.typ)));
+        // Die Funktion besitzt ihre Parameter wie eigene Variablen.
+        bau.platz(p.id, p.typ);
+        bau.zeile(&format!("store {} %p{i}, ptr %v{}", ir_typ(p.typ), p.id));
+    }
+    for a in &f.rumpf {
+        bau.anweisung(a);
+    }
+    if f.rueckgabe == Typ::Nix {
+        bau.lass_variablen(1);
+        bau.zeile("ret void");
+    } else if typen.wert_von(f.rueckgabe) == Some(Typ::Nix) {
+        // NIX ODA FEHLA: Wer bis hierher kommt, hat es geschafft.
+        bau.lass_variablen(1);
+        bau.zeile(&format!("ret {} zeroinitializer", ir_typ(f.rueckgabe)));
+    } else {
+        // Die Typprüfung stellt sicher, dass jeder Weg mit GIB ZRUCK aufhört.
+        bau.zeile("unreachable");
+    }
+    format!(
+        "define internal {} {name}({}) {{\nstart:\n{}{}}}\n\n",
+        ir_typ(f.rueckgabe),
+        kopf.join(", "),
+        bau.plaetze,
+        bau.code
+    )
+}
+
 /// Erzeugt das LLVM-IR für ein Programm, das die Typprüfung bestanden hat.
 pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     let mut modul = Modul {
@@ -1938,57 +2143,28 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         foisch: wb.wort(Schluessel::False).to_string(),
         nix: wb.wort(Schluessel::Null).to_string(),
         fehla: wb.wort(Schluessel::Error).to_string(),
+        funktion_wort: wb.wort(Schluessel::Function).to_string(),
+        zusatz: String::new(),
+        lambdas_gebaut: std::collections::HashSet::new(),
+        werte_gebaut: std::collections::HashSet::new(),
         typen: &programm.typen,
         klassen: &programm.klassen,
     };
     let mut funktionen = String::new();
 
     // Erst die Funktionen (ohne Klasse), dann die Methoden jeder Klasse.
-    let ohne_klasse = programm.funktionen.iter().map(|f| (None, f));
-    let methoden = programm.klassen.iter().flat_map(|k| k.methoden.iter().map(move |m| (Some(k.name.as_str()), m)));
-    for (klasse, f) in ohne_klasse.chain(methoden) {
-        let mut bau = FunktionsBau::neu(&mut modul);
-        bau.rueckgabe = f.rueckgabe;
-        let mut kopf = Vec::new();
-        if klasse.is_some() {
-            // SÖWA ist nur geliehen: Wer die Methode aufruft, hält das Objekt fest.
-            kopf.push("ptr %selbst".to_string());
-            let _ = writeln!(bau.plaetze, "  %v{} = alloca ptr", f.selbst_id);
-            bau.zeile(&format!("store ptr %selbst, ptr %v{}", f.selbst_id));
-            bau.selbst = Some(f.selbst_id);
+    for f in &programm.funktionen {
+        let code = baue_funktion(&mut modul, f, FunktionsArt::Frei);
+        funktionen.push_str(&code);
+    }
+    for (n, k) in programm.klassen.iter().enumerate() {
+        if programm.typen.klassen[n].vorlage {
+            continue; // Aus einer Vorlage entsteht selbst kein Code.
         }
-        for (i, p) in f.parameter.iter().enumerate() {
-            kopf.push(format!("{} %p{i}", ir_typ(p.typ)));
-            // Die Funktion besitzt ihre Parameter wie eigene Variablen.
-            bau.platz(p.id, p.typ);
-            bau.zeile(&format!("store {} %p{i}, ptr %v{}", ir_typ(p.typ), p.id));
+        for m in &k.methoden {
+            let code = baue_funktion(&mut modul, m, FunktionsArt::Methode(&k.name));
+            funktionen.push_str(&code);
         }
-        for a in &f.rumpf {
-            bau.anweisung(a);
-        }
-        if f.rueckgabe == Typ::Nix {
-            bau.lass_variablen(1);
-            bau.zeile("ret void");
-        } else if programm.typen.wert_von(f.rueckgabe) == Some(Typ::Nix) {
-            // NIX ODA FEHLA: Wer bis hierher kommt, hat es geschafft.
-            bau.lass_variablen(1);
-            bau.zeile(&format!("ret {} zeroinitializer", ir_typ(f.rueckgabe)));
-        } else {
-            // Die Typprüfung stellt sicher, dass jeder Weg mit GIB ZRUCK aufhört.
-            bau.zeile("unreachable");
-        }
-        let _ = write!(
-            funktionen,
-            "define internal {} {}({}) {{\nstart:\n{}{}}}\n\n",
-            ir_typ(f.rueckgabe),
-            match klasse {
-                Some(klasse) => methoden_name(klasse, &f.name),
-                None => funktions_name(&f.name),
-            },
-            kopf.join(", "),
-            bau.plaetze,
-            bau.code
-        );
     }
 
     let mut bau = FunktionsBau::neu(&mut modul);
@@ -2025,6 +2201,9 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     }
     // Ein Objekt: Zähler, Angaben zur Klasse, dann die Felder.
     for (n, k) in programm.typen.klassen.iter().enumerate() {
+        if k.vorlage {
+            continue;
+        }
         let felder: String = k.felder.iter().map(|feld| format!(", {}", ir_typ(feld.typ))).collect();
         let _ = writeln!(aus, "%k{n} = type {{ i64, ptr{felder} }}");
     }
@@ -2034,6 +2213,7 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     }
     aus.push('\n');
     aus.push_str(&hilfen);
+    aus.push_str(&modul.zusatz);
     aus.push_str(&funktionen);
     aus.push_str(FUSS);
     aus

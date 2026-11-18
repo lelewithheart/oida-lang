@@ -31,6 +31,11 @@ pub enum Typ {
     Ergebnis(u32),
     /// Ein Fehler: im Speicher ein Text mit der Meldung.
     Fehla,
+    /// Eine Funktion als Wert: Nummer in [`Typen::funktionen`]. Im Speicher
+    /// ein Zeiger auf eine Hülle mit dem Code und den mitgenommenen Werten.
+    Funktion(u32),
+    /// `VAZEICHNIS VON <schlüssel> UND <wert>`: Nummer in [`Typen::verzeichnisse`].
+    Verzeichnis(u32),
     /// Die leere Liste `[]`, solange noch nicht klar ist, wovon sie eine Liste ist.
     LeereListe,
     /// Das Wort `NIX`, solange noch nicht klar ist, was fehlen soll.
@@ -76,10 +81,20 @@ pub struct MethodenInfo {
     pub platz: Option<usize>,
 }
 
+/// Der Typ einer Funktion als Wert: was sie nimmt und was sie zurückgibt.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunktionsTyp {
+    pub parameter: Vec<Typ>,
+    pub rueckgabe: Typ,
+}
+
 /// Eine Klasse, wie die Typprüfung sie kennt.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct KlassenInfo {
     pub name: String,
+    /// Nur eine Vorlage (`KLASSE Stapel VON T`): Daraus entstehen erst beim
+    /// Verwenden echte Klassen (`Stapel VON ZOI`). Für die Vorlage selbst wird kein Code erzeugt.
+    pub vorlage: bool,
     pub eltern: Option<u32>,
     /// Alle Felder, die geerbten zuerst. So liegen sie auch im Objekt.
     pub felder: Vec<KlassenFeldInfo>,
@@ -101,6 +116,10 @@ pub struct Typen {
     pub vielleicht: Vec<Typ>,
     /// Der Typ des Werts je `... ODA FEHLA` (`Nix` bei `NIX ODA FEHLA`).
     pub ergebnisse: Vec<Typ>,
+    /// Die Typen von Funktionen als Werte.
+    pub funktionen: Vec<FunktionsTyp>,
+    /// Schlüssel und Wert je Verzeichnis-Typ.
+    pub verzeichnisse: Vec<(Typ, Typ)>,
 }
 
 impl Typen {
@@ -164,9 +183,58 @@ impl Typen {
         }
     }
 
+    /// Der Typ "Funktion von diesen Werten nach diesem". Jeden gibt es nur einmal.
+    pub fn funktion_von(&mut self, parameter: Vec<Typ>, rueckgabe: Typ) -> Typ {
+        let gesucht = FunktionsTyp { parameter, rueckgabe };
+        let nummer = match self.funktionen.iter().position(|t| *t == gesucht) {
+            Some(n) => n,
+            None => {
+                self.funktionen.push(gesucht);
+                self.funktionen.len() - 1
+            }
+        };
+        Typ::Funktion(nummer as u32)
+    }
+
+    pub fn funktions_typ(&self, typ: Typ) -> Option<&FunktionsTyp> {
+        match typ {
+            Typ::Funktion(n) => self.funktionen.get(n as usize),
+            _ => None,
+        }
+    }
+
+    /// Der Typ "Verzeichnis von `schluessel` nach `wert`". Jeden gibt es nur einmal.
+    pub fn verzeichnis_von(&mut self, schluessel: Typ, wert: Typ) -> Typ {
+        let nummer = match self.verzeichnisse.iter().position(|t| *t == (schluessel, wert)) {
+            Some(n) => n,
+            None => {
+                self.verzeichnisse.push((schluessel, wert));
+                self.verzeichnisse.len() - 1
+            }
+        };
+        Typ::Verzeichnis(nummer as u32)
+    }
+
+    /// Schlüssel und Wert eines Verzeichnis-Typs.
+    pub fn verzeichnis(&self, typ: Typ) -> Option<(Typ, Typ)> {
+        match typ {
+            Typ::Verzeichnis(n) => self.verzeichnisse.get(n as usize).copied(),
+            _ => None,
+        }
+    }
+
     /// Ist ein Wert dieses Typs im Speicher ein einzelner Zeiger auf etwas am Heap?
     pub fn zeiger(&self, typ: Typ) -> bool {
-        matches!(typ, Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) | Typ::Fehla)
+        matches!(
+            typ,
+            Typ::Kettn
+                | Typ::Liste(_)
+                | Typ::LeereListe
+                | Typ::Klasse(_)
+                | Typ::Fehla
+                | Typ::Funktion(_)
+                | Typ::Verzeichnis(_)
+        )
     }
 
     pub fn struktur(&self, typ: Typ) -> Option<&StrukturInfo> {
@@ -201,7 +269,14 @@ impl Typen {
     /// werden muss? Das sind Texte, Listen und Strukturen, die so etwas enthalten.
     pub fn verwaltet(&self, typ: Typ) -> bool {
         match typ {
-            Typ::Kettn | Typ::Liste(_) | Typ::LeereListe | Typ::Klasse(_) | Typ::Fehla | Typ::Ergebnis(_) => true,
+            Typ::Kettn
+            | Typ::Liste(_)
+            | Typ::LeereListe
+            | Typ::Klasse(_)
+            | Typ::Fehla
+            | Typ::Ergebnis(_)
+            | Typ::Funktion(_)
+            | Typ::Verzeichnis(_) => true,
             Typ::Struktur(_) => self.struktur(typ).is_some_and(|s| s.felder.iter().any(|(_, t)| self.verwaltet(*t))),
             Typ::Vielleicht { .. } => self.innen(typ).is_some_and(|t| self.verwaltet(t)),
             Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Nix | Typ::NixWert | Typ::Fehler => false,
@@ -222,6 +297,12 @@ pub enum TypAngabe {
     Vielleicht { innen: Box<TypAngabe>, pos: Position },
     /// `<typ> ODA FEHLA`; ohne Typ davor: `NIX ODA FEHLA`
     OderFehler { wert: Option<Box<TypAngabe>>, pos: Position },
+    /// `FUNKTIAUN(<typ>, ...) [GIBT ZRUCK <typ>]`: eine Funktion als Wert
+    Funktion { parameter: Vec<TypAngabe>, rueckgabe: Option<Box<TypAngabe>>, pos: Position },
+    /// `Stapel VON ZOI`, `Paar VON ZOI UND KETTN`: eine Vorlage mit ihren Typen
+    Generisch { name: String, argumente: Vec<TypAngabe>, pos: Position },
+    /// `VAZEICHNIS VON <schlüssel> UND <wert>`
+    Verzeichnis { schluessel: Box<TypAngabe>, wert: Box<TypAngabe>, pos: Position },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -395,6 +476,29 @@ pub enum AusdruckArt {
     /// `PROBIER ausdruck`: der Wert; ist es ein Fehler, hört die Funktion
     /// hier auf und gibt ihn weiter.
     Probier { innen: Box<Ausdruck> },
+    /// Eine Funktion ohne Namen: `FUNKTIAUN(x ZOI) => x * 2` (`kurz`) oder
+    /// mit Block bis `PASST SCHO`. `fang` sind die Werte von außen, die sie
+    /// mitnimmt, `nummer` macht sie eindeutig; beides trägt die Typprüfung ein.
+    Lambda { funktion: Box<Funktion>, kurz: bool, fang: Vec<Fang>, nummer: usize },
+    /// Eine Funktion mit Namen als Wert: `SOG AU f = verdoppel OIDA`.
+    /// Entsteht in der Typprüfung aus einer "Variable", die eine Funktion ist.
+    FunktionsWert { name: String },
+    /// Aufruf einer Funktion, die ein Wert ist: `f(3)`, `liste[0](x)`, `ding.rueckruf(x)`.
+    WertAufruf { funktion: Box<Ausdruck>, argumente: Vec<Ausdruck> },
+    /// Ein neuer Wert, dessen Typ dabeisteht: `Stapel VON ZOI()`, `VAZEICHNIS VON KETTN UND ZOI()`.
+    Erzeug { angabe: TypAngabe, argumente: Vec<Ausdruck> },
+}
+
+/// Ein Wert von außen, den eine Funktion ohne Namen mitnimmt. Er wird
+/// kopiert, wenn die Funktion entsteht; drinnen kann man ihn nur lesen.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fang {
+    pub name: String,
+    /// Wie man außen an den Wert kommt (eine Variable oder SÖWA).
+    pub wert: Ausdruck,
+    /// Die Nummer, unter der die Funktion ihn drinnen findet.
+    pub id: usize,
+    pub typ: Typ,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -469,6 +573,8 @@ pub struct Funktion {
     /// Bei einer Methode: die Nummer von `SÖWA` (wie bei einer Variable).
     /// Die Typprüfung trägt sie ein.
     pub selbst_id: usize,
+    /// `FUNKTIAUN erster VON T(...)`: die Namen der Typen, die erst beim Aufruf feststehen.
+    pub typ_parameter: Vec<String>,
 }
 
 /// Ein Feld in `STRUKTUR ... PASST SCHO`.
@@ -482,6 +588,8 @@ pub struct FeldDef {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StrukturDef {
     pub name: String,
+    /// `STRUKTUR Paar VON A UND B`: die Namen der Typen, die erst beim Verwenden feststehen.
+    pub typ_parameter: Vec<String>,
     pub felder: Vec<FeldDef>,
     pub pos: Position,
 }
@@ -499,6 +607,8 @@ pub struct KlassenFeldDef {
 #[derive(Debug, Clone, PartialEq)]
 pub struct KlassenDef {
     pub name: String,
+    /// `KLASSE Stapel VON T`: die Namen der Typen, die erst beim Verwenden feststehen.
+    pub typ_parameter: Vec<String>,
     /// Der Name hinter `ERBT VON`.
     pub eltern: Option<(String, Position)>,
     pub felder: Vec<KlassenFeldDef>,

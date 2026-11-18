@@ -1,0 +1,17 @@
+:12:43: DE OIDN geht ned in ana FUNKTIAUN ohne Nom. Ruaf de Methode vorher auf und nimm des Ergebnis mit.
+:25:1: A ZOI kaun ma ned aufruafn, des is ka FUNKTIAUN.
+:27:9: 'f' wü an Wert hom, du gibst eam 2 Werte.
+:28:11: 'f' wü ois 1. Wert a ZOI, du gibst eam a KETTN.
+:29:16: 'zwamoi' wü ois 1. Wert a FUNKTIAUN(ZOI) GIBT ZRUCK ZOI, du gibst eam a FUNKTIAUN(KETTN).
+:30:16: 'zwamoi' wü ois 1. Wert a FUNKTIAUN(ZOI) GIBT ZRUCK ZOI, du gibst eam a FUNKTIAUN(KOMMAZOI) GIBT ZRUCK KOMMAZOI.
+:31:5: 'f' is a FUNKTIAUN(ZOI) GIBT ZRUCK ZOI, do kaunst ka FUNKTIAUN(KETTN) einetuan.
+:32:29: 'zahl' kummt von außn: In ana FUNKTIAUN ohne Nom host nur a Kopie davon, de kaunst lesn, oba ned ändern. (Wos in an Objekt oda ana LISTN steht, auf des 'zahl' zeigt, kaunst scho ändern.)
+:35:7: 'p' kummt von außn: In ana FUNKTIAUN ohne Nom host nur a Kopie davon, de kaunst lesn, oba ned ändern. (Wos in an Objekt oda ana LISTN steht, auf des 'p' zeigt, kaunst scho ändern.)
+:36:5: 'zahl' kummt von außn: In ana FUNKTIAUN ohne Nom host nur a Kopie davon, de kaunst lesn, oba ned ändern. (Wos in an Objekt oda ana LISTN steht, auf des 'zahl' zeigt, kaunst scho ändern.)
+:38:15: De FUNKTIAUN muass a ZOI zruckgebn, oba ned jeda Weg hört mit GIB ZRUCK auf.
+:43:31: Bei NIX waaß i ned, wos do fehln soll. Sog's dazua, zum Beispü: SOG AU x VIELLEICHT ZOI = NIX OIDA
+:44:31: 'gibts_ned' kenn i ned. Host des mit SOG AU augsogt?
+:46:9: 'vf' kunnt NIX sei. Schau z'erst noch: WENN vf != NIX DAUN ... (oda nimm ODA HOID).
+:47:11: A FUNKTIAUN(ZOI) GIBT ZRUCK ZOI == a FUNKTIAUN(ZOI) GIBT ZRUCK ZOI? Des geht si ned aus.
+:48:9: A ZOI kaun ma ned aufruafn, des is ka FUNKTIAUN.
+Na, des wird nix: 16 Fehler.

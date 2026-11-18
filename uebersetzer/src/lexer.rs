@@ -37,6 +37,8 @@ pub enum TokenArt {
     Gleich,
     /// `==`
     GleichGleich,
+    /// `=>`: kurze Funktion ohne Namen, `FUNKTIAUN(x ZOI) => x * 2`
+    Pfeil,
     /// `!=` oder `<>`
     Ungleich,
     Kleiner,
@@ -245,6 +247,7 @@ impl Leser<'_> {
         let c = self.nimm().unwrap();
         let zwei = match (c, self.schau(0)) {
             ('=', Some('=')) => Some(TokenArt::GleichGleich),
+            ('=', Some('>')) => Some(TokenArt::Pfeil),
             ('!', Some('=')) => Some(TokenArt::Ungleich),
             ('<', Some('>')) => Some(TokenArt::Ungleich),
             ('<', Some('=')) => Some(TokenArt::KleinerGleich),

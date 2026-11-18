@@ -83,11 +83,13 @@ pub enum Schluessel {
     Catch,
     ParseInt,
     ParseFloat,
+    // Verzeichnis (Schlüssel -> Wert)
+    Map,
 }
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 68] = [
+    pub const ALLE: [(Schluessel, &'static str); 69] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -156,6 +158,7 @@ impl Schluessel {
         (Schluessel::Catch, "CATCH"),
         (Schluessel::ParseInt, "PARSEINT"),
         (Schluessel::ParseFloat, "PARSEFLOAT"),
+        (Schluessel::Map, "MAP"),
     ];
 
     /// Ist das der Name einer eingebauten Funktion (LÄNGN, WURZL ...)?

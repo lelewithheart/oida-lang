@@ -1,0 +1,171 @@
+# Funktionen als Werte: in Variablen, als Parameter, in Listen und Feldern,
+# mit und ohne Namen, und mit Werten, die sie von außen mitnehmen.
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+KLASSE Zöhla
+    stand ZOI = 0
+
+    FUNKTIAUN zöh()
+        SÖWA.stand += 1 OIDA
+    PASST SCHO
+
+    # Gibt eine Funktion zurück, die diesen Zähler weiterzählt: Sie nimmt SÖWA mit.
+    FUNKTIAUN knopf(weite ZOI) GIBT ZRUCK FUNKTIAUN() GIBT ZRUCK ZOI
+        GIB ZRUCK FUNKTIAUN() GIBT ZRUCK ZOI
+            SÖWA.stand += weite OIDA
+            GIB ZRUCK SÖWA.stand OIDA
+        PASST SCHO OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Kortn
+    name KETTN
+    wirkung FUNKTIAUN(Zöhla, ZOI)
+    passt VIELLEICHT FUNKTIAUN(ZOI) GIBT ZRUCK JONA = NIX
+PASST SCHO
+
+FUNKTIAUN doppelt(x ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK x * 2 OIDA
+PASST SCHO
+
+FUNKTIAUN plus_ans(x ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK x + 1 OIDA
+PASST SCHO
+
+FUNKTIAUN griaß(wen KETTN)
+    SCHREIB("Servas " + wen + "!") OIDA
+PASST SCHO
+
+FUNKTIAUN zwamoi(f FUNKTIAUN(ZOI) GIBT ZRUCK ZOI, x ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK f(f(x)) OIDA
+PASST SCHO
+
+FUNKTIAUN fia_olle(zahlen LISTN VON ZOI, f FUNKTIAUN(ZOI) GIBT ZRUCK ZOI) GIBT ZRUCK LISTN VON ZOI
+    SOG AU aus LISTN VON ZOI = [] OIDA
+    FIA JEDE z IN zahlen TUA
+        HAU EINE(aus, f(z)) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+FUNKTIAUN nur(zahlen LISTN VON ZOI, passt FUNKTIAUN(ZOI) GIBT ZRUCK JONA) GIBT ZRUCK LISTN VON ZOI
+    SOG AU aus LISTN VON ZOI = [] OIDA
+    FIA JEDE z IN zahlen TUA
+        WENN passt(z) DAUN
+            HAU EINE(aus, z) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+# Baut aus zwei Funktionen eine dritte.
+FUNKTIAUN hintaranaund(f FUNKTIAUN(ZOI) GIBT ZRUCK ZOI, g FUNKTIAUN(ZOI) GIBT ZRUCK ZOI) GIBT ZRUCK FUNKTIAUN(ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK FUNKTIAUN(x ZOI) => g(f(x)) OIDA
+PASST SCHO
+
+FUNKTIAUN mal(faktor ZOI) GIBT ZRUCK FUNKTIAUN(ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK FUNKTIAUN(x ZOI) => x * faktor OIDA
+PASST SCHO
+
+SCHREIB("--- Funktionen mit Nom") OIDA
+SOG AU f = doppelt OIDA
+SCHREIB(f(21), zwamoi(f, 3), zwamoi(plus_ans, 3), f) OIDA
+f = plus_ans OIDA
+SCHREIB(f(21)) OIDA
+SOG AU sog FUNKTIAUN(KETTN) = griaß OIDA
+sog("Hansi") OIDA
+
+SCHREIB("--- ohne Nom") OIDA
+SOG AU quadrat = FUNKTIAUN(x ZOI) => x * x OIDA
+SOG AU lang = FUNKTIAUN(a ZOI, b ZOI) GIBT ZRUCK KETTN
+    SOG AU summe = a + b OIDA
+    WENN summe > 10 DAUN
+        GIB ZRUCK "vü: " + KETTN(summe) OIDA
+    PASST SCHO
+    GIB ZRUCK "wenig: " + KETTN(summe) OIDA
+PASST SCHO OIDA
+SCHREIB(quadrat(7), lang(3, 4), lang(30, 4)) OIDA
+SOG AU zahlen = [1, 2, 3, 4, 5, 6] OIDA
+SCHREIB(fia_olle(zahlen, quadrat), fia_olle(zahlen, FUNKTIAUN(x ZOI) => x - 1)) OIDA
+SCHREIB(nur(zahlen, FUNKTIAUN(x ZOI) => x % 2 == 0)) OIDA
+SOG AU brüll = FUNKTIAUN(t KETTN) => SCHREIB(SCHREI(t) + "!") OIDA
+brüll("oida") OIDA
+
+SCHREIB("--- wos von außn mitnehma") OIDA
+SOG AU grenz = 3 OIDA
+SOG AU wort = "Zoi " OIDA
+SOG AU groß = FUNKTIAUN(x ZOI) => x > grenz OIDA
+SOG AU benenn = FUNKTIAUN(x ZOI) => wort + KETTN(x) OIDA
+# Die Funktion hat ihre eigene Kopie: Was danach mit grenz und wort passiert, ändert sie nicht.
+grenz = 100 OIDA
+wort = "nix " OIDA
+SCHREIB(nur(zahlen, groß), benenn(7)) OIDA
+SOG AU mal3 = mal(3) OIDA
+SOG AU mal10 = mal(10) OIDA
+SCHREIB(mal3(5), mal10(5), mal(7)(6), hintaranaund(mal3, plus_ans)(4), hintaranaund(doppelt, mal10)(4)) OIDA
+# Eine Liste nimmt sie als Verweis mit: Was hineinkommt, sehen beide.
+SOG AU gmerkt LISTN VON KETTN = [] OIDA
+SOG AU merk = FUNKTIAUN(t KETTN) => HAU EINE(gmerkt, t) OIDA
+merk("ans") OIDA
+merk("zwa") OIDA
+SCHREIB(gmerkt) OIDA
+# Eine Funktion in einer Funktion: Die innere nimmt mit, was die äußere mitgenommen hat.
+SOG AU basis = 1000 OIDA
+SOG AU außn = FUNKTIAUN(a ZOI) GIBT ZRUCK FUNKTIAUN(ZOI) GIBT ZRUCK ZOI
+    SOG AU mitte = a * 10 OIDA
+    GIB ZRUCK FUNKTIAUN(b ZOI) => basis + mitte + b OIDA
+PASST SCHO OIDA
+SCHREIB(außn(2)(3), außn(5)(0)) OIDA
+SOG AU p = Punkt(1, 2) OIDA
+SOG AU weit = FUNKTIAUN(k ZOI) => Punkt(p.x * k, p.y * k) OIDA
+p.x = 50 OIDA
+SCHREIB(weit(3), p) OIDA
+
+SCHREIB("--- Listen und Föda") OIDA
+SOG AU schritte = [doppelt, plus_ans, quadrat, mal(-1)] OIDA
+SOG AU wert = 3 OIDA
+FIA JEDE ana IN schritte TUA
+    wert = ana(wert) OIDA
+PASST SCHO
+SCHREIB(wert, schritte[2](9), LÄNGN(schritte)) OIDA
+HAU EINE(schritte, FUNKTIAUN(x ZOI) => x + wert) OIDA
+SCHREIB(schritte[4](1)) OIDA
+
+SOG AU z = Zöhla() OIDA
+SOG AU kortn = [
+    Kortn("ans dazua", FUNKTIAUN(wen Zöhla, wievü ZOI) => wen.zöh()),
+    Kortn("vü dazua", FUNKTIAUN(wen Zöhla, wievü ZOI)
+        FIA i VON 1 BIS wievü TUA
+            wen.zöh() OIDA
+        PASST SCHO
+    PASST SCHO)
+] OIDA
+kortn[1].passt = FUNKTIAUN(stand ZOI) => stand < 5 OIDA
+FIA runde VON 1 BIS 3 TUA
+    FIA JEDE k IN kortn TUA
+        SOG AU frog = k.passt OIDA
+        WENN frog == NIX ODA frog(z.stand) DAUN
+            k.wirkung(z, 4) OIDA
+            SCHREIB(runde, k.name, "->", z.stand) OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+SCHREIB("--- SÖWA mitnehma") OIDA
+SOG AU drucka = z.knopf(10) OIDA
+SOG AU drucka2 = Zöhla().knopf(1) OIDA
+SCHREIB(drucka(), drucka(), z.stand, drucka2(), drucka2()) OIDA
+
+SCHREIB("--- vü auf amoi") OIDA
+SOG AU summe = 0 OIDA
+FIA i VON 1 BIS 2000 TUA
+    SOG AU dazua = mal(i % 7) OIDA
+    SOG AU text = "x" + KETTN(i) OIDA
+    SOG AU lang2 = FUNKTIAUN(n ZOI) => LÄNGN(text) + n OIDA
+    summe += hintaranaund(dazua, lang2)(2) OIDA
+PASST SCHO
+SCHREIB(summe) OIDA

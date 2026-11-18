@@ -120,6 +120,7 @@ impl Parser<'_> {
             TokenArt::ProzentGleich => "'%='".to_string(),
             TokenArt::Gleich => "'='".to_string(),
             TokenArt::GleichGleich => "'=='".to_string(),
+            TokenArt::Pfeil => "'=>'".to_string(),
             TokenArt::Ungleich => "'!='".to_string(),
             TokenArt::Kleiner => "'<'".to_string(),
             TokenArt::KleinerGleich => "'<='".to_string(),
@@ -228,6 +229,33 @@ impl Parser<'_> {
         if self.nimm(Schluessel::Maybe) {
             return Ok(TypAngabe::Vielleicht { innen: Box::new(self.typ_kern()?), pos });
         }
+        // FUNKTIAUN(ZOI, KETTN) GIBT ZRUCK JONA: eine Funktion als Wert
+        if self.ist(Schluessel::Function) && *self.naechstes() == TokenArt::KlammerAuf {
+            self.weiter();
+            self.weiter();
+            let mut parameter = Vec::new();
+            if self.aktuell().art != TokenArt::KlammerZu {
+                loop {
+                    parameter.push(self.typ_angabe()?);
+                    if self.aktuell().art == TokenArt::Komma {
+                        self.weiter();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            self.erwarte(TokenArt::KlammerZu, "a ',' oda a ')'")?;
+            let rueckgabe = if self.nimm(Schluessel::Returns) { Some(Box::new(self.typ_angabe()?)) } else { None };
+            return Ok(TypAngabe::Funktion { parameter, rueckgabe, pos });
+        }
+        // VAZEICHNIS VON KETTN UND ZOI
+        if self.nimm(Schluessel::Map) {
+            self.erwarte_schluessel(Schluessel::From)?;
+            let schluessel = Box::new(self.typ_kern()?);
+            self.erwarte_schluessel(Schluessel::And)?;
+            let wert = Box::new(self.typ_kern()?);
+            return Ok(TypAngabe::Verzeichnis { schluessel, wert, pos });
+        }
         if self.nimm(Schluessel::List) {
             self.erwarte_schluessel(Schluessel::From)?;
             return Ok(TypAngabe::Liste(Box::new(self.typ_kern()?)));
@@ -235,6 +263,14 @@ impl Parser<'_> {
         let token = self.aktuell().clone();
         if let TokenArt::Name(name) = token.art {
             self.weiter();
+            // Stapel VON ZOI, Paar VON ZOI UND KETTN: eine Vorlage mit ihren Typen
+            if self.nimm(Schluessel::From) {
+                let mut argumente = vec![self.typ_kern()?];
+                while self.nimm(Schluessel::And) {
+                    argumente.push(self.typ_kern()?);
+                }
+                return Ok(TypAngabe::Generisch { name, argumente, pos: token.pos });
+            }
             return Ok(TypAngabe::Name { name, pos: token.pos });
         }
         Err(self.unerwartet(&format!(
@@ -247,6 +283,115 @@ impl Parser<'_> {
             self.wort(Schluessel::From),
             self.wort(Schluessel::Struct)
         )))
+    }
+
+    /// `VON T` oder `VON A UND B` hinter dem Namen einer Funktion, Struktur
+    /// oder Klasse: die Typen, die erst beim Verwenden feststehen.
+    fn typ_parameter(&mut self) -> Result<Vec<String>, Fehler> {
+        let mut namen = Vec::new();
+        if self.nimm(Schluessel::From) {
+            loop {
+                namen.push(self.name("den Typ, der no offn is")?.0);
+                if !self.nimm(Schluessel::And) {
+                    break;
+                }
+            }
+        }
+        Ok(namen)
+    }
+
+    /// Die Parameter einer Funktion bis zur schließenden Klammer; die öffnende ist schon gelesen.
+    fn parameter(&mut self) -> Result<Vec<Parameter>, Fehler> {
+        let mut parameter = Vec::new();
+        if self.aktuell().art != TokenArt::KlammerZu {
+            loop {
+                let (pname, ppos) = self.name("den Parameter")?;
+                let angabe = self.typ_angabe()?;
+                let typ = einfacher_typ(&angabe);
+                parameter.push(Parameter { name: pname, angabe, typ, pos: ppos, id: 0 });
+                if self.aktuell().art == TokenArt::Komma {
+                    self.weiter();
+                } else {
+                    break;
+                }
+            }
+        }
+        self.erwarte(TokenArt::KlammerZu, "a ',' oda a ')'")?;
+        Ok(parameter)
+    }
+
+    /// Eine Funktion ohne Namen; `FUNKTIAUN` und `(` sind schon gelesen.
+    ///
+    ///  - kurz: `FUNKTIAUN(x ZOI) => x * 2`
+    ///  - mit Block: `FUNKTIAUN(x ZOI) GIBT ZRUCK ZOI ... PASST SCHO`
+    fn lambda(&mut self, pos: Position) -> Result<Ausdruck, Fehler> {
+        let parameter = self.parameter()?;
+        let mut funktion = Funktion {
+            name: String::new(),
+            parameter,
+            rueckgabe_angabe: None,
+            rueckgabe: Typ::Nix,
+            rumpf: Vec::new(),
+            pos,
+            selbst_id: 0,
+            typ_parameter: Vec::new(),
+        };
+        if self.aktuell().art == TokenArt::Pfeil {
+            let pfeil = self.weiter().pos;
+            // => SCHREIB(...): Ausgeben ist eine Anweisung, soll in der kurzen Form aber auch gehen.
+            if self.nimm(Schluessel::Print) {
+                self.erwarte(TokenArt::KlammerAuf, "a '('")?;
+                let argumente = self.argumente()?;
+                funktion.rumpf.push(Anweisung { art: AnweisungArt::Schreib { argumente }, pos: pfeil });
+                return Ok(Ausdruck::neu(
+                    AusdruckArt::Lambda { funktion: Box::new(funktion), kurz: false, fang: Vec::new(), nummer: 0 },
+                    pos,
+                ));
+            }
+            // => ziel += wert: auch das ist eine Anweisung. (Ein einfaches = wäre hier ein Vergleich.)
+            let anfang = self.i;
+            if let Ok(ziel) = self.primaer()
+                && let Some(op) = rechen_zuweisung(&self.aktuell().art)
+            {
+                self.weiter();
+                let wert = self.ausdruck()?;
+                let art = AnweisungArt::Zuweisung { ziel, op: Some(op), wert };
+                funktion.rumpf.push(Anweisung { art, pos: pfeil });
+                return Ok(Ausdruck::neu(
+                    AusdruckArt::Lambda { funktion: Box::new(funktion), kurz: false, fang: Vec::new(), nummer: 0 },
+                    pos,
+                ));
+            }
+            self.i = anfang;
+            let wert = self.ausdruck()?;
+            // Vorerst als GIB ZRUCK; gibt der Ausdruck nichts zurück, macht die Typprüfung einen Aufruf daraus.
+            funktion.rumpf.push(Anweisung { art: AnweisungArt::GibZruck { wert: Some(wert) }, pos: pfeil });
+            return Ok(Ausdruck::neu(
+                AusdruckArt::Lambda { funktion: Box::new(funktion), kurz: true, fang: Vec::new(), nummer: 0 },
+                pos,
+            ));
+        }
+        if self.nimm(Schluessel::Returns) {
+            let angabe = self.typ_angabe()?;
+            funktion.rueckgabe = einfacher_typ(&angabe);
+            funktion.rueckgabe_angabe = Some(angabe);
+        }
+        funktion.rumpf = self.block()?;
+        // Das OIDA danach gehört zur Anweisung rundherum, nicht zur Funktion.
+        if !self.nimm(Schluessel::End) {
+            return Err(Fehler::neu(
+                pos,
+                format!(
+                    "De {} ohne Nom hört nimma auf. Do fehlt a {} (oda manst de kurze Form mit => ?).",
+                    self.wort(Schluessel::Function),
+                    self.wort(Schluessel::End)
+                ),
+            ));
+        }
+        Ok(Ausdruck::neu(
+            AusdruckArt::Lambda { funktion: Box::new(funktion), kurz: false, fang: Vec::new(), nummer: 0 },
+            pos,
+        ))
     }
 
     // ---------------------------------------------------------- Programm
@@ -299,6 +444,7 @@ impl Parser<'_> {
         let pos = self.weiter().pos; // STRUKTUR
         let wofuer = format!("de {}", self.wort(Schluessel::Struct));
         let (name, _) = self.name(&wofuer)?;
+        let typ_parameter = self.typ_parameter()?;
         let mut felder = Vec::new();
         while !self.ist(Schluessel::End) && self.aktuell().art != TokenArt::DateiEnde {
             let (feld, feld_pos) = self.name("des Föd")?;
@@ -308,13 +454,14 @@ impl Parser<'_> {
             felder.push(FeldDef { name: feld, angabe, pos: feld_pos });
         }
         self.erwarte_end(pos, Schluessel::Struct)?;
-        Ok(StrukturDef { name, felder, pos })
+        Ok(StrukturDef { name, typ_parameter, felder, pos })
     }
 
     fn klasse(&mut self) -> Result<KlassenDef, Fehler> {
         let pos = self.weiter().pos; // KLASSE
         let wofuer = format!("de {}", self.wort(Schluessel::Class));
         let (name, _) = self.name(&wofuer)?;
+        let typ_parameter = self.typ_parameter()?;
         let eltern = if self.nimm(Schluessel::Extends) {
             let wofuer = format!("de {}, von der '{name}' erbt", self.wort(Schluessel::Class));
             Some(self.name(&wofuer)?)
@@ -341,34 +488,21 @@ impl Parser<'_> {
             felder.push(KlassenFeldDef { name: feld, angabe, standard, pos: feld_pos });
         }
         self.erwarte_end(pos, Schluessel::Class)?;
-        Ok(KlassenDef { name, eltern, felder, methoden, pos })
+        Ok(KlassenDef { name, typ_parameter, eltern, felder, methoden, pos })
     }
 
     fn funktion(&mut self) -> Result<Funktion, Fehler> {
         let pos = self.weiter().pos; // FUNKTIAUN
         let wofuer = format!("de {}", self.wort(Schluessel::Function));
         let (name, _) = self.name(&wofuer)?;
+        let typ_parameter = self.typ_parameter()?;
         self.erwarte(TokenArt::KlammerAuf, "a '('")?;
-        let mut parameter = Vec::new();
-        if self.aktuell().art != TokenArt::KlammerZu {
-            loop {
-                let (pname, ppos) = self.name("den Parameter")?;
-                let angabe = self.typ_angabe()?;
-                let typ = einfacher_typ(&angabe);
-                parameter.push(Parameter { name: pname, angabe, typ, pos: ppos, id: 0 });
-                if self.aktuell().art == TokenArt::Komma {
-                    self.weiter();
-                } else {
-                    break;
-                }
-            }
-        }
-        self.erwarte(TokenArt::KlammerZu, "a ',' oda a ')'")?;
+        let parameter = self.parameter()?;
         let rueckgabe_angabe = if self.nimm(Schluessel::Returns) { Some(self.typ_angabe()?) } else { None };
         let rueckgabe = rueckgabe_angabe.as_ref().map_or(Typ::Nix, einfacher_typ);
         let rumpf = self.block()?;
         self.erwarte_end(pos, Schluessel::Function)?;
-        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0 })
+        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0, typ_parameter })
     }
 
     /// Anweisungen bis PASST SCHO, SUNST oder zum Ende der Datei.
@@ -666,6 +800,8 @@ impl Parser<'_> {
             || self.ist(Schluessel::List)
             || self.ist(Schluessel::Maybe)
             || self.ist(Schluessel::Null)
+            || self.ist(Schluessel::Map)
+            || (self.ist(Schluessel::Function) && *self.naechstes() == TokenArt::KlammerAuf)
             || matches!(self.aktuell().art, TokenArt::Name(_))
     }
 
@@ -689,6 +825,8 @@ impl Parser<'_> {
                         | Schluessel::Super
                         | Schluessel::Null
                         | Schluessel::Try
+                        | Schluessel::Map
+                        | Schluessel::Function
                 )
                     || s.ist_funktion()
                     || self.typ_hier().is_some()
@@ -837,6 +975,12 @@ impl Parser<'_> {
                         pos,
                     );
                 }
+                // wert(...): Was vorne steht, ist eine Funktion als Wert, etwa liste[0](x) oder mach()(x).
+                TokenArt::KlammerAuf => {
+                    let pos = self.weiter().pos;
+                    let argumente = self.argumente()?;
+                    ausdruck = Ausdruck::neu(AusdruckArt::WertAufruf { funktion: Box::new(ausdruck), argumente }, pos);
+                }
                 _ => return Ok(ausdruck),
             }
         }
@@ -892,6 +1036,22 @@ impl Parser<'_> {
             TokenArt::Schluessel(Schluessel::Null) => {
                 self.weiter();
                 AusdruckArt::Nix
+            }
+            TokenArt::Schluessel(Schluessel::Function) if *self.naechstes() == TokenArt::KlammerAuf => {
+                self.weiter();
+                self.weiter();
+                return self.lambda(pos);
+            }
+            // Stapel VON ZOI(...), VAZEICHNIS VON KETTN UND ZOI(): ein neuer Wert, der Typ steht dabei.
+            TokenArt::Schluessel(Schluessel::Map) => {
+                let angabe = self.typ_kern()?;
+                self.erwarte(TokenArt::KlammerAuf, "a '('")?;
+                AusdruckArt::Erzeug { angabe, argumente: self.argumente()? }
+            }
+            TokenArt::Name(_) if *self.naechstes() == TokenArt::Schluessel(Schluessel::From) => {
+                let angabe = self.typ_kern()?;
+                self.erwarte(TokenArt::KlammerAuf, "a '('")?;
+                AusdruckArt::Erzeug { angabe, argumente: self.argumente()? }
             }
             TokenArt::Name(name) => {
                 self.weiter();
@@ -1061,6 +1221,24 @@ mod tests {
                 format!("OIDN.{name}({})", argumente.iter().map(klammern).collect::<Vec<_>>().join(", "))
             }
             AusdruckArt::Nix => "NIX".to_string(),
+            AusdruckArt::Lambda { funktion, kurz: true, .. } => {
+                let AnweisungArt::GibZruck { wert: Some(wert) } = &funktion.rumpf[0].art else { panic!() };
+                let namen: Vec<&str> = funktion.parameter.iter().map(|p| p.name.as_str()).collect();
+                format!("FUNKTIAUN({}) => {}", namen.join(", "), klammern(wert))
+            }
+            AusdruckArt::Lambda { funktion, .. } => {
+                let namen: Vec<&str> = funktion.parameter.iter().map(|p| p.name.as_str()).collect();
+                format!("FUNKTIAUN({}) [{} Anweisungen]", namen.join(", "), funktion.rumpf.len())
+            }
+            AusdruckArt::WertAufruf { funktion, argumente } => {
+                let argumente: Vec<String> = argumente.iter().map(klammern).collect();
+                format!("{}({})", klammern(funktion), argumente.join(", "))
+            }
+            AusdruckArt::Erzeug { argumente, .. } => {
+                let argumente: Vec<String> = argumente.iter().map(klammern).collect();
+                format!("NEU({})", argumente.join(", "))
+            }
+            AusdruckArt::FunktionsWert { .. } => unreachable!("entsteht erst in der Typprüfung"),
             AusdruckArt::OdaHoid { links, rechts } => format!("({} ODA HOID {})", klammern(links), klammern(rechts)),
             AusdruckArt::Probier { innen } => format!("PROBIER {}", klammern(innen)),
             AusdruckArt::Bau { .. }
