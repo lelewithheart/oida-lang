@@ -14,7 +14,7 @@ const os = require('os');
 const path = require('path');
 
 // Die Wortarten. Die Reihenfolge muss zu `Art` in uebersetzer/src/editor.rs passen.
-const ARTEN = ['keyword', 'type', 'function', 'variable', 'number', 'string', 'wahrheitswert', 'endwort'];
+const ARTEN = ['keyword', 'type', 'function', 'variable', 'number', 'string', 'wahrheitswert', 'endwort', 'property'];
 const LEGENDE = new vscode.SemanticTokensLegend(ARTEN, []);
 const EXE = process.platform === 'win32' ? 'oida.exe' : 'oida';
 // So lange wartet die Fehlerprüfung nach dem letzten Tastendruck (Millisekunden).

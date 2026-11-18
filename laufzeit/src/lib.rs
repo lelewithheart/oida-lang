@@ -16,6 +16,14 @@
 //! der erzeugte Code selbst; fällt der Zähler auf 0, ruft er
 //! [`oida_text_frei`]. Feste Texte aus dem Programm haben den Zähler -1 und
 //! werden nie gezählt und nie freigegeben.
+//!
+//! # Listen
+//!
+//! Eine Liste ist ein Zeiger auf einen [`ListenKopf`]: Zähler (wie bei
+//! Texten), Länge, Platz und ein Zeiger auf die Elemente. Die Elemente liegen
+//! als Werte dicht hintereinander. Wie groß ein Element ist, weiß nur der
+//! Compiler; er gibt die Größe bei jedem Aufruf mit. Lesen und Schreiben der
+//! Elemente macht der erzeugte Code selbst.
 
 use std::alloc::{Layout, alloc, dealloc, handle_alloc_error};
 use std::cell::UnsafeCell;
@@ -42,12 +50,12 @@ struct Zustand {
     /// Im Terminal wird nach jeder Zeile geschrieben, in eine Datei oder
     /// Pipe erst, wenn der Puffer voll ist (das ist viel schneller).
     terminal: bool,
-    /// Wie viele Texte gerade am Heap leben.
+    /// Wie viele Texte und Listen gerade am Heap leben.
     lebende_texte: i64,
-    /// Prüfmodus (Umgebungsvariable `OIDA_TEXTE_PRUEFEN`): Texte werden nicht
-    /// wirklich freigegeben, sondern als tot markiert. Wird ein toter Text
-    /// noch verwendet, bricht das Programm ab; am Ende wird gemeldet, wie
-    /// viele Texte übrig sind. Damit testet der Compiler seine Referenzzählung.
+    /// Prüfmodus (Umgebungsvariable `OIDA_TEXTE_PRUEFEN`): Texte und Listen
+    /// werden nicht wirklich freigegeben, sondern als tot markiert. Wird so
+    /// etwas noch verwendet, bricht das Programm ab; am Ende wird gemeldet,
+    /// wie viele übrig sind. Damit testet der Compiler seine Referenzzählung.
     pruefen: bool,
     /// Stand des Zufallsgenerators. 0 heißt: noch nicht gestartet.
     zufall: u64,
@@ -360,6 +368,131 @@ pub unsafe extern "C" fn oida_text_ersetzt(
     neuer_text(text.replace(alt, neu).as_bytes())
 }
 
+// ------------------------------------------------------------------- Listen
+
+/// Kopf einer Liste. Die Reihenfolge muss zu `%oida.Liste` im erzeugten Code passen.
+#[repr(C)]
+pub struct ListenKopf {
+    zaehler: i64,
+    /// Wie viele Elemente drin sind.
+    laenge: i64,
+    /// Für wie viele Elemente Speicher da ist.
+    platz: i64,
+    daten: *mut u8,
+}
+
+/// Alle Elemente sind auf 8 Bytes ausgerichtet (mehr braucht kein Typ in OIDA).
+const ELEMENT_AUSRICHTUNG: usize = 8;
+
+fn daten_layout(platz: i64, groesse: i64) -> Layout {
+    let bytes = (platz as usize).checked_mul(groesse as usize).expect("Liste zu groß");
+    Layout::from_size_align(bytes, ELEMENT_AUSRICHTUNG).expect("Liste zu groß")
+}
+
+/// Speicher für `platz` Elemente. Braucht es keinen (leere Liste oder
+/// Elemente ohne Größe), gibt es einen Zeiger, hinter dem nichts liegt.
+fn neue_daten(platz: i64, groesse: i64) -> *mut u8 {
+    let layout = daten_layout(platz, groesse);
+    if layout.size() == 0 {
+        return std::ptr::without_provenance_mut(ELEMENT_AUSRICHTUNG);
+    }
+    let daten = unsafe { alloc(layout) };
+    if daten.is_null() {
+        handle_alloc_error(layout);
+    }
+    daten
+}
+
+/// Prüft, dass die Liste noch lebt.
+unsafe fn liste<'a>(liste: *mut ListenKopf) -> &'a mut ListenKopf {
+    let liste = unsafe { &mut *liste };
+    if liste.zaehler == TOT {
+        abbruch_compiler("a LISTN wird no verwendet, obwohl sie scho freigebn is");
+    }
+    liste
+}
+
+/// Eine neue, leere Liste mit Platz für `platz` Elemente zu je `groesse` Bytes.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_liste_neu(groesse: i64, platz: i64) -> *mut ListenKopf {
+    zustand().lebende_texte += 1;
+    Box::into_raw(Box::new(ListenKopf { zaehler: 1, laenge: 0, platz, daten: neue_daten(platz, groesse) }))
+}
+
+/// Macht hinten Platz für ein weiteres Element und gibt zurück, wo es
+/// hinkommt. Die Liste ist danach um eins länger; hineinschreiben muss der Aufrufer.
+///
+/// # Safety
+/// `liste` muss eine gültige Liste mit Elementen dieser Größe sein.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_liste_neuer_platz(liste_zeiger: *mut ListenKopf, groesse: i64) -> *mut u8 {
+    let l = unsafe { liste(liste_zeiger) };
+    if l.laenge == l.platz {
+        // Voll: doppelt so viel Platz holen und alles umziehen.
+        let neuer_platz = (l.platz * 2).max(4);
+        let neu = neue_daten(neuer_platz, groesse);
+        let alt = daten_layout(l.platz, groesse);
+        unsafe {
+            std::ptr::copy_nonoverlapping(l.daten, neu, (l.laenge * groesse) as usize);
+            if alt.size() > 0 {
+                dealloc(l.daten, alt);
+            }
+        }
+        l.daten = neu;
+        l.platz = neuer_platz;
+    }
+    let stelle = unsafe { l.daten.add((l.laenge * groesse) as usize) };
+    l.laenge += 1;
+    stelle
+}
+
+/// Nimmt das Element an der Stelle heraus und rückt die dahinter nach.
+/// (Was an dem Element hängt, hat der Aufrufer vorher losgelassen.)
+///
+/// # Safety
+/// `liste` muss eine gültige Liste mit Elementen dieser Größe sein.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_liste_raus(liste_zeiger: *mut ListenKopf, stelle: i64, groesse: i64, zeile: i64) {
+    let l = unsafe { liste(liste_zeiger) };
+    if stelle < 0 || stelle >= l.laenge {
+        oida_fehler_stelle(stelle, l.laenge, zeile);
+    }
+    let dahinter = (l.laenge - stelle - 1) * groesse;
+    unsafe {
+        let hier = l.daten.add((stelle * groesse) as usize);
+        std::ptr::copy(hier.add(groesse as usize), hier, dahinter as usize);
+    }
+    l.laenge -= 1;
+}
+
+/// Gibt eine Liste frei. Der erzeugte Code ruft das auf, sobald ihr Zähler auf
+/// 0 gefallen ist und er die Elemente losgelassen hat.
+///
+/// # Safety
+/// `liste` muss eine Liste sein, die niemand mehr braucht.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_liste_frei(liste_zeiger: *mut ListenKopf, groesse: i64) {
+    let l = unsafe { &mut *liste_zeiger };
+    if l.zaehler != 0 {
+        abbruch_compiler("a LISTN wird freigebn, obwohl sie no braucht wird");
+    }
+    let z = zustand();
+    z.lebende_texte -= 1;
+    if z.pruefen {
+        // Als tot markieren und leeren: Jeder spätere Zugriff fällt dann auf.
+        l.zaehler = TOT;
+        l.laenge = 0;
+        return;
+    }
+    let layout = daten_layout(l.platz, groesse);
+    unsafe {
+        if layout.size() > 0 {
+            dealloc(l.daten, layout);
+        }
+        drop(Box::from_raw(liste_zeiger));
+    }
+}
+
 // ------------------------------------------------------------------- Zufall
 
 /// Macht aus einem beliebigen Startwert einen guten, der nie 0 ist (SplitMix64).
@@ -450,7 +583,7 @@ pub extern "C" fn oida_start() {
 pub extern "C" fn oida_ende() {
     leeren();
     if zustand().pruefen {
-        eprintln!("OIDA: {} Texte übrig", zustand().lebende_texte);
+        eprintln!("OIDA: {} Texte und Listen übrig", zustand().lebende_texte);
     }
 }
 
@@ -489,6 +622,17 @@ pub unsafe extern "C" fn oida_schreib_text(text: *const TextKopf) {
     schreib(unsafe { bytes(text) });
 }
 
+/// Ein Text in Anführungszeichen: So stehen Texte in Listen und Strukturen da.
+///
+/// # Safety
+/// `text` muss ein gültiger Text sein.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_schreib_text_zitiert(text: *const TextKopf) {
+    schreib(b"\"");
+    schreib(unsafe { bytes(text) });
+    schreib(b"\"");
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_schreib_leer() {
     schreib(b" ");
@@ -521,6 +665,17 @@ fn abbruch_compiler(meldung: &str) -> ! {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_fehler_durch_null(zeile: i64) -> ! {
     abbruch(zeile, "Durch nix kaun ma ned teilen.");
+}
+
+/// Zugriff auf eine Stelle, die es in der Liste nicht gibt.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_fehler_stelle(stelle: i64, laenge: i64, zeile: i64) -> ! {
+    let meldung = match laenge {
+        0 => format!("De LISTN is laar, a Stö {stelle} gibt's ned."),
+        1 => format!("De LISTN hot nur a Element (de Stö 0), a Stö {stelle} gibt's ned."),
+        n => format!("De LISTN hot {n} Elemente (Stön 0 bis {}), a Stö {stelle} gibt's ned.", n - 1),
+    };
+    abbruch(zeile, &meldung);
 }
 
 #[unsafe(no_mangle)]
@@ -626,6 +781,42 @@ mod tests {
         // Auch der ganze Bereich der 64-Bit-Zahlen geht.
         let _ = oida_zufall_zoi(i64::MIN, i64::MAX, 0);
         assert_eq!(oida_zufall_zoi(7, 7, 0), 7);
+    }
+
+    #[test]
+    fn liste_waechst_und_schrumpft() {
+        // Eine Liste von i64 (8 Bytes je Element), so wie der erzeugte Code sie benutzt.
+        let l = oida_liste_neu(8, 0);
+        for wert in 0..100i64 {
+            unsafe { *(oida_liste_neuer_platz(l, 8) as *mut i64) = wert * 10 };
+        }
+        let lesen = |stelle: usize| unsafe { *((*l).daten as *const i64).add(stelle) };
+        assert_eq!(unsafe { (*l).laenge }, 100);
+        assert_eq!((lesen(0), lesen(57), lesen(99)), (0, 570, 990));
+        unsafe { oida_liste_raus(l, 0, 8, 0) };
+        unsafe { oida_liste_raus(l, 98, 8, 0) };
+        unsafe { oida_liste_raus(l, 10, 8, 0) };
+        assert_eq!(unsafe { (*l).laenge }, 97);
+        assert_eq!((lesen(0), lesen(9), lesen(10), lesen(96)), (10, 100, 120, 980));
+        unsafe {
+            (*l).zaehler = 0;
+            oida_liste_frei(l, 8);
+        }
+    }
+
+    #[test]
+    fn liste_ohne_groesse() {
+        // Eine Struktur ohne Felder braucht keinen Speicher je Element.
+        let l = oida_liste_neu(0, 3);
+        for _ in 0..10 {
+            unsafe { oida_liste_neuer_platz(l, 0) };
+        }
+        unsafe { oida_liste_raus(l, 3, 0, 0) };
+        assert_eq!(unsafe { (*l).laenge }, 9);
+        unsafe {
+            (*l).zaehler = 0;
+            oida_liste_frei(l, 0);
+        }
     }
 
     #[test]

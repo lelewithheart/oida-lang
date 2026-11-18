@@ -7,17 +7,28 @@
 //! Die Funktionen mit `oida_` am Anfang kommen aus der Laufzeitbibliothek
 //! (`laufzeit/src/lib.rs`) und müssen zu den Deklarationen in [`KOPF`] passen.
 //!
-//! # Texte und Referenzzählung
+//! # Wie die Typen im Speicher aussehen
 //!
-//! Texte liegen am Heap und tragen einen Zähler: wie viele Stellen den Text
-//! gerade brauchen. Fällt er auf 0, wird der Text freigegeben. Die Regeln:
+//!  - `ZOI` ist `i64`, `KOMMAZOI` ist `double`, `JONA` ist `i1`.
+//!  - Eine Struktur ist ein LLVM-Verbund `%sN` und liegt als Wert direkt in
+//!    der Variable, im Feld oder in der Liste. Zuweisen heißt kopieren.
+//!  - Ein Text und eine Liste sind Zeiger auf Speicher am Heap. Zuweisen
+//!    heißt: Beide zeigen auf dasselbe.
 //!
-//!  - Ein Ausdruck liefert einen Text, der dem Empfänger **gehört** (Zähler
-//!    schon mitgezählt): [`FunktionsBau::ausdruck`].
-//!  - Wer einen Text nur liest (vergleichen, zusammenhängen, ausgeben), kann
-//!    ihn **leihen**: [`FunktionsBau::geliehen`]. Eine Variable oder ein fester
-//!    Text wird dann gar nicht gezählt, das spart die meiste Arbeit.
-//!  - Eine Variable besitzt ihren Text. Beim Zuweisen wird der alte
+//! # Referenzzählung
+//!
+//! Texte und Listen tragen einen Zähler: wie viele Stellen sie gerade
+//! brauchen. Fällt er auf 0, werden sie freigegeben. "Verwaltet" heißt ein
+//! Typ, an dem so etwas hängt: Texte, Listen und Strukturen, die welche
+//! enthalten. Die Regeln:
+//!
+//!  - Ein Ausdruck liefert einen Wert, der dem Empfänger **gehört** (schon
+//!    mitgezählt): [`FunktionsBau::ausdruck`].
+//!  - Wer nur liest (vergleichen, zusammenhängen, ausgeben), kann **leihen**:
+//!    [`FunktionsBau::geliehen`]. Eine Variable, ein Feld davon oder ein
+//!    fester Text wird dann nicht gezählt. Aus einer Liste wird nie geliehen,
+//!    weil eine aufgerufene Funktion die Liste ändern könnte.
+//!  - Eine Variable besitzt ihren Wert. Beim Zuweisen wird der alte
 //!    losgelassen, am Ende des Blocks der letzte.
 //!  - Eine Funktion besitzt ihre Parameter und lässt sie am Ende los. Was sie
 //!    zurückgibt, gehört dem Aufrufer.
@@ -36,11 +47,15 @@ pub const ZIEL: &str = "x86_64-w64-windows-gnu";
 const KOPF: &str = r#"; Erzeugt vom OIDA-Compiler. Nicht von Hand ändern.
 target triple = "x86_64-w64-windows-gnu"
 
+; Eine Liste am Heap: Zähler, Länge, Platz (für wie viele Elemente Speicher da ist), Daten.
+%oida.Liste = type { i64, i64, i64, ptr }
+
 declare void @oida_start()
 declare void @oida_ende()
 declare void @oida_schreib_zoi(i64)
 declare void @oida_schreib_kommazoi(double)
 declare void @oida_schreib_text(ptr)
+declare void @oida_schreib_text_zitiert(ptr)
 declare void @oida_schreib_leer()
 declare void @oida_schreib_zeilenende()
 declare ptr @oida_text_verbinden(ptr, ptr)
@@ -53,7 +68,14 @@ declare i64 @oida_text_zu_zoi(ptr, i64)
 declare double @oida_text_zu_kommazoi(ptr, i64)
 declare void @oida_fehler_durch_null(i64) noreturn
 declare void @oida_fehler_schritt_null(i64) noreturn
+declare void @oida_fehler_stelle(i64, i64, i64) noreturn
 declare i64 @llvm.fptosi.sat.i64.f64(double)
+
+; Listen
+declare ptr @oida_liste_neu(i64, i64)
+declare ptr @oida_liste_neuer_platz(ptr, i64)
+declare void @oida_liste_raus(ptr, i64, i64, i64)
+declare void @oida_liste_frei(ptr, i64)
 
 ; Eingebaute Funktionen: Eingabe, Texte, Zufall
 declare ptr @oida_lies(ptr)
@@ -123,21 +145,23 @@ normal:
   ret i64 %r
 }
 
-; Referenzzählung für Texte. Der Zähler steht ganz vorne im Text.
+; Referenzzählung. Der Zähler steht bei Texten und Listen ganz vorne.
 ; Negativ heißt: fester Text aus dem Programm, nicht zählen.
-define internal void @oida.behalt(ptr %text) alwaysinline {
+define internal void @oida.behalt(ptr %ding) alwaysinline {
 start:
-  %z = load i64, ptr %text
+  %z = load i64, ptr %ding
   %fest = icmp slt i64 %z, 0
   br i1 %fest, label %ende, label %zaehlen
 zaehlen:
   %mehr = add i64 %z, 1
-  store i64 %mehr, ptr %text
+  store i64 %mehr, ptr %ding
   br label %ende
 ende:
   ret void
 }
 
+; Einen Text loslassen. (Für Listen gibt es je Listentyp eine eigene
+; Funktion, weil dabei auch die Elemente losgelassen werden.)
 define internal void @oida.lass(ptr %text) alwaysinline {
 start:
   %z = load i64, ptr %text
@@ -155,16 +179,85 @@ ende:
   ret void
 }
 
+; Die Daten einer Liste, nachdem geprüft ist, dass es die Stelle gibt.
+define internal ptr @oida.stelle(ptr %liste, i64 %stelle, i64 %zeile) alwaysinline {
+start:
+  %lp = getelementptr inbounds %oida.Liste, ptr %liste, i32 0, i32 1
+  %laenge = load i64, ptr %lp, !tbaa !3
+  %drin = icmp ult i64 %stelle, %laenge
+  br i1 %drin, label %gut, label %daneben
+daneben:
+  call void @oida_fehler_stelle(i64 %stelle, i64 %laenge, i64 %zeile)
+  unreachable
+gut:
+  %dp = getelementptr inbounds %oida.Liste, ptr %liste, i32 0, i32 3
+  %daten = load ptr, ptr %dp, !tbaa !3
+  ret ptr %daten
+}
+
 "#;
 
-fn ir_typ(typ: Typ) -> &'static str {
+/// Hinweise für LLVM, was sich im Speicher nicht überschneiden kann (TBAA):
+/// Der Kopf einer Liste (Länge, Platz, Zeiger auf die Daten) ist anderer
+/// Speicher als die Werte in Variablen und in Listen. Wer ein Element
+/// schreibt, ändert also weder die Länge noch den Datenzeiger, und LLVM muss
+/// beides in einer Schleife nicht bei jedem Zugriff neu lesen.
+///
+/// `!3` steht an Zugriffen auf den Kopf, `!4` an Zugriffen auf Werte.
+const FUSS: &str = r#"
+!0 = !{!"oida"}
+!1 = !{!"oida listenkopf", !0}
+!2 = !{!"oida wert", !0}
+!3 = !{!1, !1, i64 0}
+!4 = !{!2, !2, i64 0}
+"#;
+
+/// Der Zusatz für `load` und `store` eines Werts in einer Variable oder Liste
+/// (siehe [`FUSS`]). Nur bei einfachen Werten; bei ganzen Strukturen bleibt er weg.
+fn wert_hinweis(typ: Typ) -> &'static str {
     match typ {
-        Typ::Zoi => "i64",
-        Typ::Kommazoi => "double",
-        Typ::Jona => "i1",
-        Typ::Kettn => "ptr",
-        Typ::Nix => "void",
+        Typ::Struktur(_) => "",
+        _ => ", !tbaa !4",
+    }
+}
+
+/// Der Zusatz für das Lesen aus dem Kopf einer Liste.
+const KOPF_HINWEIS: &str = ", !tbaa !3";
+
+fn ir_typ(typ: Typ) -> String {
+    match typ {
+        Typ::Zoi => "i64".to_string(),
+        Typ::Kommazoi => "double".to_string(),
+        Typ::Jona => "i1".to_string(),
+        Typ::Kettn | Typ::Liste(_) | Typ::LeereListe => "ptr".to_string(),
+        Typ::Struktur(n) => format!("%s{n}"),
+        Typ::Nix => "void".to_string(),
         Typ::Fehler => unreachable!("nach der Typprüfung gibt es keine Fehler-Typen mehr"),
+    }
+}
+
+/// Wie viele Bytes ein Wert dieses Typs im Speicher braucht, als Konstante,
+/// die LLVM ausrechnet (so muss der Compiler den Aufbau nicht selbst kennen).
+fn groesse(typ: Typ) -> String {
+    format!("ptrtoint (ptr getelementptr ({}, ptr null, i32 1) to i64)", ir_typ(typ))
+}
+
+/// Der Befehl, der den Wert für eine weitere Stelle mitzählt (keiner, wenn es nichts zu zählen gibt).
+fn behalt_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
+    match typ {
+        Typ::Kettn | Typ::Liste(_) => Some(format!("call void @oida.behalt(ptr {wert})")),
+        Typ::Struktur(n) if typen.verwaltet(typ) => Some(format!("call void @oida.behalt.s{n}(%s{n} {wert})")),
+        _ => None,
+    }
+}
+
+/// Der Befehl, der den Wert loslässt.
+fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
+    match typ {
+        Typ::Kettn => Some(format!("call void @oida.lass(ptr {wert})")),
+        Typ::Liste(n) => Some(format!("call void @oida.lass.l{n}(ptr {wert})")),
+        Typ::Struktur(n) if typen.verwaltet(typ) => Some(format!("call void @oida.lass.s{n}(%s{n} {wert})")),
+        _ => None,
     }
 }
 
@@ -183,15 +276,16 @@ fn funktions_name(name: &str) -> String {
     aus
 }
 
-struct Modul {
+struct Modul<'t> {
     /// Feste Texte aus dem Programm, jeder nur einmal.
     texte: Vec<String>,
     text_nummer: HashMap<String, usize>,
     woahr: String,
     foisch: String,
+    typen: &'t Typen,
 }
 
-impl Modul {
+impl Modul<'_> {
     /// Der IR-Name für einen festen Text.
     fn text(&mut self, inhalt: &str) -> String {
         let nummer = match self.text_nummer.get(inhalt) {
@@ -205,20 +299,133 @@ impl Modul {
         };
         format!("@.text.{nummer}")
     }
+
+    /// Die Befehle, die einen Wert ausgeben. `innen` heißt: Der Wert steht in
+    /// einer Liste oder Struktur; Texte bekommen dort Anführungszeichen.
+    /// `name` macht den Zwischenwert eindeutig.
+    fn schreib_befehle(&mut self, typ: Typ, wert: &str, innen: bool, name: &str) -> String {
+        match typ {
+            Typ::Zoi => format!("  call void @oida_schreib_zoi(i64 {wert})\n"),
+            Typ::Kommazoi => format!("  call void @oida_schreib_kommazoi(double {wert})\n"),
+            Typ::Kettn if innen => format!("  call void @oida_schreib_text_zitiert(ptr {wert})\n"),
+            Typ::Kettn => format!("  call void @oida_schreib_text(ptr {wert})\n"),
+            Typ::Jona => {
+                let (woahr, foisch) = (self.woahr.clone(), self.foisch.clone());
+                let (woahr, foisch) = (self.text(&woahr), self.text(&foisch));
+                format!(
+                    "  %{name} = select i1 {wert}, ptr {woahr}, ptr {foisch}\n  call void @oida_schreib_text(ptr %{name})\n"
+                )
+            }
+            Typ::Struktur(n) => format!("  call void @oida.schreib.s{n}(%s{n} {wert})\n"),
+            Typ::Liste(n) => format!("  call void @oida.schreib.l{n}(ptr {wert})\n"),
+            Typ::LeereListe | Typ::Nix | Typ::Fehler => unreachable!("von der Typprüfung abgelehnt"),
+        }
+    }
+
+    /// Die Hilfsfunktionen je Struktur und je Listentyp: mitzählen,
+    /// loslassen und ausgeben.
+    fn hilfsfunktionen(&mut self) -> String {
+        let typen = self.typen;
+        let mut aus = String::new();
+
+        for (n, s) in typen.strukturen.iter().enumerate() {
+            let typ = Typ::Struktur(n as u32);
+            // Mitzählen und loslassen: nur nötig, wenn Texte oder Listen drinstecken.
+            if typen.verwaltet(typ) {
+                let arten: [(&str, fn(&Typen, Typ, &str) -> Option<String>); 2] =
+                    [("behalt", behalt_befehl), ("lass", lass_befehl)];
+                for (wort, erzeuge) in arten {
+                    let _ = writeln!(aus, "define internal void @oida.{wort}.s{n}(%s{n} %w) {{\nstart:");
+                    for (i, (_, feld)) in s.felder.iter().enumerate() {
+                        if let Some(befehl) = erzeuge(typen, *feld, &format!("%f{i}")) {
+                            let _ = writeln!(aus, "  %f{i} = extractvalue %s{n} %w, {i}\n  {befehl}");
+                        }
+                    }
+                    aus.push_str("  ret void\n}\n\n");
+                }
+            }
+            // Ausgeben: Name(feld, feld, ...)
+            let anfang = self.text(&format!("{}(", s.name));
+            let (komma, ende) = (self.text(", "), self.text(")"));
+            let _ = writeln!(aus, "define internal void @oida.schreib.s{n}(%s{n} %w) {{\nstart:");
+            let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {anfang})");
+            for (i, (_, feld)) in s.felder.iter().enumerate() {
+                if i > 0 {
+                    let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {komma})");
+                }
+                let _ = writeln!(aus, "  %f{i} = extractvalue %s{n} %w, {i}");
+                aus.push_str(&self.schreib_befehle(*feld, &format!("%f{i}"), true, &format!("j{i}")));
+            }
+            let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {ende})\n  ret void\n}}\n");
+        }
+
+        for (n, element) in typen.listen.iter().enumerate() {
+            if matches!(element, Typ::LeereListe | Typ::Fehler | Typ::Nix) {
+                continue; // nur ein Zwischenstand der Typprüfung, kommt im Programm nicht vor
+            }
+            let t = ir_typ(*element);
+            let lesen = "  %lp = getelementptr inbounds %oida.Liste, ptr %liste, i32 0, i32 1\n  \
+                         %laenge = load i64, ptr %lp\n  \
+                         %dp = getelementptr inbounds %oida.Liste, ptr %liste, i32 0, i32 3\n  \
+                         %daten = load ptr, ptr %dp\n";
+
+            // Loslassen: Braucht die Liste niemand mehr, werden erst die Elemente losgelassen.
+            let _ = writeln!(aus, "define internal void @oida.lass.l{n}(ptr %liste) {{\nstart:");
+            aus.push_str(
+                "  %z = load i64, ptr %liste\n  %weniger = sub i64 %z, 1\n  store i64 %weniger, ptr %liste\n  \
+                 %keiner = icmp eq i64 %weniger, 0\n  br i1 %keiner, label %frei, label %ende\nfrei:\n",
+            );
+            if let Some(befehl) = lass_befehl(typen, *element, "%e") {
+                aus.push_str(lesen);
+                let _ = writeln!(
+                    aus,
+                    "  br label %kopf\nkopf:\n  %i = phi i64 [ 0, %frei ], [ %i2, %rumpf ]\n  \
+                     %weiter = icmp slt i64 %i, %laenge\n  br i1 %weiter, label %rumpf, label %raus\nrumpf:\n  \
+                     %p = getelementptr inbounds {t}, ptr %daten, i64 %i\n  %e = load {t}, ptr %p\n  {befehl}\n  \
+                     %i2 = add i64 %i, 1\n  br label %kopf\nraus:"
+                );
+            }
+            let _ = writeln!(
+                aus,
+                "  call void @oida_liste_frei(ptr %liste, i64 {})\n  br label %ende\nende:\n  ret void\n}}\n",
+                groesse(*element)
+            );
+
+            // Ausgeben: [a, b, c]
+            let (auf, komma, zu) = (self.text("["), self.text(", "), self.text("]"));
+            let _ = writeln!(aus, "define internal void @oida.schreib.l{n}(ptr %liste) {{\nstart:");
+            let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {auf})");
+            aus.push_str(lesen);
+            let _ = writeln!(
+                aus,
+                "  br label %kopf\nkopf:\n  %i = phi i64 [ 0, %start ], [ %i2, %element ]\n  \
+                 %weiter = icmp slt i64 %i, %laenge\n  br i1 %weiter, label %rumpf, label %ende\nrumpf:\n  \
+                 %erstes = icmp eq i64 %i, 0\n  br i1 %erstes, label %element, label %komma\nkomma:\n  \
+                 call void @oida_schreib_text(ptr {komma})\n  br label %element\nelement:\n  \
+                 %p = getelementptr inbounds {t}, ptr %daten, i64 %i\n  %e = load {t}, ptr %p"
+            );
+            aus.push_str(&self.schreib_befehle(*element, "%e", true, "j"));
+            let _ = writeln!(
+                aus,
+                "  %i2 = add i64 %i, 1\n  br label %kopf\nende:\n  call void @oida_schreib_text(ptr {zu})\n  ret void\n}}\n"
+            );
+        }
+        aus
+    }
 }
 
 /// Erzeugt den Code für eine Funktion (oder das Hauptprogramm).
-struct FunktionsBau<'m> {
-    modul: &'m mut Modul,
+struct FunktionsBau<'m, 't> {
+    modul: &'m mut Modul<'t>,
     /// Die `alloca`-Zeilen; sie kommen alle ganz an den Anfang der Funktion.
     plaetze: String,
     code: String,
     naechste_nummer: usize,
     /// Der Block, in den gerade geschrieben wird (für `phi`).
     block: String,
-    /// Die Text-Variablen (ihre Nummern) je offenem Block, der innerste hinten.
-    /// Am Ende eines Blocks und bei GIB ZRUCK werden ihre Texte losgelassen.
-    text_variablen: Vec<Vec<usize>>,
+    /// Die verwalteten Variablen (ihr Platz und ihr Typ) je offenem Block, der
+    /// innerste hinten. Am Ende eines Blocks und bei GIB ZRUCK werden sie losgelassen.
+    verwaltet: Vec<Vec<(String, Typ)>>,
     /// Die Schleifen, in denen wir gerade stecken, die innerste hinten.
     schleifen: Vec<Schleife>,
 }
@@ -230,7 +437,7 @@ struct Schleife {
     weiter: String,
     /// Hierhin springt HAU OB.
     ende: String,
-    /// Wie viele Blöcke offen waren, als der Rumpf begonnen hat. Die Texte
+    /// Wie viele Blöcke offen waren, als der Rumpf begonnen hat. Die Werte
     /// aus allen Blöcken darüber werden beim Hinausspringen losgelassen.
     bloecke: usize,
 }
@@ -247,15 +454,25 @@ fn feste_zoi(ausdruck: &Ausdruck) -> Option<i64> {
     }
 }
 
-impl<'m> FunktionsBau<'m> {
-    fn neu(modul: &'m mut Modul) -> FunktionsBau<'m> {
+/// Ist das eine Variable oder ein Feld (von einem Feld ...) einer Variable?
+/// Daraus darf geliehen werden: Niemand außer dieser Funktion kommt an ihre Variablen.
+fn feld_einer_variable(ausdruck: &Ausdruck) -> bool {
+    match &ausdruck.art {
+        AusdruckArt::Variable { .. } => true,
+        AusdruckArt::Feld { objekt, .. } => feld_einer_variable(objekt),
+        _ => false,
+    }
+}
+
+impl<'m, 't> FunktionsBau<'m, 't> {
+    fn neu(modul: &'m mut Modul<'t>) -> FunktionsBau<'m, 't> {
         FunktionsBau {
             modul,
             plaetze: String::new(),
             code: String::new(),
             naechste_nummer: 0,
             block: "start".to_string(),
-            text_variablen: vec![Vec::new()],
+            verwaltet: vec![Vec::new()],
             schleifen: Vec::new(),
         }
     }
@@ -281,39 +498,57 @@ impl<'m> FunktionsBau<'m> {
         self.block = marke.to_string();
     }
 
-    /// Legt den Platz für eine Variable an. Text-Variablen werden gemerkt,
-    /// damit ihr Text am Ende des Blocks losgelassen wird.
+    /// Legt den Platz für eine Variable an. Verwaltete Variablen werden
+    /// gemerkt, damit ihr Wert am Ende des Blocks losgelassen wird.
     fn platz(&mut self, id: usize, typ: Typ) {
-        let _ = writeln!(self.plaetze, "  %v{id} = alloca {}", ir_typ(typ));
-        if typ == Typ::Kettn {
-            self.text_variablen.last_mut().expect("es gibt immer einen Block").push(id);
+        let name = format!("%v{id}");
+        let _ = writeln!(self.plaetze, "  {name} = alloca {}", ir_typ(typ));
+        if self.modul.typen.verwaltet(typ) {
+            self.verwaltet.last_mut().expect("es gibt immer einen Block").push((name, typ));
         }
     }
 
-    // ----------------------------------------------------- Texte loslassen
-
-    /// Der Text wird hier nicht mehr gebraucht.
-    fn lass(&mut self, text: &str) {
-        self.zeile(&format!("call void @oida.lass(ptr {text})"));
+    /// Ein Platz am Stack, den es im OIDA-Programm nicht gibt (für Zwischenwerte).
+    fn versteckter_platz(&mut self, typ: &str) -> String {
+        self.naechste_nummer += 1;
+        let name = format!("%h{}", self.naechste_nummer);
+        let _ = writeln!(self.plaetze, "  {name} = alloca {typ}");
+        name
     }
 
-    /// Lässt den Text los, wenn er uns gehört (siehe [`Self::geliehen`]).
-    fn lass_wenn_eigen(&mut self, text: &str, eigen: bool) {
+    // ------------------------------------------------ mitzählen, loslassen
+
+    /// Der Wert wird ab jetzt an einer weiteren Stelle gebraucht.
+    fn behalt(&mut self, wert: &str, typ: Typ) {
+        if let Some(befehl) = behalt_befehl(self.modul.typen, typ, wert) {
+            self.zeile(&befehl);
+        }
+    }
+
+    /// Der Wert wird hier nicht mehr gebraucht.
+    fn lass(&mut self, wert: &str, typ: Typ) {
+        if let Some(befehl) = lass_befehl(self.modul.typen, typ, wert) {
+            self.zeile(&befehl);
+        }
+    }
+
+    /// Lässt den Wert los, wenn er uns gehört (siehe [`Self::geliehen`]).
+    fn lass_wenn_eigen(&mut self, wert: &str, typ: Typ, eigen: bool) {
         if eigen {
-            self.lass(text);
+            self.lass(wert, typ);
         }
     }
 
-    /// Lässt die Texte der Variablen los, die in den innersten `bloecke`
+    /// Lässt die Werte der Variablen los, die in den innersten `bloecke`
     /// Blöcken angesagt wurden.
     fn lass_variablen(&mut self, bloecke: usize) {
-        let anfang = self.text_variablen.len() - bloecke;
-        let nummern: Vec<usize> = self.text_variablen[anfang..].iter().flatten().copied().collect();
+        let anfang = self.verwaltet.len() - bloecke;
+        let variablen: Vec<(String, Typ)> = self.verwaltet[anfang..].iter().flatten().cloned().collect();
         // In umgekehrter Reihenfolge, wie beim Aufräumen üblich.
-        for id in nummern.into_iter().rev() {
+        for (platz, typ) in variablen.into_iter().rev() {
             let t = self.temp();
-            self.zeile(&format!("{t} = load ptr, ptr %v{id}"));
-            self.lass(&t);
+            self.zeile(&format!("{t} = load {}, ptr {platz}", ir_typ(typ)));
+            self.lass(&t, typ);
         }
     }
 
@@ -322,33 +557,58 @@ impl<'m> FunktionsBau<'m> {
     /// Die Anweisungen eines eigenen Blocks (WENN, SOLONG): Variablen, die
     /// darin angesagt werden, gelten nur bis zu seinem Ende.
     fn block(&mut self, anweisungen: &[Anweisung]) {
-        self.text_variablen.push(Vec::new());
+        self.verwaltet.push(Vec::new());
         for a in anweisungen {
             self.anweisung(a);
         }
         self.lass_variablen(1);
-        self.text_variablen.pop();
+        self.verwaltet.pop();
     }
 
     fn anweisung(&mut self, anweisung: &Anweisung) {
+        let zeile = anweisung.pos.zeile;
         match &anweisung.art {
             AnweisungArt::Deklaration { wert, id, .. } => {
                 let w = self.ausdruck(wert);
                 self.platz(*id, wert.typ);
-                self.zeile(&format!("store {} {w}, ptr %v{id}", ir_typ(wert.typ)));
+                self.zeile(&format!("store {} {w}, ptr %v{id}{}", ir_typ(wert.typ), wert_hinweis(wert.typ)));
             }
-            AnweisungArt::Zuweisung { wert, id, .. } => {
+            AnweisungArt::Zuweisung { ziel, op: None, wert } => {
+                // Erst den Wert ausrechnen, dann erst das Ziel suchen: Beim
+                // Ausrechnen könnte sich eine Liste ändern, in der das Ziel liegt.
                 let w = self.ausdruck(wert);
-                if wert.typ == Typ::Kettn {
-                    // Der alte Text wird nicht mehr gebraucht. Erst nach dem
+                let (zeiger, wurzel) = self.ort(ziel);
+                let (t, hinweis) = (ir_typ(ziel.typ), wert_hinweis(ziel.typ));
+                if self.modul.typen.verwaltet(ziel.typ) {
+                    // Der alte Wert wird nicht mehr gebraucht. Erst nach dem
                     // Speichern loslassen, falls es derselbe ist (s = s).
                     let alt = self.temp();
-                    self.zeile(&format!("{alt} = load ptr, ptr %v{id}"));
-                    self.zeile(&format!("store ptr {w}, ptr %v{id}"));
-                    self.lass(&alt);
+                    self.zeile(&format!("{alt} = load {t}, ptr {zeiger}{hinweis}"));
+                    self.zeile(&format!("store {t} {w}, ptr {zeiger}{hinweis}"));
+                    self.lass(&alt, ziel.typ);
                 } else {
-                    self.zeile(&format!("store {} {w}, ptr %v{id}", ir_typ(wert.typ)));
+                    self.zeile(&format!("store {t} {w}, ptr {zeiger}{hinweis}"));
                 }
+                self.lass_wurzel(wurzel);
+            }
+            AnweisungArt::Zuweisung { ziel, op: Some(op), wert } => {
+                // ziel += wert: Das Ziel wird nur einmal gesucht.
+                let (r, r_eigen) = self.geliehen(wert);
+                let (zeiger, wurzel) = self.ort(ziel);
+                let (t, hinweis) = (ir_typ(ziel.typ), wert_hinweis(ziel.typ));
+                let alt = self.temp();
+                self.zeile(&format!("{alt} = load {t}, ptr {zeiger}{hinweis}"));
+                if ziel.typ == Typ::Kettn {
+                    let neu = self.temp();
+                    self.zeile(&format!("{neu} = call ptr @oida_text_verbinden(ptr {alt}, ptr {r})"));
+                    self.zeile(&format!("store ptr {neu}, ptr {zeiger}{hinweis}"));
+                    self.lass(&alt, Typ::Kettn);
+                } else {
+                    let neu = self.binaer(*op, ziel.typ, &alt, &r, zeile);
+                    self.zeile(&format!("store {t} {neu}, ptr {zeiger}{hinweis}"));
+                }
+                self.lass_wenn_eigen(&r, wert.typ, r_eigen);
+                self.lass_wurzel(wurzel);
             }
             AnweisungArt::Wenn { bedingung, dann, sunst } => {
                 let b = self.ausdruck(bedingung);
@@ -378,7 +638,7 @@ impl<'m> FunktionsBau<'m> {
                 self.schleifen.push(Schleife {
                     weiter: m_kopf.clone(),
                     ende: m_ende.clone(),
-                    bloecke: self.text_variablen.len(),
+                    bloecke: self.verwaltet.len(),
                 });
                 self.block(rumpf);
                 self.schleifen.pop();
@@ -386,7 +646,6 @@ impl<'m> FunktionsBau<'m> {
                 self.beginne_block(&m_ende);
             }
             AnweisungArt::Fia { id, von, bis, schritt, rumpf, .. } => {
-                let zeile = anweisung.pos.zeile;
                 // Anfang, Ende und Schritt werden einmal vor der Schleife ausgerechnet.
                 let anfang = self.ausdruck(von);
                 self.platz(*id, Typ::Zoi);
@@ -440,7 +699,7 @@ impl<'m> FunktionsBau<'m> {
                 self.schleifen.push(Schleife {
                     weiter: m_weiter.clone(),
                     ende: m_ende.clone(),
-                    bloecke: self.text_variablen.len(),
+                    bloecke: self.verwaltet.len(),
                 });
                 self.block(rumpf);
                 self.schleifen.pop();
@@ -457,10 +716,11 @@ impl<'m> FunktionsBau<'m> {
                 self.zeile(&format!("br i1 {ueber}, label %{m_ende}, label %{m_kopf}"));
                 self.beginne_block(&m_ende);
             }
+            AnweisungArt::FiaJede { id, liste, rumpf, .. } => self.fia_jede(*id, liste, rumpf),
             AnweisungArt::HauOb | AnweisungArt::Weida => {
                 let schleife = self.schleifen.last().expect("die Typprüfung lässt das nur in Schleifen zu").clone();
-                // Die Texte aus allen Blöcken, die dabei verlassen werden.
-                self.lass_variablen(self.text_variablen.len() - schleife.bloecke);
+                // Die Werte aus allen Blöcken, die dabei verlassen werden.
+                self.lass_variablen(self.verwaltet.len() - schleife.bloecke);
                 let ziel = if matches!(anweisung.art, AnweisungArt::HauOb) { schleife.ende } else { schleife.weiter };
                 self.zeile(&format!("br label %{ziel}"));
                 // Was danach noch kommt, wird nie erreicht, braucht aber einen eigenen Block.
@@ -469,9 +729,9 @@ impl<'m> FunktionsBau<'m> {
             }
             AnweisungArt::GibZruck { wert } => {
                 // Erst den Wert ausrechnen (er gehört dann dem Aufrufer),
-                // dann alle Text-Variablen der Funktion loslassen.
+                // dann alle verwalteten Variablen der Funktion loslassen.
                 let w = wert.as_ref().map(|wert| (self.ausdruck(wert), wert.typ));
-                self.lass_variablen(self.text_variablen.len());
+                self.lass_variablen(self.verwaltet.len());
                 match w {
                     Some((w, typ)) => self.zeile(&format!("ret {} {w}", ir_typ(typ))),
                     None => self.zeile("ret void"),
@@ -486,57 +746,189 @@ impl<'m> FunktionsBau<'m> {
                     if i > 0 {
                         self.zeile("call void @oida_schreib_leer()");
                     }
-                    match argument.typ {
-                        Typ::Zoi => self.zeile(&format!("call void @oida_schreib_zoi(i64 {w})")),
-                        Typ::Kommazoi => self.zeile(&format!("call void @oida_schreib_kommazoi(double {w})")),
-                        Typ::Kettn => {
-                            self.zeile(&format!("call void @oida_schreib_text(ptr {w})"));
-                            self.lass_wenn_eigen(&w, eigen);
-                        }
-                        Typ::Jona => {
-                            let text = self.jona_als_text(&w);
-                            self.zeile(&format!("call void @oida_schreib_text(ptr {text})"));
-                        }
-                        Typ::Nix | Typ::Fehler => unreachable!("von der Typprüfung abgelehnt"),
-                    }
+                    let name = self.marke("j");
+                    let befehle = self.modul.schreib_befehle(argument.typ, &w, false, &name);
+                    self.code.push_str(&befehle);
+                    self.lass_wenn_eigen(&w, argument.typ, eigen);
                 }
                 self.zeile("call void @oida_schreib_zeilenende()");
             }
             AnweisungArt::Ausdruck(ausdruck) => {
+                // Das Ergebnis will niemand haben.
                 let w = self.ausdruck(ausdruck);
-                if ausdruck.typ == Typ::Kettn {
-                    // Das Ergebnis will niemand haben.
-                    self.lass(&w);
-                }
+                self.lass(&w, ausdruck.typ);
             }
+        }
+    }
+
+    /// `FIA JEDE x IN liste`: geht die Liste der Reihe nach durch. `x` ist in
+    /// jedem Durchlauf eine Kopie des Elements und gilt nur in diesem Durchlauf.
+    fn fia_jede(&mut self, id: usize, liste: &Ausdruck, rumpf: &[Anweisung]) {
+        let element = self.modul.typen.element(liste.typ).expect("die Typprüfung verlangt eine Liste");
+        let t = ir_typ(element);
+
+        // Die Liste gehört für die Dauer der Schleife uns, auch wenn die
+        // Variable inzwischen eine andere Liste bekommt. Sie liegt in einem
+        // versteckten Platz, damit HAU OB und GIB ZRUCK sie mit loslassen.
+        let l = self.ausdruck(liste);
+        self.verwaltet.push(Vec::new());
+        let l_platz = self.versteckter_platz("ptr");
+        self.zeile(&format!("store ptr {l}, ptr {l_platz}"));
+        self.verwaltet.last_mut().expect("gerade angelegt").push((l_platz, liste.typ));
+        let i_platz = self.versteckter_platz("i64");
+        self.zeile(&format!("store i64 0, ptr {i_platz}"));
+
+        let m_kopf = self.marke("jede");
+        let m_rumpf = self.marke("tua");
+        let m_weiter = self.marke("jede_weida");
+        let m_ende = self.marke("jede_ende");
+        self.zeile(&format!("br label %{m_kopf}"));
+
+        // Die Länge wird jedes Mal neu gelesen: Die Liste darf in der Schleife kürzer werden.
+        self.beginne_block(&m_kopf);
+        let (i, lp, laenge, weiter) = (self.temp(), self.temp(), self.temp(), self.temp());
+        self.zeile(&format!("{i} = load i64, ptr {i_platz}"));
+        self.zeile(&format!("{lp} = getelementptr inbounds %oida.Liste, ptr {l}, i32 0, i32 1"));
+        self.zeile(&format!("{laenge} = load i64, ptr {lp}{KOPF_HINWEIS}"));
+        self.zeile(&format!("{weiter} = icmp slt i64 {i}, {laenge}"));
+        self.zeile(&format!("br i1 {weiter}, label %{m_rumpf}, label %{m_ende}"));
+
+        self.beginne_block(&m_rumpf);
+        self.schleifen.push(Schleife { weiter: m_weiter.clone(), ende: m_ende.clone(), bloecke: self.verwaltet.len() });
+        self.verwaltet.push(Vec::new());
+        let (dp, daten, p, e) = (self.temp(), self.temp(), self.temp(), self.temp());
+        self.zeile(&format!("{dp} = getelementptr inbounds %oida.Liste, ptr {l}, i32 0, i32 3"));
+        self.zeile(&format!("{daten} = load ptr, ptr {dp}{KOPF_HINWEIS}"));
+        self.zeile(&format!("{p} = getelementptr inbounds {t}, ptr {daten}, i64 {i}"));
+        self.zeile(&format!("{e} = load {t}, ptr {p}{}", wert_hinweis(element)));
+        self.behalt(&e, element);
+        self.platz(id, element);
+        self.zeile(&format!("store {t} {e}, ptr %v{id}"));
+        for a in rumpf {
+            self.anweisung(a);
+        }
+        self.lass_variablen(1);
+        self.verwaltet.pop();
+        self.schleifen.pop();
+        self.zeile(&format!("br label %{m_weiter}"));
+
+        self.beginne_block(&m_weiter);
+        let (alt, neu) = (self.temp(), self.temp());
+        self.zeile(&format!("{alt} = load i64, ptr {i_platz}"));
+        self.zeile(&format!("{neu} = add i64 {alt}, 1"));
+        self.zeile(&format!("store i64 {neu}, ptr {i_platz}"));
+        self.zeile(&format!("br label %{m_kopf}"));
+
+        self.beginne_block(&m_ende);
+        self.lass_variablen(1);
+        self.verwaltet.pop();
+    }
+
+    // -------------------------------------------- Felder und Stellen finden
+
+    /// Wo eine Variable, ein Feld (`p.x`) oder ein Element (`liste[i]`) im Speicher liegt.
+    ///
+    /// Beginnt der Ausdruck nicht bei einer Variable (etwa `gib_liste()[0]`),
+    /// wird der Anfang ausgerechnet und zwischengespeichert; er kommt dann
+    /// als zweiter Wert zurück und muss nach dem Lesen oder Schreiben mit
+    /// [`Self::lass_wurzel`] losgelassen werden.
+    fn ort(&mut self, ausdruck: &Ausdruck) -> (String, Option<(String, Typ)>) {
+        // Den Weg von außen nach innen aufrollen: wurzel . feld [stelle] . feld ...
+        let mut schritte: Vec<&Ausdruck> = Vec::new();
+        let mut wurzel = ausdruck;
+        loop {
+            match &wurzel.art {
+                AusdruckArt::Feld { objekt, .. } => {
+                    schritte.push(wurzel);
+                    wurzel = objekt;
+                }
+                AusdruckArt::Stelle { liste, .. } => {
+                    schritte.push(wurzel);
+                    wurzel = liste;
+                }
+                _ => break,
+            }
+        }
+        schritte.reverse();
+
+        let (mut zeiger, eigen) = match &wurzel.art {
+            AusdruckArt::Variable { id, .. } => (format!("%v{id}"), None),
+            _ => {
+                let w = self.ausdruck(wurzel);
+                let t = ir_typ(wurzel.typ);
+                let platz = self.versteckter_platz(&t);
+                self.zeile(&format!("store {t} {w}, ptr {platz}"));
+                (platz, Some((w, wurzel.typ)))
+            }
+        };
+
+        // Erst alle Stellen ausrechnen: Dabei können Funktionen laufen, die
+        // Listen ändern. Danach geht es ohne Unterbrechung zum Ziel.
+        let stellen: Vec<Option<String>> = schritte
+            .iter()
+            .map(|schritt| match &schritt.art {
+                AusdruckArt::Stelle { index, .. } => Some(self.ausdruck(index)),
+                _ => None,
+            })
+            .collect();
+        for (schritt, stelle) in schritte.iter().zip(stellen) {
+            match &schritt.art {
+                AusdruckArt::Feld { objekt, nummer, .. } => {
+                    let t = self.temp();
+                    self.zeile(&format!(
+                        "{t} = getelementptr inbounds {}, ptr {zeiger}, i32 0, i32 {nummer}",
+                        ir_typ(objekt.typ)
+                    ));
+                    zeiger = t;
+                }
+                AusdruckArt::Stelle { .. } => {
+                    let stelle = stelle.expect("oben ausgerechnet");
+                    let (l, daten, t) = (self.temp(), self.temp(), self.temp());
+                    self.zeile(&format!("{l} = load ptr, ptr {zeiger}, !tbaa !4"));
+                    self.zeile(&format!(
+                        "{daten} = call ptr @oida.stelle(ptr {l}, i64 {stelle}, i64 {})",
+                        schritt.pos.zeile
+                    ));
+                    self.zeile(&format!(
+                        "{t} = getelementptr inbounds {}, ptr {daten}, i64 {stelle}",
+                        ir_typ(schritt.typ)
+                    ));
+                    zeiger = t;
+                }
+                _ => unreachable!(),
+            }
+        }
+        (zeiger, eigen)
+    }
+
+    /// Lässt den Anfang los, den [`Self::ort`] zwischengespeichert hat.
+    fn lass_wurzel(&mut self, wurzel: Option<(String, Typ)>) {
+        if let Some((wert, typ)) = wurzel {
+            self.lass(&wert, typ);
         }
     }
 
     // --------------------------------------------------------- Ausdrücke
 
-    /// WOAHR oder FOISCH als Text. Das sind feste Texte, die niemand zählt.
-    fn jona_als_text(&mut self, wert: &str) -> String {
-        let woahr = self.modul.woahr.clone();
-        let foisch = self.modul.foisch.clone();
-        let (woahr, foisch) = (self.modul.text(&woahr), self.modul.text(&foisch));
-        let t = self.temp();
-        self.zeile(&format!("{t} = select i1 {wert}, ptr {woahr}, ptr {foisch}"));
-        t
-    }
-
-    /// Wie [`Self::ausdruck`], aber für Stellen, die einen Text nur lesen.
-    /// Gibt dazu zurück, ob der Text uns gehört und nach dem Lesen
-    /// losgelassen werden muss. Eine Variable und ein fester Text werden nur
-    /// geliehen: Solange gelesen wird, kann sie niemand ändern.
+    /// Wie [`Self::ausdruck`], aber für Stellen, die den Wert nur lesen.
+    /// Gibt dazu zurück, ob der Wert uns gehört und nach dem Lesen
+    /// losgelassen werden muss. Eine Variable, ein Feld einer Variable und
+    /// ein fester Text werden nur geliehen: Solange gelesen wird, kann sie
+    /// niemand ändern.
     fn geliehen(&mut self, ausdruck: &Ausdruck) -> (String, bool) {
-        if ausdruck.typ != Typ::Kettn {
+        if !self.modul.typen.verwaltet(ausdruck.typ) {
             return (self.ausdruck(ausdruck), false);
         }
         match &ausdruck.art {
             AusdruckArt::Text(inhalt) => (self.modul.text(inhalt), false),
-            AusdruckArt::Variable { id, .. } => {
+            AusdruckArt::Variable { .. } | AusdruckArt::Feld { .. } if feld_einer_variable(ausdruck) => {
+                let (zeiger, _) = self.ort(ausdruck);
                 let t = self.temp();
-                self.zeile(&format!("{t} = load ptr, ptr %v{id}"));
+                self.zeile(&format!(
+                    "{t} = load {}, ptr {zeiger}{}",
+                    ir_typ(ausdruck.typ),
+                    wert_hinweis(ausdruck.typ)
+                ));
                 (t, false)
             }
             _ => (self.ausdruck(ausdruck), true),
@@ -545,7 +937,7 @@ impl<'m> FunktionsBau<'m> {
 
     /// Erzeugt den Code für einen Ausdruck und gibt zurück, wo der Wert steht
     /// (ein Register wie `%t3` oder gleich eine Konstante).
-    /// Ein Text gehört danach dem Empfänger.
+    /// Ein verwalteter Wert gehört danach dem Empfänger.
     fn ausdruck(&mut self, ausdruck: &Ausdruck) -> String {
         match &ausdruck.art {
             AusdruckArt::Zoi(wert) => wert.to_string(),
@@ -553,13 +945,17 @@ impl<'m> FunktionsBau<'m> {
             AusdruckArt::Kommazoi(wert) => format!("0x{:016X}", wert.to_bits()),
             AusdruckArt::Jona(wert) => wert.to_string(),
             AusdruckArt::Text(inhalt) => self.modul.text(inhalt),
-            AusdruckArt::Variable { id, .. } => {
+            AusdruckArt::Variable { .. } | AusdruckArt::Feld { .. } | AusdruckArt::Stelle { .. } => {
+                let (zeiger, wurzel) = self.ort(ausdruck);
                 let t = self.temp();
-                self.zeile(&format!("{t} = load {}, ptr %v{id}", ir_typ(ausdruck.typ)));
-                if ausdruck.typ == Typ::Kettn {
-                    // Jetzt braucht ihn außer der Variable noch jemand.
-                    self.zeile(&format!("call void @oida.behalt(ptr {t})"));
-                }
+                self.zeile(&format!(
+                    "{t} = load {}, ptr {zeiger}{}",
+                    ir_typ(ausdruck.typ),
+                    wert_hinweis(ausdruck.typ)
+                ));
+                // Jetzt braucht ihn außer der Variable (oder der Liste) noch jemand.
+                self.behalt(&t, ausdruck.typ);
+                self.lass_wurzel(wurzel);
                 t
             }
             AusdruckArt::Unaer { op, innen } => {
@@ -583,8 +979,8 @@ impl<'m> FunktionsBau<'m> {
                 let (l, l_eigen) = self.geliehen(links);
                 let (r, r_eigen) = self.geliehen(rechts);
                 let t = self.binaer(*op, links.typ, &l, &r, ausdruck.pos.zeile);
-                self.lass_wenn_eigen(&l, l_eigen);
-                self.lass_wenn_eigen(&r, r_eigen);
+                self.lass_wenn_eigen(&l, links.typ, l_eigen);
+                self.lass_wenn_eigen(&r, rechts.typ, r_eigen);
                 t
             }
             AusdruckArt::Aufruf { name, argumente } => {
@@ -616,15 +1012,96 @@ impl<'m> FunktionsBau<'m> {
                 // Aus einem Text wird beim Umwandeln nur gelesen.
                 let (w, eigen) = self.geliehen(innen);
                 let t = self.umwandlung(innen.typ, *ziel, &w, ausdruck.pos.zeile);
-                self.lass_wenn_eigen(&w, eigen);
+                self.lass_wenn_eigen(&w, innen.typ, eigen);
                 t
+            }
+            AusdruckArt::Bau { argumente, .. } => {
+                // Die Felder der Reihe nach in den Verbund setzen. Sie gehören danach dem neuen Wert.
+                let t = ir_typ(ausdruck.typ);
+                let mut verbund = if argumente.is_empty() { "zeroinitializer".to_string() } else { "poison".to_string() };
+                for (i, argument) in argumente.iter().enumerate() {
+                    let w = self.ausdruck(argument);
+                    let naechster = self.temp();
+                    self.zeile(&format!(
+                        "{naechster} = insertvalue {t} {verbund}, {} {w}, {i}",
+                        ir_typ(argument.typ)
+                    ));
+                    verbund = naechster;
+                }
+                verbund
+            }
+            AusdruckArt::ListenWert { elemente } => {
+                let element = self.modul.typen.element(ausdruck.typ).expect("die Typprüfung kennt den Typ der Liste");
+                let (t, bytes) = (ir_typ(element), groesse(element));
+                let l = self.temp();
+                self.zeile(&format!("{l} = call ptr @oida_liste_neu(i64 {bytes}, i64 {})", elemente.len()));
+                for e in elemente {
+                    let w = self.ausdruck(e);
+                    let p = self.temp();
+                    self.zeile(&format!("{p} = call ptr @oida_liste_neuer_platz(ptr {l}, i64 {bytes})"));
+                    self.zeile(&format!("store {t} {w}, ptr {p}{}", wert_hinweis(element)));
+                }
+                l
             }
         }
     }
 
-    /// Aufruf einer eingebauten Funktion. Texte werden dabei nur gelesen;
-    /// kommt ein Text heraus, ist er neu und gehört dem Empfänger.
+    /// WOAHR oder FOISCH als Text. Das sind feste Texte, die niemand zählt.
+    fn jona_als_text(&mut self, wert: &str) -> String {
+        let woahr = self.modul.woahr.clone();
+        let foisch = self.modul.foisch.clone();
+        let (woahr, foisch) = (self.modul.text(&woahr), self.modul.text(&foisch));
+        let t = self.temp();
+        self.zeile(&format!("{t} = select i1 {wert}, ptr {woahr}, ptr {foisch}"));
+        t
+    }
+
+    /// Aufruf einer eingebauten Funktion. Texte und Listen werden dabei nur
+    /// gelesen; kommt ein Text heraus, ist er neu und gehört dem Empfänger.
     fn eingebaut(&mut self, funktion: Eingebaut, argumente: &[Ausdruck], ergebnis: Typ, zeile: u32) -> String {
+        match funktion {
+            Eingebaut::Dazu => {
+                let element = argumente[1].typ;
+                let (l, l_eigen) = self.geliehen(&argumente[0]);
+                // Erst den Wert ausrechnen, dann erst Platz holen (siehe Zuweisung).
+                let w = self.ausdruck(&argumente[1]);
+                let p = self.temp();
+                self.zeile(&format!("{p} = call ptr @oida_liste_neuer_platz(ptr {l}, i64 {})", groesse(element)));
+                self.zeile(&format!("store {} {w}, ptr {p}{}", ir_typ(element), wert_hinweis(element)));
+                self.lass_wenn_eigen(&l, argumente[0].typ, l_eigen);
+                return String::new();
+            }
+            Eingebaut::Raus => {
+                let element = self.modul.typen.element(argumente[0].typ).expect("von der Typprüfung geprüft");
+                let (l, l_eigen) = self.geliehen(&argumente[0]);
+                let stelle = self.ausdruck(&argumente[1]);
+                if self.modul.typen.verwaltet(element) {
+                    // Was an der Stelle liegt, braucht danach niemand mehr.
+                    let (daten, p, alt) = (self.temp(), self.temp(), self.temp());
+                    let t = ir_typ(element);
+                    self.zeile(&format!("{daten} = call ptr @oida.stelle(ptr {l}, i64 {stelle}, i64 {zeile})"));
+                    self.zeile(&format!("{p} = getelementptr inbounds {t}, ptr {daten}, i64 {stelle}"));
+                    self.zeile(&format!("{alt} = load {t}, ptr {p}"));
+                    self.lass(&alt, element);
+                }
+                self.zeile(&format!(
+                    "call void @oida_liste_raus(ptr {l}, i64 {stelle}, i64 {}, i64 {zeile})",
+                    groesse(element)
+                ));
+                self.lass_wenn_eigen(&l, argumente[0].typ, l_eigen);
+                return String::new();
+            }
+            Eingebaut::Laenge if matches!(argumente[0].typ, Typ::Liste(_)) => {
+                let (l, l_eigen) = self.geliehen(&argumente[0]);
+                let (lp, t) = (self.temp(), self.temp());
+                self.zeile(&format!("{lp} = getelementptr inbounds %oida.Liste, ptr {l}, i32 0, i32 1"));
+                self.zeile(&format!("{t} = load i64, ptr {lp}{KOPF_HINWEIS}"));
+                self.lass_wenn_eigen(&l, argumente[0].typ, l_eigen);
+                return t;
+            }
+            _ => {}
+        }
+
         let werte: Vec<(String, bool)> = argumente.iter().map(|a| self.geliehen(a)).collect();
         let w = |i: usize| werte[i].0.as_str();
         // Viele Rechenfunktionen gibt es als fertigen LLVM-Befehl für Kommazahlen.
@@ -666,6 +1143,7 @@ impl<'m> FunktionsBau<'m> {
             Eingebaut::Zufall if werte.is_empty() => "call double @oida_zufall()".to_string(),
             Eingebaut::Zufall => format!("call i64 @oida_zufall_zoi(i64 {}, i64 {}, i64 {zeile})", w(0), w(1)),
             Eingebaut::Samen => format!("call void @oida_zufall_samen(i64 {})", w(0)),
+            Eingebaut::Dazu | Eingebaut::Raus => unreachable!("oben erledigt"),
         };
         let t = if ergebnis == Typ::Nix {
             self.zeile(&befehl);
@@ -676,9 +1154,7 @@ impl<'m> FunktionsBau<'m> {
             t
         };
         for (argument, (wert, eigen)) in argumente.iter().zip(&werte) {
-            if argument.typ == Typ::Kettn {
-                self.lass_wenn_eigen(wert, *eigen);
-            }
+            self.lass_wenn_eigen(wert, argument.typ, *eigen);
         }
         t
     }
@@ -705,8 +1181,7 @@ impl<'m> FunktionsBau<'m> {
         } else {
             // Die Teile kommen in eine kleine Liste am Stack.
             let n = werte.len();
-            let liste = self.temp();
-            let _ = writeln!(self.plaetze, "  {liste} = alloca [{n} x ptr]");
+            let liste = self.versteckter_platz(&format!("[{n} x ptr]"));
             for (i, (wert, _)) in werte.iter().enumerate() {
                 let platz = self.temp();
                 self.zeile(&format!("{platz} = getelementptr inbounds [{n} x ptr], ptr {liste}, i64 0, i64 {i}"));
@@ -715,7 +1190,7 @@ impl<'m> FunktionsBau<'m> {
             self.zeile(&format!("{t} = call ptr @oida_text_verbinden_viele(ptr {liste}, i64 {n})"));
         }
         for (wert, eigen) in &werte {
-            self.lass_wenn_eigen(wert, *eigen);
+            self.lass_wenn_eigen(wert, Typ::Kettn, *eigen);
         }
         t
     }
@@ -765,7 +1240,7 @@ impl<'m> FunktionsBau<'m> {
                 self.zeile(&format!("{v} = call i32 @oida_text_vergleich(ptr {l}, ptr {r})"));
                 format!("icmp {} i32 {v}, 0", vergleich_ganz(op))
             }
-            (Typ::Nix | Typ::Fehler, _) => unreachable!("von der Typprüfung abgelehnt"),
+            _ => unreachable!("von der Typprüfung abgelehnt"),
         };
         self.zeile(&format!("{t} = {befehl}"));
         t
@@ -840,6 +1315,7 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         text_nummer: HashMap::new(),
         woahr: wb.wort(Schluessel::True).to_string(),
         foisch: wb.wort(Schluessel::False).to_string(),
+        typen: &programm.typen,
     };
     let mut funktionen = String::new();
 
@@ -883,11 +1359,21 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     bau.zeile("ret i32 0");
     let _ = write!(funktionen, "define i32 @main() {{\nstart:\n{}{}}}\n", bau.plaetze, bau.code);
 
+    // Die Hilfsfunktionen je Typ kommen zuletzt dran, weil sie noch feste Texte anlegen.
+    let hilfen = modul.hilfsfunktionen();
+
     let mut aus = String::from(KOPF);
+    for (n, s) in programm.typen.strukturen.iter().enumerate() {
+        let felder: Vec<String> = s.felder.iter().map(|(_, typ)| ir_typ(*typ)).collect();
+        let _ = writeln!(aus, "%s{n} = type {{ {} }}", felder.join(", "));
+    }
+    aus.push('\n');
     for (nummer, inhalt) in modul.texte.iter().enumerate() {
         aus.push_str(&text_konstante(nummer, inhalt));
     }
     aus.push('\n');
+    aus.push_str(&hilfen);
     aus.push_str(&funktionen);
+    aus.push_str(FUSS);
     aus
 }

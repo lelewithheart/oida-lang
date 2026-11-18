@@ -16,7 +16,12 @@ pub enum TokenArt {
     Text(String),
     KlammerAuf,
     KlammerZu,
+    /// `[` und `]`: Listen
+    EckigAuf,
+    EckigZu,
     Komma,
+    /// `.` zwischen einem Wert und seinem Feld: `punkt.x`
+    Punkt,
     Plus,
     Minus,
     Mal,
@@ -261,6 +266,9 @@ impl Leser<'_> {
             '>' => TokenArt::Groesser,
             '(' => TokenArt::KlammerAuf,
             ')' => TokenArt::KlammerZu,
+            '[' => TokenArt::EckigAuf,
+            ']' => TokenArt::EckigZu,
+            '.' => TokenArt::Punkt,
             ',' => TokenArt::Komma,
             '+' => TokenArt::Plus,
             '-' => TokenArt::Minus,
@@ -458,6 +466,48 @@ mod tests {
         );
         // Wörter, die keine Funktionen sind, gelten immer.
         assert_eq!(arten("HAU OB fia"), vec![Schluessel(S::Break), Schluessel(S::For), DateiEnde]);
+    }
+
+    #[test]
+    fn felder_und_listen() {
+        assert_eq!(
+            arten("p.x = liste[0].y + 1.5"),
+            vec![
+                name("p"),
+                Punkt,
+                name("x"),
+                Gleich,
+                name("liste"),
+                EckigAuf,
+                Zoi(0),
+                EckigZu,
+                Punkt,
+                name("y"),
+                Plus,
+                Kommazoi(1.5),
+                DateiEnde
+            ]
+        );
+        assert_eq!(
+            arten("HAU EINE(xs, 1) STRUKTUR LISTN VON FIA JEDE x IN xs"),
+            vec![
+                Schluessel(S::Add),
+                KlammerAuf,
+                name("xs"),
+                Komma,
+                Zoi(1),
+                KlammerZu,
+                Schluessel(S::Struct),
+                Schluessel(S::List),
+                Schluessel(S::From),
+                Schluessel(S::For),
+                Schluessel(S::Each),
+                name("x"),
+                Schluessel(S::In),
+                name("xs"),
+                DateiEnde
+            ]
+        );
     }
 
     #[test]

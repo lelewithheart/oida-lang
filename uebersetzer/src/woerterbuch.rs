@@ -62,11 +62,18 @@ pub enum Schluessel {
     Seed,
     // Feste Werte
     Pi,
+    // Strukturen und Listen
+    Struct,
+    List,
+    Each,
+    In,
+    Add,
+    Remove,
 }
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 50] = [
+    pub const ALLE: [(Schluessel, &'static str); 56] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -117,6 +124,12 @@ impl Schluessel {
         (Schluessel::Random, "RANDOM"),
         (Schluessel::Seed, "SEED"),
         (Schluessel::Pi, "PI"),
+        (Schluessel::Struct, "STRUCT"),
+        (Schluessel::List, "LIST"),
+        (Schluessel::Each, "EACH"),
+        (Schluessel::In, "IN"),
+        (Schluessel::Add, "ADD"),
+        (Schluessel::Remove, "REMOVE"),
     ];
 
     /// Ist das der Name einer eingebauten Funktion (LÄNGN, WURZL ...)?
@@ -149,6 +162,8 @@ impl Schluessel {
                 | Round
                 | Random
                 | Seed
+                | Add
+                | Remove
         )
     }
 

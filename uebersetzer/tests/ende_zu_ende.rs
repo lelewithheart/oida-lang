@@ -136,7 +136,7 @@ fn texte_werden_alle_freigegeben() {
             let lauf = befehl(&exe, Some(&quelle)).env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
             assert!(lauf.status.success(), "{} ({art}):\n{}", quelle.display(), text(&lauf.stderr));
             assert_eq!(text(&lauf.stdout), erwartet, "{} ({art})", quelle.display());
-            assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte übrig\n", "{} ({art})", quelle.display());
+            assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte und Listen übrig\n", "{} ({art})", quelle.display());
         }
     }
 }

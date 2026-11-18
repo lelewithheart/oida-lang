@@ -24,20 +24,20 @@
 <path d="M110.0,179.0 h13.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-13.1 z" fill="#c3c2b7"/>
 <text x="135.1" y="189.0" font-size="12" fill="#0b0b0b">4,9 MB<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>Python: 23,4 MB </title>
+<g><title>Python: 23,5 MB </title>
 <text x="28.0" y="211.0" font-size="12" fill="#0b0b0b">Python</text>
 <path d="M110.0,201.0 h77.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-77.0 z" fill="#c3c2b7"/>
-<text x="199.0" y="211.0" font-size="12" fill="#0b0b0b">23,4 MB<tspan fill="#898781" font-weight="400"></tspan></text>
+<text x="199.0" y="211.0" font-size="12" fill="#0b0b0b">23,5 MB<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>C#: 23,7 MB </title>
+<g><title>C#: 23,9 MB </title>
 <text x="28.0" y="233.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M110.0,223.0 h77.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-77.7 z" fill="#c3c2b7"/>
-<text x="199.7" y="233.0" font-size="12" fill="#0b0b0b">23,7 MB<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M110.0,223.0 h78.6 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-78.6 z" fill="#c3c2b7"/>
+<text x="200.6" y="233.0" font-size="12" fill="#0b0b0b">23,9 MB<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
-<g><title>JavaScript: 37,3 MB </title>
+<g><title>JavaScript: 37,9 MB </title>
 <text x="28.0" y="255.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M110.0,245.0 h125.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-125.0 z" fill="#c3c2b7"/>
-<text x="247.0" y="255.0" font-size="12" fill="#0b0b0b">37,3 MB<tspan fill="#898781" font-weight="400"></tspan></text>
+<path d="M110.0,245.0 h126.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-126.9 z" fill="#c3c2b7"/>
+<text x="248.9" y="255.0" font-size="12" fill="#0b0b0b">37,9 MB<tspan fill="#898781" font-weight="400"></tspan></text>
 </g>
 <g><title>Java: 57,9 MB </title>
 <text x="28.0" y="277.0" font-size="12" fill="#0b0b0b">Java</text>
@@ -47,42 +47,42 @@
 <line x1="110.0" y1="128.0" x2="110.0" y2="286.0" stroke="#898781" stroke-width="1"/>
 <text x="484.0" y="100.0" font-size="14" fill="#0b0b0b" font-weight="600">Höchstwert</text>
 <text x="484.0" y="117.0" font-size="11.5" fill="#52514e">Das hungrigste der gemessenen Programme.</text>
-<g><title>C: 4,8 MB bei texte</title>
+<g><title>C: 7,4 MB bei teilchen</title>
 <text x="484.0" y="145.0" font-size="12" fill="#0b0b0b">C</text>
-<path d="M566.0,135.0 h2.8 a2.849383170686798,2.849383170686798 0 0 1 2.849383170686798,2.849383170686798 v6.3 a2.849383170686798,2.849383170686798 0 0 1 -2.849383170686798,2.849383170686798 h-2.8 z" fill="#c3c2b7"/>
-<text x="579.7" y="145.0" font-size="12" fill="#0b0b0b">4,8 MB<tspan fill="#898781" font-weight="400">  ·  bei texte</tspan></text>
+<path d="M566.0,135.0 h4.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-4.7 z" fill="#c3c2b7"/>
+<text x="582.7" y="145.0" font-size="12" fill="#0b0b0b">7,4 MB<tspan fill="#898781" font-weight="400">  ·  bei teilchen</tspan></text>
 </g>
-<g><title>Rust: 5,0 MB bei texte</title>
-<text x="484.0" y="167.0" font-size="12" fill="#0b0b0b">Rust</text>
-<path d="M566.0,157.0 h2.9 a2.9184312281347817,2.9184312281347817 0 0 1 2.9184312281347817,2.9184312281347817 v6.2 a2.9184312281347817,2.9184312281347817 0 0 1 -2.9184312281347817,2.9184312281347817 h-2.9 z" fill="#c3c2b7"/>
-<text x="579.8" y="167.0" font-size="12" fill="#0b0b0b">5,0 MB<tspan fill="#898781" font-weight="400">  ·  bei texte</tspan></text>
+<g><title>OIDA: 9,2 MB bei teilchen</title>
+<text x="484.0" y="167.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
+<path d="M566.0,157.0 h6.8 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-6.8 z" fill="#2a78d6"/>
+<text x="584.8" y="167.0" font-size="12" fill="#0b0b0b" font-weight="600">9,2 MB<tspan fill="#898781" font-weight="400">  ·  bei teilchen</tspan></text>
 </g>
-<g><title>OIDA: 5,0 MB bei ausgabe</title>
-<text x="484.0" y="189.0" font-size="12" fill="#0b0b0b" font-weight="600">OIDA</text>
-<path d="M566.0,179.0 h2.9 a2.92533603387958,2.92533603387958 0 0 1 2.92533603387958,2.92533603387958 v6.1 a2.92533603387958,2.92533603387958 0 0 1 -2.92533603387958,2.92533603387958 h-2.9 z" fill="#2a78d6"/>
-<text x="579.9" y="189.0" font-size="12" fill="#0b0b0b" font-weight="600">5,0 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
+<g><title>Rust: 9,4 MB bei teilchen</title>
+<text x="484.0" y="189.0" font-size="12" fill="#0b0b0b">Rust</text>
+<path d="M566.0,179.0 h7.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-7.1 z" fill="#c3c2b7"/>
+<text x="585.1" y="189.0" font-size="12" fill="#0b0b0b">9,4 MB<tspan fill="#898781" font-weight="400">  ·  bei teilchen</tspan></text>
 </g>
-<g><title>Python: 25,0 MB bei ausgabe</title>
-<text x="484.0" y="211.0" font-size="12" fill="#0b0b0b">Python</text>
-<path d="M566.0,201.0 h25.5 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-25.5 z" fill="#c3c2b7"/>
-<text x="603.5" y="211.0" font-size="12" fill="#0b0b0b">25,0 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
+<g><title>C#: 34,4 MB bei ausgabe</title>
+<text x="484.0" y="211.0" font-size="12" fill="#0b0b0b">C#</text>
+<path d="M566.0,201.0 h36.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-36.4 z" fill="#c3c2b7"/>
+<text x="614.4" y="211.0" font-size="12" fill="#0b0b0b">34,4 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
 </g>
-<g><title>C#: 34,6 MB bei ausgabe</title>
-<text x="484.0" y="233.0" font-size="12" fill="#0b0b0b">C#</text>
-<path d="M566.0,223.0 h36.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-36.7 z" fill="#c3c2b7"/>
-<text x="614.7" y="233.0" font-size="12" fill="#0b0b0b">34,6 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
+<g><title>Python: 47,1 MB bei teilchen</title>
+<text x="484.0" y="233.0" font-size="12" fill="#0b0b0b">Python</text>
+<path d="M566.0,223.0 h51.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-51.3 z" fill="#c3c2b7"/>
+<text x="629.3" y="233.0" font-size="12" fill="#0b0b0b">47,1 MB<tspan fill="#898781" font-weight="400">  ·  bei teilchen</tspan></text>
 </g>
-<g><title>JavaScript: 80,4 MB bei ausgabe</title>
+<g><title>JavaScript: 80,3 MB bei ausgabe</title>
 <text x="484.0" y="255.0" font-size="12" fill="#0b0b0b">JavaScript</text>
-<path d="M566.0,245.0 h90.7 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-90.7 z" fill="#c3c2b7"/>
-<text x="668.7" y="255.0" font-size="12" fill="#0b0b0b">80,4 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
+<path d="M566.0,245.0 h90.2 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-90.2 z" fill="#c3c2b7"/>
+<text x="668.2" y="255.0" font-size="12" fill="#0b0b0b">80,3 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
 </g>
-<g><title>Java: 169,7 MB bei ausgabe</title>
+<g><title>Java: 170,3 MB bei ausgabe</title>
 <text x="484.0" y="277.0" font-size="12" fill="#0b0b0b">Java</text>
 <path d="M566.0,267.0 h196.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 h-196.0 z" fill="#c3c2b7"/>
-<text x="774.0" y="277.0" font-size="12" fill="#0b0b0b">169,7 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
+<text x="774.0" y="277.0" font-size="12" fill="#0b0b0b">170,3 MB<tspan fill="#898781" font-weight="400">  ·  bei ausgabe</tspan></text>
 </g>
 <line x1="566.0" y1="128.0" x2="566.0" y2="286.0" stroke="#898781" stroke-width="1"/>
-<text x="28.0" y="316.0" font-size="11.5" fill="#898781">Üblich: der mittlere Wert (Median) über alle 7 Programme. Höchstwert: das Programm, das am meisten braucht.</text>
+<text x="28.0" y="316.0" font-size="11.5" fill="#898781">Üblich: der mittlere Wert (Median) über alle 8 Programme. Höchstwert: das Programm, das am meisten braucht.</text>
 <text x="28.0" y="334.0" font-size="11.5" fill="#898781">Gemessen am 18.11.2026 auf: AMD Ryzen 5 8645HS w/ Radeon 760M Graphics.</text>
 </svg>

@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.2.** Zahlen, Texte, Schleifen, Funktionen, Eingabe und Ausgabe sind da; Listen, Strukturen und
+**Stand: v0.3.** Zahlen, Texte, Strukturen, Listen, Schleifen, Funktionen, Eingabe und Ausgabe sind da;
 Klassen fehlen noch. Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -130,7 +130,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.2)
+## Die Sprache (v0.3)
 
 ### Typen
 
@@ -140,6 +140,8 @@ Mehr dazu in [`vscode/README.md`](vscode/README.md).
 | `KOMMAZOI` | Kommazahl, 64 Bit     | `3.14` (mit Punkt)   |
 | `JONA`     | Wahrheitswert         | `WOAHR`, `FOISCH`    |
 | `KETTN`    | Text                  | `"Servas"`, `'Oida'` |
+
+Dazu kommen eigene [Strukturen](#strukturen) und [Listen](#listen) (`LISTN VON ZOI`).
 
 Die Typen sind fest, aber man muss sie fast nie hinschreiben: Der Compiler erkennt sie am Wert.
 
@@ -245,13 +247,62 @@ anderen Blöcken), die Reihenfolge ist egal, und sie dürfen sich selbst aufrufe
 Alles, was außerhalb von Funktionen steht, ist das Hauptprogramm. Funktionen sehen die
 Variablen des Hauptprogramms nicht; was sie brauchen, bekommen sie als Parameter.
 
+### Strukturen
+
+Eine Struktur fasst mehrere Werte unter einem Namen zusammen:
+
+```
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+
+SOG AU p = Punkt(1.5, 2) OIDA     # die Felder der Reihe nach
+p.x += 10 OIDA
+SCHREIB(p.x, p) OIDA              # 11.5 Punkt(11.5, 2.0)
+```
+
+- Eine Struktur ist ein **Wert**, der direkt in der Variable liegt. Zuweisen heißt kopieren:
+  Nach `SOG AU q = p OIDA` sind `p` und `q` unabhängig. Auch eine Funktion bekommt eine Kopie.
+- Felder können alles sein: Zahlen, Texte, andere Strukturen, Listen. Nur sich selbst kann eine
+  Struktur nicht enthalten (über eine Liste geht es).
+- Strukturen stehen ganz außen wie Funktionen, die Reihenfolge ist egal.
+
+### Listen
+
+```
+SOG AU zahlen = [3, 1, 4] OIDA                  # eine LISTN VON ZOI
+SOG AU namen LISTN VON KETTN = [] OIDA          # leer: den Typ dazusagen
+
+HAU EINE(zahlen, 5) OIDA                        # hinten anhängen
+zahlen[0] = 30 OIDA                             # gezählt wird ab 0
+HAU AUSSE(zahlen, 1) OIDA                       # die Stelle 1 herausnehmen
+SCHREIB(zahlen, LÄNGN(zahlen), zahlen[0]) OIDA  # [30, 4, 5] 3 30
+
+FIA JEDE z IN zahlen TUA
+    SCHREIB(z) OIDA
+PASST SCHO
+```
+
+- In einer Liste haben alle Elemente denselben Typ. Der Typ heißt `LISTN VON <typ>`, zum Beispiel
+  `LISTN VON Punkt` oder `LISTN VON LISTN VON ZOI`.
+- Eine Liste ist ein **Verweis**: Nach `SOG AU b = a OIDA` meinen `a` und `b` dieselbe Liste, und
+  eine Funktion, die eine Liste bekommt, ändert das Original.
+- Strukturen liegen direkt in der Liste, ohne Umweg. `punkte[0].x = 5 OIDA` ändert das Element.
+- In `FIA JEDE` ist die Variable eine Kopie des Elements. Wer Elemente ändern will, zählt mit
+  `FIA i VON 0 BIS LÄNGN(liste) - 1` und schreibt `liste[i]`.
+- Greift man auf eine Stelle zu, die es nicht gibt, bricht das Programm mit einer Meldung ab.
+- Um den Speicher kümmert sich OIDA: Eine Liste wird freigegeben, sobald sie niemand mehr braucht.
+
 ### Ausgabe
 
 ```
 SCHREIB("Summe:", 5050, 3.5, WOAHR) OIDA    # Summe: 5050 3.5 WOAHR
+SCHREIB([1, 2], Punkt(1, 2)) OIDA           # [1, 2] Punkt(1.0, 2.0)
 ```
 
 `SCHREIB` nimmt beliebig viele Werte, schreibt sie mit Leerzeichen dazwischen und macht eine neue Zeile.
+Listen und Strukturen werden so ausgegeben, wie man sie hinschreibt.
 
 ### Eingabe
 
@@ -277,6 +328,14 @@ Für Texte (gezählt wird ab 0, in Zeichen):
 | `FLÜSTER(text)`                | in Kleinbuchstaben                                    | `FLÜSTER("OIDA")` ist `"oida"`        |
 | `STUTZ(text)`                  | ohne Leerraum am Anfang und am Ende                   | `STUTZ("  jo  ")` ist `"jo"`          |
 | `ERSETZ(text, alt, neu)`       | jedes `alt` durch `neu` ersetzt                       | `ERSETZ("aba", "a", "o")` ist `"obo"` |
+
+Für Listen:
+
+| Funktion                   | Was sie tut                                        |
+|----------------------------|----------------------------------------------------|
+| `LÄNGN(liste)`             | Anzahl der Elemente                                |
+| `HAU EINE(liste, wert)`    | hängt den Wert hinten an (auch: `DAZUA`)           |
+| `HAU AUSSE(liste, stelle)` | nimmt das Element an der Stelle heraus             |
 
 Zum Rechnen (wo eine `KOMMAZOI` verlangt ist, geht auch eine `ZOI`):
 
@@ -418,7 +477,8 @@ Maschinencode, Linken). Mit `--ir` kann man sich das IR anschauen.
 
 ## Was OIDA noch nicht kann
 
-- Keine Listen, Strukturen und Klassen; nur einzelne Werte.
+- Keine Klassen und Methoden. Strukturen und Listen kann man nicht mit `=` vergleichen.
+- Listen kann man nicht sortieren oder durchsuchen lassen; das schreibt man vorerst selbst.
 - Keine Dateien, kein Fenster, keine Grafik.
 - Fehler beim Laufen (etwa `ZOI("abc")`) brechen das Programm ab; abfangen kann man sie noch nicht.
 - Ganze Zahlen laufen bei mehr als 64 Bit still über.
@@ -438,7 +498,7 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 |---|---|---|
 | 0 | Grundgerüst: Typen, Variablen, `WENN`, `SOLONG`, Funktionen, `SCHREIB`; Texte werden freigegeben | fertig |
 | 1 | Zählschleife, `HAU OB`, `WEIDA`, `+=`, Eingabe, Text- und Rechenfunktionen, Zufall | fertig |
-| 2 | Strukturen als direkte Werte und Listen, `FIA JEDE` | offen |
+| 2 | Strukturen als direkte Werte und Listen, `FIA JEDE` | fertig |
 | 3 | Klassen mit Feldern, Methoden und Vererbung | offen |
 | 4 | Fehlende Werte nur, wo der Typ es erlaubt (`NIX`), und Fehler im Rückgabetyp statt Exceptions | offen |
 | 5 | Generics für eigene Typen, Funktionen als Werte, ein Wörterbuch-Typ | offen |

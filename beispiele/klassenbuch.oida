@@ -1,0 +1,50 @@
+# Klassenbuch: Strukturen und Listen zusammen.
+
+STRUKTUR Schuela
+    name KETTN
+    noten LISTN VON ZOI
+PASST SCHO
+
+FUNKTIAUN schnitt(s Schuela) GIBT ZRUCK KOMMAZOI
+    WENN LÄNGN(s.noten) = 0 DAUN
+        GIB ZRUCK 0.0 OIDA
+    PASST SCHO
+    SOG AU summe = 0 OIDA
+    FIA JEDE note IN s.noten TUA
+        summe += note OIDA
+    PASST SCHO
+    GIB ZRUCK KOMMAZOI(summe) / LÄNGN(s.noten) OIDA
+PASST SCHO
+
+# Sortiert die Klasse nach dem Schnitt, die Besten zuerst.
+# Die Funktion bekommt dieselbe Liste, nicht eine Kopie.
+FUNKTIAUN sortier(klasse LISTN VON Schuela)
+    FIA i VON 0 BIS LÄNGN(klasse) - 2 TUA
+        FIA j VON 0 BIS LÄNGN(klasse) - 2 - i TUA
+            WENN schnitt(klasse[j]) > schnitt(klasse[j + 1]) DAUN
+                SOG AU merk = klasse[j] OIDA
+                klasse[j] = klasse[j + 1] OIDA
+                klasse[j + 1] = merk OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+SOG AU klasse = [
+    Schuela("Resi", [2, 3, 4]),
+    Schuela("Franz", [1, 1, 2]),
+    Schuela("Schurli", [5, 4, 5])
+] OIDA
+
+# Eine Neue kommt dazu, und Resi bessert sich aus.
+HAU EINE(klasse, Schuela("Mitzi", [])) OIDA
+HAU EINE(klasse[3].noten, 1) OIDA
+klasse[0].noten[2] = 1 OIDA
+
+sortier(klasse) OIDA
+
+SOG AU platz = 1 OIDA
+FIA JEDE s IN klasse TUA
+    SCHREIB(KETTN(platz) + ".", s.name, "- Schnitt", schnitt(s), "- Noten", s.noten) OIDA
+    platz += 1 OIDA
+PASST SCHO

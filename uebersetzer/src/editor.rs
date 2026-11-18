@@ -26,6 +26,8 @@ pub enum Art {
     Text = 5,
     Wahrheitswert = 6,
     Endwort = 7,
+    /// Ein Feld einer Struktur: das `x` in `punkt.x`
+    Feld = 8,
 }
 
 fn art_von_schluessel(schluessel: Schluessel) -> Art {
@@ -128,14 +130,32 @@ pub fn untersuche(quelltext: &str, wb: &Woerterbuch) -> String {
         );
     }
 
+    // Die Namen der Strukturen: das Wort hinter STRUKTUR. Sie werden überall als Typ eingefärbt.
+    let strukturen: Vec<&str> = tokens
+        .windows(2)
+        .filter_map(|paar| match (&paar[0].art, &paar[1].art) {
+            (TokenArt::Schluessel(Schluessel::Struct), TokenArt::Name(name)) => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+
     aus.push_str("],\"tokens\":[");
     let mut erstes = true;
     for (i, token) in tokens.iter().enumerate() {
         let art = match &token.art {
             TokenArt::Schluessel(s) => art_von_schluessel(*s),
-            TokenArt::Name(_) => {
+            TokenArt::Name(name) => {
                 let aufruf = tokens.get(i + 1).is_some_and(|t| t.art == TokenArt::KlammerAuf);
-                if aufruf { Art::Funktion } else { Art::Variable }
+                let nach_punkt = i > 0 && tokens[i - 1].art == TokenArt::Punkt;
+                if nach_punkt {
+                    Art::Feld
+                } else if strukturen.contains(&name.as_str()) {
+                    Art::Typ
+                } else if aufruf {
+                    Art::Funktion
+                } else {
+                    Art::Variable
+                }
             }
             TokenArt::Zoi(_) | TokenArt::Kommazoi(_) => Art::Zahl,
             TokenArt::Text(_) => Art::Text,
@@ -268,12 +288,12 @@ fn grammatik(wb: &Woerterbuch) -> String {
 fn sprach_einstellungen(wb: &Woerterbuch) -> String {
     let davor = format!("(?<!{WORTZEICHEN})");
     let danach = format!("(?!{WORTZEICHEN})");
-    let funktion = auswahl(wb, &[Schluessel::Function]);
+    let funktion = auswahl(wb, &[Schluessel::Function, Schluessel::Struct]);
     let oeffner = auswahl(wb, &[Schluessel::Then, Schluessel::Do]);
     // (Auch die Zählschleife hört in der ersten Zeile mit TUA auf.)
     let sunst = auswahl(wb, &[Schluessel::Else]);
     let ende = auswahl(wb, &[Schluessel::End]);
-    // Eine Zeile weiter einrücken nach: FUNKTIAUN ..., ... DAUN, ... TUA, SUNST
+    // Eine Zeile weiter einrücken nach: FUNKTIAUN ..., STRUKTUR ..., ... DAUN, ... TUA, SUNST
     let mehr = format!(
         r"^\s*(?:{funktion}{danach}.*|.*{davor}{oeffner}|{sunst})\s*(?:#.*)?$"
     );
@@ -341,6 +361,26 @@ fn schnipsel(wb: &Woerterbuch) -> String {
                 w(End).to_string(),
             ],
             "Zählschleife",
+        ),
+        (
+            format!("{} {}", w(For), w(Each)),
+            format!("{}{}", w(For), w(Each)),
+            vec![
+                format!("{} {} ${{1:x}} {} ${{2:liste}} {}", w(For), w(Each), w(In), w(Do)),
+                "\t$0".into(),
+                w(End).to_string(),
+            ],
+            "Schleife über eine Liste",
+        ),
+        (
+            w(Struct).to_string(),
+            w(Struct).to_string(),
+            vec![
+                format!("{} ${{1:Name}}", w(Struct)),
+                format!("\t${{2:feld}} ${{3:{}}}", w(Int)),
+                w(End).to_string(),
+            ],
+            "Struktur mit Feldern",
         ),
         (
             w(Function).to_string(),
@@ -491,6 +531,19 @@ mod tests {
         assert!(g.contains(r"WURZL(?![\\p{L}\\p{N}_])(?=\\s*\\()"), "{g}");
         // FIA ist keine Funktion und braucht keine Klammer.
         assert!(g.contains(r#"FIA(?![\\p{L}\\p{N}_])" }"#), "{g}");
+    }
+
+    #[test]
+    fn strukturen_felder_und_listen() {
+        // Punkt ist überall ein Typ (1), x hinter dem Punkt ein Feld (8).
+        let json = untersuche("STRUKTUR Punkt\n x ZOI\nPASST SCHO\nSOG AU p = Punkt(1) OIDA\np.x = [1][0] OIDA", &wb());
+        assert_eq!(
+            feld(&json, "tokens"),
+            "[[0,0,8,0],[0,9,5,1],[1,1,1,3],[1,3,3,1],[2,0,10,0],\
+             [3,0,6,0],[3,7,1,3],[3,11,5,1],[3,17,1,4],[3,20,4,7],\
+             [4,0,1,3],[4,2,1,8],[4,7,1,4],[4,10,1,4],[4,13,4,7]]"
+        );
+        assert_eq!(feld(&json, "fehler"), "[]");
     }
 
     #[test]

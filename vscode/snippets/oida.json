@@ -20,6 +20,16 @@
     "body": ["FIA ${1:i} VON ${2:1} BIS ${3:10} TUA", "\t$0", "PASST SCHO"],
     "description": "Zählschleife"
   },
+  "FIA JEDE": {
+    "prefix": "fiajede",
+    "body": ["FIA JEDE ${1:x} IN ${2:liste} TUA", "\t$0", "PASST SCHO"],
+    "description": "Schleife über eine Liste"
+  },
+  "STRUKTUR": {
+    "prefix": "struktur",
+    "body": ["STRUKTUR ${1:Name}", "\t${2:feld} ${3:ZOI}", "PASST SCHO"],
+    "description": "Struktur mit Feldern"
+  },
   "FUNKTIAUN": {
     "prefix": "funktiaun",
     "body": ["FUNKTIAUN ${1:name}(${2:x} ${3:ZOI}) GIBT ZRUCK ${4:ZOI}", "\tGIB ZRUCK ${0:x} OIDA", "PASST SCHO"],

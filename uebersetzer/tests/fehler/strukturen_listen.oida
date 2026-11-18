@@ -1,0 +1,14 @@
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+SOG AU p = Punkt(1) OIDA
+SOG AU q = Punkt(1, 2) OIDA
+SCHREIB(q.z) OIDA
+SOG AU leer = [] OIDA
+SOG AU misch = [1, "zwa"] OIDA
+SOG AU zahlen = [1, 2] OIDA
+zahlen[0] = "ans" OIDA
+HAU EINE(zahlen, q) OIDA
+FIA JEDE z IN q TUA
+PASST SCHO

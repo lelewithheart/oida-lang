@@ -1,0 +1,8 @@
+:5:12: 'Punkt' hot 2 Föda, du gibst eam an Wert.
+:7:11: A Föd 'z' gibt's in 'Punkt' ned. Es gibt: x, y.
+:8:15: Bei [] waaß i ned, wos fia a LISTN des sei soll.
+:9:20: In ana LISTN muass ollas vom gleichn Typ sei: do steht a KETTN, davua oba a ZOI.
+:11:13: 'zahlen[...]' is a ZOI, do kaunst ka KETTN einetuan.
+:12:18: In de LISTN ghört a ZOI eine, du gibst oba a Punkt her.
+:13:15: FIA JEDE geht nur mit ana LISTN, des do is oba a Punkt.
+Na, des wird nix: 7 Fehler.

@@ -1,6 +1,7 @@
 //! Typprüfung mit Typerkennung (Inferenz).
 //!
 //! Geht einmal durch den Syntaxbaum und
+//!  - löst die Typen auf, die im Quelltext stehen (Strukturen, Listen),
 //!  - trägt bei jedem Ausdruck den Typ ein,
 //!  - gibt jeder Variable eine Nummer (`id`), damit die IR-Erzeugung nicht
 //!    mehr nach Namen suchen muss,
@@ -36,6 +37,10 @@ struct Pruefer<'a> {
     funktion: Option<(String, Typ)>,
     /// In wie vielen Schleifen wir gerade stecken (für HAU OB und WEIDA).
     schleifen: usize,
+    /// Alle Strukturen und Listentypen des Programms.
+    typen: Typen,
+    /// Name einer Struktur -> ihre Nummer in `typen.strukturen`.
+    struktur_nummern: HashMap<String, u32>,
 }
 
 /// Das Wort, unter dem eine eingebaute Funktion im Wörterbuch steht.
@@ -63,12 +68,15 @@ fn wort_von(funktion: Eingebaut) -> Schluessel {
         Eingebaut::Runden => Schluessel::Round,
         Eingebaut::Zufall => Schluessel::Random,
         Eingebaut::Samen => Schluessel::Seed,
+        Eingebaut::Dazu => Schluessel::Add,
+        Eingebaut::Raus => Schluessel::Remove,
     }
 }
 
 /// Welche Werte eine eingebaute Funktion nimmt und was sie zurückgibt.
 /// Mehrere Zeilen heißt: Es gibt sie in mehreren Fassungen; die erste, die passt, gilt.
 /// Wo KOMMAZOI verlangt ist, geht auch eine ZOI.
+/// Die Funktionen für Listen stehen nicht hier, weil ihr Typ von der Liste abhängt.
 fn fassungen(funktion: Eingebaut) -> &'static [(&'static [Typ], Typ)] {
     use Typ::{Kettn as T, Kommazoi as K, Nix, Zoi as Z};
     match funktion {
@@ -90,6 +98,25 @@ fn fassungen(funktion: Eingebaut) -> &'static [(&'static [Typ], Typ)] {
         Eingebaut::Min | Eingebaut::Max => &[(&[Z, Z], Z), (&[K, K], K)],
         Eingebaut::Zufall => &[(&[], K), (&[Z, Z], Z)],
         Eingebaut::Samen => &[(&[Z], Nix)],
+        Eingebaut::Dazu | Eingebaut::Raus => unreachable!("Listenfunktionen werden eigens geprüft"),
+    }
+}
+
+/// Was beim Rechnen oder Vergleichen von `l` und `r` herauskommt, wenn es geht.
+/// (Dass aus einer ZOI neben einer KOMMAZOI eine KOMMAZOI wird, ist hier schon eingerechnet.)
+fn binaer_ergebnis(op: BinaerOp, l: Typ, r: Typ) -> Option<Typ> {
+    let zahl = |t: Typ| t == Typ::Zoi || t == Typ::Kommazoi;
+    let zahlen =
+        (zahl(l) && zahl(r)).then(|| if l == Typ::Kommazoi || r == Typ::Kommazoi { Typ::Kommazoi } else { Typ::Zoi });
+    let einfach = matches!(l, Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn);
+    match op {
+        BinaerOp::Plus => zahlen.or((l == Typ::Kettn && r == Typ::Kettn).then_some(Typ::Kettn)),
+        BinaerOp::Minus | BinaerOp::Mal | BinaerOp::Durch | BinaerOp::Rest => zahlen,
+        BinaerOp::Gleich | BinaerOp::Ungleich => (zahlen.is_some() || (l == r && einfach)).then_some(Typ::Jona),
+        BinaerOp::Kleiner | BinaerOp::KleinerGleich | BinaerOp::Groesser | BinaerOp::GroesserGleich => {
+            (zahlen.is_some() || (l == Typ::Kettn && r == Typ::Kettn)).then_some(Typ::Jona)
+        }
+        BinaerOp::Und | BinaerOp::Oda => (l == Typ::Jona && r == Typ::Jona).then_some(Typ::Jona),
     }
 }
 
@@ -103,10 +130,28 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         naechste_id: 0,
         funktion: None,
         schleifen: 0,
+        typen: Typen::default(),
+        struktur_nummern: HashMap::new(),
     };
 
-    // Erst alle Funktionen kennenlernen, damit die Reihenfolge egal ist.
-    for f in &programm.funktionen {
+    p.strukturen(&programm.strukturen);
+
+    // Alle Funktionen kennenlernen, damit die Reihenfolge egal ist.
+    for f in &mut programm.funktionen {
+        for parameter in &mut f.parameter {
+            parameter.typ = p.typ_aus(&parameter.angabe);
+        }
+        f.rueckgabe = f.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| p.typ_aus(angabe));
+        if p.struktur_nummern.contains_key(&f.name) {
+            let meldung = format!(
+                "'{}' gibt's scho ois {}, des kaun ned a no a {} sei.",
+                f.name,
+                p.wort(Schluessel::Struct),
+                p.wort(Schluessel::Function)
+            );
+            p.melde(f.pos, meldung);
+            continue;
+        }
         if p.signaturen.contains_key(&f.name) {
             let meldung = format!("De {} '{}' gibt's scho. Zwamoi geht ned.", p.wort(Schluessel::Function), f.name);
             p.melde(f.pos, meldung);
@@ -124,11 +169,13 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
 
     p.bereiche = vec![HashMap::new()];
     p.funktion = None;
+    p.schleifen = 0;
     for a in &mut programm.haupt {
         p.anweisung(a);
     }
 
     if p.fehler.is_empty() {
+        programm.typen = p.typen;
         Ok(())
     } else {
         p.fehler.sort_by_key(|f| (f.pos.zeile, f.pos.spalte));
@@ -145,16 +192,147 @@ impl Pruefer<'_> {
         self.wb.wort(schluessel)
     }
 
-    /// Wie ein Typ in einer Meldung heißt, mit Artikel: "a ZOI".
-    fn typ_name(&self, typ: Typ) -> String {
+    /// Wie ein Typ heißt: "ZOI", "Punkt", "LISTN VON ZOI".
+    fn typ_wort(&self, typ: Typ) -> String {
         match typ {
-            Typ::Zoi => format!("a {}", self.wort(Schluessel::Int)),
-            Typ::Kommazoi => format!("a {}", self.wort(Schluessel::Float)),
-            Typ::Jona => format!("a {}", self.wort(Schluessel::Boolean)),
-            Typ::Kettn => format!("a {}", self.wort(Schluessel::Text)),
+            Typ::Zoi => self.wort(Schluessel::Int).to_string(),
+            Typ::Kommazoi => self.wort(Schluessel::Float).to_string(),
+            Typ::Jona => self.wort(Schluessel::Boolean).to_string(),
+            Typ::Kettn => self.wort(Schluessel::Text).to_string(),
+            Typ::Struktur(_) => self.typen.struktur(typ).map_or_else(String::new, |s| s.name.clone()),
+            Typ::Liste(_) => format!(
+                "{} {} {}",
+                self.wort(Schluessel::List),
+                self.wort(Schluessel::From),
+                self.typ_wort(self.typen.element(typ).unwrap_or(Typ::Fehler))
+            ),
+            Typ::LeereListe => format!("laare {}", self.wort(Schluessel::List)),
             Typ::Nix | Typ::Fehler => "nix".to_string(),
         }
     }
+
+    /// Wie ein Typ in einer Meldung heißt, mit Artikel: "a ZOI".
+    fn typ_name(&self, typ: Typ) -> String {
+        match typ {
+            Typ::Nix | Typ::Fehler => "nix".to_string(),
+            _ => format!("a {}", self.typ_wort(typ)),
+        }
+    }
+
+    /// Macht aus einem Typ, wie er im Quelltext steht, den Typ selbst.
+    fn typ_aus(&mut self, angabe: &TypAngabe) -> Typ {
+        match angabe {
+            TypAngabe::Einfach(typ) => *typ,
+            TypAngabe::Name { name, pos } => match self.struktur_nummern.get(name) {
+                Some(nummer) => Typ::Struktur(*nummer),
+                None => {
+                    let meldung = match self.wb.festes_wort(name) {
+                        Some(schluessel) => format!("Des haaßt {}, ned {}!", self.wort(schluessel), name),
+                        None => format!(
+                            "An Typ '{name}' kenn i ned. Gibt's a {} mit dem Nom?",
+                            self.wort(Schluessel::Struct)
+                        ),
+                    };
+                    self.melde(*pos, meldung);
+                    Typ::Fehler
+                }
+            },
+            TypAngabe::Liste(innen) => match self.typ_aus(innen) {
+                Typ::Fehler => Typ::Fehler,
+                element => self.typen.liste_von(element),
+            },
+        }
+    }
+
+    /// Steht der Typ ganz fest? Bei `[]` ohne Angabe ist offen, wovon es eine Liste ist.
+    fn fertig(&self, typ: Typ) -> bool {
+        match typ {
+            Typ::LeereListe => false,
+            Typ::Liste(_) => self.typen.element(typ).is_some_and(|e| self.fertig(e)),
+            _ => true,
+        }
+    }
+
+    /// Meldet eine Liste, von der nicht klar ist, was drin sein soll.
+    fn fertig_verlangt(&mut self, ausdruck: &Ausdruck) -> bool {
+        if self.fertig(ausdruck.typ) {
+            return true;
+        }
+        let meldung = format!(
+            "Bei [] waaß i ned, wos fia a {liste} des sei soll. Sog's dazua, zum Beispü: {} x {liste} {} {} = [] {}",
+            self.wort(Schluessel::Declare),
+            self.wort(Schluessel::From),
+            self.wort(Schluessel::Int),
+            self.wort(Schluessel::Oida),
+            liste = self.wort(Schluessel::List),
+        );
+        self.melde(ausdruck.pos, meldung);
+        false
+    }
+
+    // -------------------------------------------------------- Strukturen
+
+    /// Lernt alle Strukturen kennen: erst die Namen (damit die Reihenfolge
+    /// egal ist), dann die Felder.
+    fn strukturen(&mut self, definitionen: &[StrukturDef]) {
+        // Welche Definition zu welcher Nummer gehört (doppelte Namen fallen weg).
+        let mut gueltig: Vec<&StrukturDef> = Vec::new();
+        for s in definitionen {
+            if self.struktur_nummern.contains_key(&s.name) {
+                let meldung = format!("De {} '{}' gibt's scho. Zwamoi geht ned.", self.wort(Schluessel::Struct), s.name);
+                self.melde(s.pos, meldung);
+                continue;
+            }
+            self.struktur_nummern.insert(s.name.clone(), gueltig.len() as u32);
+            self.typen.strukturen.push(StrukturInfo { name: s.name.clone(), felder: Vec::new() });
+            gueltig.push(s);
+        }
+        for (nummer, s) in gueltig.iter().enumerate() {
+            let mut felder: Vec<(String, Typ)> = Vec::new();
+            for feld in &s.felder {
+                let typ = self.typ_aus(&feld.angabe);
+                if felder.iter().any(|(name, _)| *name == feld.name) {
+                    let meldung = format!("Des Föd '{}' gibt's in '{}' scho.", feld.name, s.name);
+                    self.melde(feld.pos, meldung);
+                    continue;
+                }
+                felder.push((feld.name.clone(), typ));
+            }
+            self.typen.strukturen[nummer].felder = felder;
+        }
+        // Eine Struktur, die sich selbst als Wert enthält, wäre unendlich groß.
+        for (nummer, s) in gueltig.iter().enumerate() {
+            for i in 0..self.typen.strukturen[nummer].felder.len() {
+                let (name, typ) = self.typen.strukturen[nummer].felder[i].clone();
+                let Some(feld) = s.felder.iter().find(|f| f.name == name) else { continue };
+                if self.enthaelt(typ, nummer as u32, 0) {
+                    let meldung = format!(
+                        "De {} '{}' kaun si ned söwa enthoitn, de warat unendlich groß. Nimm a {} dafia.",
+                        self.wort(Schluessel::Struct),
+                        s.name,
+                        self.wort(Schluessel::List)
+                    );
+                    self.melde(feld.pos, meldung);
+                    // Den Kreis auftrennen, damit später nichts endlos läuft.
+                    self.typen.strukturen[nummer].felder[i].1 = Typ::Fehler;
+                }
+            }
+        }
+    }
+
+    /// Steckt in einem Wert vom Typ `typ` (direkt, nicht über eine Liste) die Struktur `gesucht`?
+    fn enthaelt(&self, typ: Typ, gesucht: u32, tiefe: usize) -> bool {
+        match typ {
+            Typ::Struktur(n) if n == gesucht => true,
+            // Die Tiefe begrenzt die Suche, falls anderswo ein Kreis steckt, der gerade gemeldet wird.
+            Typ::Struktur(n) if tiefe < self.typen.strukturen.len() => {
+                self.typen.strukturen[n as usize].felder.iter().any(|(_, t)| self.enthaelt(*t, gesucht, tiefe + 1))
+            }
+            _ => false,
+        }
+    }
+
+    // --------------------------------------------------------- Variablen
 
     fn neue_variable(&mut self, name: &str, typ: Typ, pos: Position) -> usize {
         let id = self.naechste_id;
@@ -191,7 +369,7 @@ impl Pruefer<'_> {
         for a in &mut f.rumpf {
             self.anweisung(a);
         }
-        if f.rueckgabe != Typ::Nix && !gibt_sicher_zruck(&f.rumpf) {
+        if f.rueckgabe != Typ::Nix && f.rueckgabe != Typ::Fehler && !gibt_sicher_zruck(&f.rumpf) {
             let meldung = format!(
                 "De {} '{}' muass {} zruckgebn, oba ned jeda Weg hört mit {} auf.",
                 self.wort(Schluessel::Function),
@@ -216,9 +394,10 @@ impl Pruefer<'_> {
     fn anweisung(&mut self, anweisung: &mut Anweisung) {
         let pos = anweisung.pos;
         match &mut anweisung.art {
-            AnweisungArt::Deklaration { name, typ, wert, id } => {
+            AnweisungArt::Deklaration { name, angabe, wert, id } => {
                 let wert_typ = self.ausdruck(wert);
-                let mut var_typ = typ.unwrap_or(wert_typ);
+                let verlangt = angabe.as_ref().map(|a| self.typ_aus(a));
+                let mut var_typ = verlangt.unwrap_or(wert_typ);
                 if wert_typ == Typ::Nix {
                     self.melde(wert.pos, "Des gibt nix zruck, des kaunst in ka Variable einetuan.");
                     var_typ = Typ::Fehler;
@@ -229,25 +408,58 @@ impl Pruefer<'_> {
                         self.typ_name(wert_typ)
                     );
                     self.melde(wert.pos, meldung);
+                } else if !self.fertig_verlangt(wert) {
+                    var_typ = Typ::Fehler;
                 }
                 // Erst jetzt eintragen: "SOG AU x = x" soll das äußere x meinen.
                 *id = self.neue_variable(name, var_typ, pos);
             }
-            AnweisungArt::Zuweisung { name, wert, id } => {
+            AnweisungArt::Zuweisung { ziel, op, wert } => {
                 let wert_typ = self.ausdruck(wert);
-                match self.finde_variable(name).map(|v| (v.id, v.typ)) {
-                    None => self.unbekannte_variable(name, pos),
-                    Some((var_id, var_typ)) => {
-                        *id = var_id;
-                        if !self.anpassen(wert, var_typ) {
-                            let meldung = format!(
-                                "'{name}' is {}, do kaunst {} einetuan.",
-                                self.typ_name(var_typ),
-                                self.typ_name(wert_typ).replacen("a ", "ka ", 1)
-                            );
-                            self.melde(wert.pos, meldung);
-                        }
+                let ziel_typ = self.ausdruck(ziel);
+                if ziel_typ == Typ::Fehler || wert_typ == Typ::Fehler {
+                    return;
+                }
+                if !ist_ziel(ziel) {
+                    let meldung = format!(
+                        "Do kaun ma nix zuaweisn. Links vom = ghört a Variable, a Föd oda a Stö in ana {}.",
+                        self.wort(Schluessel::List)
+                    );
+                    self.melde(ziel.pos, meldung);
+                    return;
+                }
+                // Was am Ende im Ziel landen soll: der Wert selbst oder das Ergebnis der Rechnung.
+                let ergebnis = match op {
+                    None => Some(wert_typ),
+                    Some(op) => binaer_ergebnis(*op, ziel_typ, wert_typ),
+                };
+                let Some(ergebnis) = ergebnis else {
+                    let meldung = format!(
+                        "{} {}= {}? Des geht si ned aus.",
+                        self.typ_name(ziel_typ).replacen("a ", "A ", 1),
+                        op.map_or("", BinaerOp::zeichen),
+                        self.typ_name(wert_typ)
+                    );
+                    self.melde(pos, meldung);
+                    return;
+                };
+                let passt = match op {
+                    None => self.anpassen(wert, ziel_typ),
+                    // Bei der Rechnung muss wieder der Typ des Ziels herauskommen.
+                    Some(_) if ergebnis == ziel_typ => {
+                        self.anpassen(wert, ziel_typ);
+                        true
                     }
+                    Some(_) => false,
+                };
+                if !passt {
+                    let meldung = format!(
+                        "'{}' is {}, do kaunst {} einetuan.",
+                        ziel_text(ziel),
+                        self.typ_name(ziel_typ),
+                        self.typ_name(ergebnis).replacen("a ", "ka ", 1)
+                    );
+                    self.melde(wert.pos, meldung);
                 }
             }
             AnweisungArt::Wenn { bedingung, dann, sunst } => {
@@ -275,6 +487,32 @@ impl Pruefer<'_> {
                 // Die Zählvariable gilt nur in der Schleife.
                 self.bereiche.push(HashMap::new());
                 *id = self.neue_variable(name, Typ::Zoi, pos);
+                self.schleifen += 1;
+                self.block(rumpf);
+                self.schleifen -= 1;
+                self.bereiche.pop();
+            }
+            AnweisungArt::FiaJede { name, id, liste, rumpf } => {
+                let listen_typ = self.ausdruck(liste);
+                let mut element = Typ::Fehler;
+                if listen_typ != Typ::Fehler && self.fertig_verlangt(liste) {
+                    match self.typen.element(listen_typ) {
+                        Some(typ) => element = typ,
+                        None => {
+                            let meldung = format!(
+                                "{} {} geht nur mit ana {}, des do is oba {}.",
+                                self.wort(Schluessel::For),
+                                self.wort(Schluessel::Each),
+                                self.wort(Schluessel::List),
+                                self.typ_name(listen_typ)
+                            );
+                            self.melde(liste.pos, meldung);
+                        }
+                    }
+                }
+                // Das Element gilt nur in der Schleife.
+                self.bereiche.push(HashMap::new());
+                *id = self.neue_variable(name, element, pos);
                 self.schleifen += 1;
                 self.block(rumpf);
                 self.schleifen -= 1;
@@ -309,7 +547,7 @@ impl Pruefer<'_> {
                             "De {} '{fname}' gibt nix zruck. Schreib {} {} dazua, wennst wos zruckgebn wüst.",
                             self.wort(Schluessel::Function),
                             self.wort(Schluessel::Returns),
-                            self.typ_name(wert_typ.unwrap()).replacen("a ", "", 1)
+                            self.typ_wort(wert_typ.unwrap())
                         );
                         self.melde(wert.pos, meldung);
                     }
@@ -328,12 +566,15 @@ impl Pruefer<'_> {
             }
             AnweisungArt::Schreib { argumente } => {
                 for argument in argumente {
-                    if self.ausdruck(argument) == Typ::Nix {
+                    let typ = self.ausdruck(argument);
+                    if typ == Typ::Nix {
                         let meldung = format!(
                             "Des gibt nix zruck, do gibt's nix zum {}.",
                             self.wort(Schluessel::Print)
                         );
                         self.melde(argument.pos, meldung);
+                    } else if typ != Typ::Fehler {
+                        self.fertig_verlangt(argument);
                     }
                 }
             }
@@ -386,7 +627,8 @@ impl Pruefer<'_> {
     // --------------------------------------------------------- Ausdrücke
 
     /// Passt der Ausdruck dorthin, wo `ziel` verlangt wird? Aus einer ZOI
-    /// wird dabei von selbst eine KOMMAZOI.
+    /// wird dabei von selbst eine KOMMAZOI, und eine Liste, die gerade
+    /// hingeschrieben wird (`[]`, `[1, 2]`), richtet sich nach dem Ziel.
     fn anpassen(&mut self, ausdruck: &mut Ausdruck, ziel: Typ) -> bool {
         if ausdruck.typ == ziel || ausdruck.typ == Typ::Fehler || ziel == Typ::Fehler {
             return true;
@@ -395,12 +637,30 @@ impl Pruefer<'_> {
             einpacken(ausdruck, Typ::Kommazoi);
             return true;
         }
+        if let Some(element) = self.typen.element(ziel)
+            && let AusdruckArt::ListenWert { elemente } = &mut ausdruck.art
+        {
+            let mut alle = true;
+            for e in elemente.iter_mut() {
+                alle &= self.anpassen(e, element);
+            }
+            if alle {
+                ausdruck.typ = ziel;
+                return true;
+            }
+        }
         false
     }
 
     /// Bestimmt den Typ eines Ausdrucks und trägt ihn ein.
     fn ausdruck(&mut self, ausdruck: &mut Ausdruck) -> Typ {
         let pos = ausdruck.pos;
+        // Heißt die "Funktion" wie eine Struktur, wird ein neuer Wert gebaut.
+        if let AusdruckArt::Aufruf { name, .. } = &ausdruck.art
+            && let Some(&nummer) = self.struktur_nummern.get(name)
+        {
+            return self.bau(ausdruck, nummer);
+        }
         let typ = match &mut ausdruck.art {
             AusdruckArt::Zoi(_) => Typ::Zoi,
             AusdruckArt::Kommazoi(_) => Typ::Kommazoi,
@@ -484,9 +744,140 @@ impl Pruefer<'_> {
                     Typ::Fehler
                 }
             }
+            AusdruckArt::Feld { objekt, name, nummer } => {
+                let objekt_typ = self.ausdruck(objekt);
+                if objekt_typ == Typ::Fehler {
+                    Typ::Fehler
+                } else if let Some(struktur) = self.typen.struktur(objekt_typ).cloned() {
+                    match struktur.felder.iter().position(|(feld, _)| feld == name) {
+                        Some(stelle) => {
+                            *nummer = stelle;
+                            struktur.felder[stelle].1
+                        }
+                        None => {
+                            let namen: Vec<&str> = struktur.felder.iter().map(|(feld, _)| feld.as_str()).collect();
+                            let meldung = if namen.is_empty() {
+                                format!("A Föd '{name}' gibt's in '{}' ned, de hot gor kane Föda.", struktur.name)
+                            } else {
+                                format!(
+                                    "A Föd '{name}' gibt's in '{}' ned. Es gibt: {}.",
+                                    struktur.name,
+                                    namen.join(", ")
+                                )
+                            };
+                            self.melde(pos, meldung);
+                            Typ::Fehler
+                        }
+                    }
+                } else {
+                    let meldung = format!("{} hot kane Föda.", self.typ_name(objekt_typ).replacen("a ", "A ", 1));
+                    self.melde(pos, meldung);
+                    Typ::Fehler
+                }
+            }
+            AusdruckArt::Stelle { liste, index } => {
+                let listen_typ = self.ausdruck(liste);
+                let index_typ = self.ausdruck(index);
+                if index_typ != Typ::Zoi && index_typ != Typ::Fehler {
+                    let meldung = format!(
+                        "De Stö in ana {} muass {} sei, des do is oba {}.",
+                        self.wort(Schluessel::List),
+                        self.typ_name(Typ::Zoi),
+                        self.typ_name(index_typ)
+                    );
+                    self.melde(index.pos, meldung);
+                }
+                if listen_typ == Typ::Fehler || !self.fertig_verlangt(liste) {
+                    Typ::Fehler
+                } else if let Some(element) = self.typen.element(listen_typ) {
+                    element
+                } else {
+                    let mut meldung = format!(
+                        "Mit [...] kummt ma nur in a {} eine, des do is oba {}.",
+                        self.wort(Schluessel::List),
+                        self.typ_name(listen_typ)
+                    );
+                    if listen_typ == Typ::Kettn {
+                        meldung.push_str(&format!(" Fia Texte gibt's {}.", self.wort(Schluessel::Substring)));
+                    }
+                    self.melde(pos, meldung);
+                    Typ::Fehler
+                }
+            }
+            AusdruckArt::ListenWert { elemente } => self.listen_wert(elemente),
+            AusdruckArt::Bau { struktur, .. } => Typ::Struktur(*struktur),
         };
         ausdruck.typ = typ;
         typ
+    }
+
+    /// `[a, b, c]`: Alle Elemente müssen denselben Typ haben.
+    fn listen_wert(&mut self, elemente: &mut [Ausdruck]) -> Typ {
+        let typen: Vec<Typ> = elemente.iter_mut().map(|e| self.ausdruck(e)).collect();
+        if typen.contains(&Typ::Fehler) {
+            return Typ::Fehler;
+        }
+        for (element, typ) in elemente.iter().zip(&typen) {
+            if *typ == Typ::Nix {
+                let meldung =
+                    format!("Des gibt nix zruck, des kaunst in ka {} einetuan.", self.wort(Schluessel::List));
+                self.melde(element.pos, meldung);
+                return Typ::Fehler;
+            }
+        }
+        // Der gemeinsame Typ: der erste, der feststeht; ZOI und KOMMAZOI gemischt ergibt KOMMAZOI.
+        let Some(mut gemeinsam) = typen.iter().copied().find(|t| self.fertig(*t)) else {
+            // Leer, oder nur Listen, von denen noch offen ist, was drin ist.
+            return Typ::LeereListe;
+        };
+        if gemeinsam == Typ::Zoi && typen.contains(&Typ::Kommazoi) {
+            gemeinsam = Typ::Kommazoi;
+        }
+        for (i, element) in elemente.iter_mut().enumerate() {
+            if !self.anpassen(element, gemeinsam) {
+                let meldung = format!(
+                    "In ana {} muass ollas vom gleichn Typ sei: do steht {}, davua oba {}.",
+                    self.wort(Schluessel::List),
+                    self.typ_name(typen[i]),
+                    self.typ_name(gemeinsam)
+                );
+                self.melde(element.pos, meldung);
+                return Typ::Fehler;
+            }
+        }
+        self.typen.liste_von(gemeinsam)
+    }
+
+    /// `Punkt(1.5, 2.0)`: ein neuer Wert der Struktur, die Felder der Reihe nach.
+    fn bau(&mut self, ausdruck: &mut Ausdruck, nummer: u32) -> Typ {
+        let AusdruckArt::Aufruf { name, argumente } = &mut ausdruck.art else { unreachable!() };
+        let name = name.clone();
+        let mut argumente = std::mem::take(argumente);
+        let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+        let felder = self.typen.strukturen[nummer as usize].felder.clone();
+        if felder.len() != argumente.len() {
+            let hat = match felder.len() {
+                0 => "kane Föda".to_string(),
+                1 => "a Föd".to_string(),
+                n => format!("{n} Föda"),
+            };
+            let meldung = format!("'{name}' hot {hat}, du gibst eam {}.", anzahl(argumente.len()));
+            self.melde(ausdruck.pos, meldung);
+        } else {
+            for (i, (argument, (feld, ziel))) in argumente.iter_mut().zip(&felder).enumerate() {
+                if !self.anpassen(argument, *ziel) {
+                    let meldung = format!(
+                        "'{name}' wü fia des Föd '{feld}' {}, du gibst eam {}.",
+                        self.typ_name(*ziel),
+                        self.typ_name(typen[i])
+                    );
+                    self.melde(argument.pos, meldung);
+                }
+            }
+        }
+        ausdruck.art = AusdruckArt::Bau { struktur: nummer, argumente };
+        ausdruck.typ = Typ::Struktur(nummer);
+        ausdruck.typ
     }
 
     fn binaer(
@@ -501,27 +892,13 @@ impl Pruefer<'_> {
         if l == Typ::Fehler || r == Typ::Fehler {
             return Typ::Fehler;
         }
-        let zahl = |t: Typ| t == Typ::Zoi || t == Typ::Kommazoi;
-
-        // Zwei Zahlen: trifft ZOI auf KOMMAZOI, wird mit KOMMAZOI gerechnet.
-        let mut zahlen = None;
-        if zahl(l) && zahl(r) {
-            let gemeinsam = if l == Typ::Kommazoi || r == Typ::Kommazoi { Typ::Kommazoi } else { Typ::Zoi };
-            self.anpassen(links, gemeinsam);
-            self.anpassen(rechts, gemeinsam);
-            zahlen = Some(gemeinsam);
-        }
-
-        let ergebnis = match op {
-            BinaerOp::Plus => zahlen.or((l == Typ::Kettn && r == Typ::Kettn).then_some(Typ::Kettn)),
-            BinaerOp::Minus | BinaerOp::Mal | BinaerOp::Durch | BinaerOp::Rest => zahlen,
-            BinaerOp::Gleich | BinaerOp::Ungleich => (zahlen.is_some() || (l == r && l != Typ::Nix)).then_some(Typ::Jona),
-            BinaerOp::Kleiner | BinaerOp::KleinerGleich | BinaerOp::Groesser | BinaerOp::GroesserGleich => {
-                (zahlen.is_some() || (l == Typ::Kettn && r == Typ::Kettn)).then_some(Typ::Jona)
+        if let Some(typ) = binaer_ergebnis(op, l, r) {
+            // Zwei Zahlen: trifft ZOI auf KOMMAZOI, wird mit KOMMAZOI gerechnet.
+            let zahl = |t: Typ| t == Typ::Zoi || t == Typ::Kommazoi;
+            if zahl(l) && zahl(r) && (l == Typ::Kommazoi || r == Typ::Kommazoi) {
+                self.anpassen(links, Typ::Kommazoi);
+                self.anpassen(rechts, Typ::Kommazoi);
             }
-            BinaerOp::Und | BinaerOp::Oda => (l == Typ::Jona && r == Typ::Jona).then_some(Typ::Jona),
-        };
-        if let Some(typ) = ergebnis {
             return typ;
         }
 
@@ -546,11 +923,20 @@ impl Pruefer<'_> {
     /// Prüft den Aufruf einer eingebauten Funktion und sucht die passende Fassung.
     fn eingebaut(&mut self, funktion: Eingebaut, argumente: &mut [Ausdruck], pos: Position) -> Typ {
         let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
-        let alle = fassungen(funktion);
         if typen.contains(&Typ::Fehler) {
             return Typ::Fehler;
         }
         let name = self.wort(wort_von(funktion)).to_string();
+        // Die Funktionen für Listen: Ihr Typ hängt davon ab, was in der Liste ist.
+        match funktion {
+            Eingebaut::Dazu | Eingebaut::Raus => return self.listen_funktion(funktion, &name, argumente, &typen, pos),
+            Eingebaut::Laenge if typen.len() == 1 && matches!(typen[0], Typ::Liste(_) | Typ::LeereListe) => {
+                self.fertig_verlangt(&argumente[0]);
+                return Typ::Zoi;
+            }
+            _ => {}
+        }
+        let alle = fassungen(funktion);
         let passt = |von: Typ, ziel: Typ| von == ziel || (von == Typ::Zoi && ziel == Typ::Kommazoi);
 
         let mit_anzahl: Vec<&(&[Typ], Typ)> = alle.iter().filter(|(p, _)| p.len() == typen.len()).collect();
@@ -600,6 +986,54 @@ impl Pruefer<'_> {
         *ergebnis
     }
 
+    /// `HAU EINE(liste, wert)` und `HAU AUSSE(liste, stelle)`.
+    fn listen_funktion(
+        &mut self,
+        funktion: Eingebaut,
+        name: &str,
+        argumente: &mut [Ausdruck],
+        typen: &[Typ],
+        pos: Position,
+    ) -> Typ {
+        if argumente.len() != 2 {
+            let meldung = format!("'{name}' wü 2 Werte hom, du gibst eam {}.", anzahl(argumente.len()));
+            self.melde(pos, meldung);
+            return Typ::Nix;
+        }
+        if !self.fertig_verlangt(&argumente[0]) {
+            return Typ::Nix;
+        }
+        let Some(element) = self.typen.element(typen[0]) else {
+            let meldung = format!(
+                "'{name}' wü ois 1. Wert a {}, du gibst eam {}.",
+                self.wort(Schluessel::List),
+                self.typ_name(typen[0])
+            );
+            self.melde(argumente[0].pos, meldung);
+            return Typ::Nix;
+        };
+        if funktion == Eingebaut::Dazu {
+            if !self.anpassen(&mut argumente[1], element) {
+                let meldung = format!(
+                    "In de {} ghört {} eine, du gibst oba {} her.",
+                    self.wort(Schluessel::List),
+                    self.typ_name(element),
+                    self.typ_name(typen[1])
+                );
+                self.melde(argumente[1].pos, meldung);
+            }
+        } else if typen[1] != Typ::Zoi {
+            let meldung = format!(
+                "De Stö in ana {} muass {} sei, des do is oba {}.",
+                self.wort(Schluessel::List),
+                self.typ_name(Typ::Zoi),
+                self.typ_name(typen[1])
+            );
+            self.melde(argumente[1].pos, meldung);
+        }
+        Typ::Nix
+    }
+
     fn aufruf(&mut self, name: &str, argumente: &mut [Ausdruck], typen: &[Typ], pos: Position) -> Typ {
         let Some(signatur) = self.signaturen.get(name) else {
             let meldung = match self.wb.festes_wort(name) {
@@ -640,6 +1074,26 @@ fn anzahl(n: usize) -> String {
         0 => "kan Wert".to_string(),
         1 => "an Wert".to_string(),
         n => format!("{n} Werte"),
+    }
+}
+
+/// Kann man dem Ausdruck etwas zuweisen? Das geht bei einer Variable, bei
+/// einem Feld von so etwas und bei jeder Stelle in einer Liste.
+fn ist_ziel(ausdruck: &Ausdruck) -> bool {
+    match &ausdruck.art {
+        AusdruckArt::Variable { .. } | AusdruckArt::Stelle { .. } => true,
+        AusdruckArt::Feld { objekt, .. } => ist_ziel(objekt),
+        _ => false,
+    }
+}
+
+/// Wie das Ziel einer Zuweisung in einer Meldung heißt: `x`, `p.x`, `liste[...]`.
+fn ziel_text(ausdruck: &Ausdruck) -> String {
+    match &ausdruck.art {
+        AusdruckArt::Variable { name, .. } => name.clone(),
+        AusdruckArt::Feld { objekt, name, .. } => format!("{}.{name}", ziel_text(objekt)),
+        AusdruckArt::Stelle { liste, .. } => format!("{}[...]", ziel_text(liste)),
+        _ => "des".to_string(),
     }
 }
 
@@ -727,7 +1181,8 @@ mod tests {
         let programm = ok("SOG AU a = 1 OIDA SOG AU b = a OIDA b = a + b OIDA");
         let AnweisungArt::Deklaration { id: a, .. } = programm.haupt[0].art else { panic!() };
         let AnweisungArt::Deklaration { id: b, .. } = programm.haupt[1].art else { panic!() };
-        let AnweisungArt::Zuweisung { id: ziel, .. } = programm.haupt[2].art else { panic!() };
+        let AnweisungArt::Zuweisung { ziel, .. } = &programm.haupt[2].art else { panic!() };
+        let AusdruckArt::Variable { id: ziel, .. } = ziel.art else { panic!() };
         assert_ne!(a, b);
         assert_eq!(ziel, b);
     }
@@ -920,5 +1375,161 @@ mod tests {
     fn englisches_wort_als_funktion() {
         let f = fehler("PRINT(1) OIDA");
         assert_eq!(f.meldung, "Des haaßt SCHREIB, ned PRINT!");
+    }
+
+    // ------------------------------------------------ Strukturen und Listen
+
+    const PUNKT: &str = "STRUKTUR Punkt\n x KOMMAZOI\n y KOMMAZOI\nPASST SCHO\n";
+
+    #[test]
+    fn struktur_bauen_und_felder_lesen() {
+        let programm = ok(&format!("{PUNKT}SOG AU p = Punkt(1, 2.5) OIDA\nSOG AU summe = p.x + p.y OIDA"));
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[0].art else { panic!() };
+        assert_eq!(wert.typ, Typ::Struktur(0));
+        // Aus dem Aufruf ist ein Bau geworden, und die 1 eine KOMMAZOI.
+        let AusdruckArt::Bau { struktur: 0, argumente } = &wert.art else { panic!("{:?}", wert.art) };
+        assert!(matches!(argumente[0].art, AusdruckArt::Umwandlung { ziel: Typ::Kommazoi, .. }));
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[1].art else { panic!() };
+        assert_eq!(wert.typ, Typ::Kommazoi);
+        let AusdruckArt::Binaer { rechts, .. } = &wert.art else { panic!() };
+        assert!(matches!(rechts.art, AusdruckArt::Feld { nummer: 1, .. }));
+        assert_eq!(programm.typen.strukturen[0].name, "Punkt");
+    }
+
+    #[test]
+    fn struktur_darf_weiter_unten_stehen_und_andere_enthalten() {
+        ok("SOG AU g = Gegner(Punkt(0, 0), \"Hansi\") OIDA\nSCHREIB(g.pos.x, g.name) OIDA\n\
+            STRUKTUR Gegner\n pos Punkt\n name KETTN\nPASST SCHO\nSTRUKTUR Punkt\n x KOMMAZOI\n y KOMMAZOI\nPASST SCHO");
+    }
+
+    #[test]
+    fn struktur_falsch_gebaut() {
+        let f = fehler(&format!("{PUNKT}SOG AU p = Punkt(1) OIDA"));
+        assert_eq!(f.meldung, "'Punkt' hot 2 Föda, du gibst eam an Wert.");
+        let f = fehler(&format!("{PUNKT}SOG AU p = Punkt(1, \"zwa\") OIDA"));
+        assert_eq!(f.meldung, "'Punkt' wü fia des Föd 'y' a KOMMAZOI, du gibst eam a KETTN.");
+    }
+
+    #[test]
+    fn felder_die_es_nicht_gibt() {
+        let f = fehler(&format!("{PUNKT}SOG AU p = Punkt(1, 2) OIDA\nSCHREIB(p.z) OIDA"));
+        assert_eq!(f.meldung, "A Föd 'z' gibt's in 'Punkt' ned. Es gibt: x, y.");
+        assert_eq!(f.pos, Position::neu(6, 11));
+        let f = fehler("SOG AU n = 5 OIDA\nSCHREIB(n.x) OIDA");
+        assert_eq!(f.meldung, "A ZOI hot kane Föda.");
+    }
+
+    #[test]
+    fn strukturen_mit_fehlern() {
+        let f = fehler("STRUKTUR A\n x ZOI\n x ZOI\nPASST SCHO");
+        assert_eq!(f.meldung, "Des Föd 'x' gibt's in 'A' scho.");
+        let f = fehler("STRUKTUR A\nPASST SCHO\nSTRUKTUR A\nPASST SCHO");
+        assert_eq!(f.meldung, "De STRUKTUR 'A' gibt's scho. Zwamoi geht ned.");
+        let f = fehler("STRUKTUR A\n b Gibtsned\nPASST SCHO");
+        assert_eq!(f.meldung, "An Typ 'Gibtsned' kenn i ned. Gibt's a STRUKTUR mit dem Nom?");
+        let f = fehler("STRUKTUR A\nPASST SCHO\nFUNKTIAUN A()\nPASST SCHO");
+        assert_eq!(f.meldung, "'A' gibt's scho ois STRUKTUR, des kaun ned a no a FUNKTIAUN sei.");
+    }
+
+    #[test]
+    fn struktur_die_sich_selbst_enthaelt() {
+        let f = fehler("STRUKTUR Knoten\n wert ZOI\n naechster Knoten\nPASST SCHO");
+        assert!(f.meldung.contains("kaun si ned söwa enthoitn"), "{}", f.meldung);
+        assert_eq!(f.pos, Position::neu(3, 2));
+        // Im Kreis über eine zweite Struktur: Die erste Stelle wird gemeldet, damit ist der Kreis offen.
+        let f = fehler("STRUKTUR A\n b B\nPASST SCHO\nSTRUKTUR B\n a A\nPASST SCHO");
+        assert!(f.meldung.contains("'A' kaun si ned söwa enthoitn"), "{}", f.meldung);
+        // Über eine Liste geht es: Die Liste liegt woanders.
+        ok("STRUKTUR Knoten\n wert ZOI\n kinder LISTN VON Knoten\nPASST SCHO\nSOG AU k = Knoten(1, []) OIDA");
+    }
+
+    #[test]
+    fn zuweisung_an_felder() {
+        ok(&format!("{PUNKT}SOG AU p = Punkt(1, 2) OIDA\np.x = 5 OIDA\np.y += 0.5 OIDA\np = Punkt(0, 0) OIDA"));
+        let f = fehler(&format!("{PUNKT}SOG AU p = Punkt(1, 2) OIDA\np.x = \"links\" OIDA"));
+        assert_eq!(f.meldung, "'p.x' is a KOMMAZOI, do kaunst ka KETTN einetuan.");
+        let f = fehler(&format!("{PUNKT}Punkt(1, 2).x = 5 OIDA"));
+        assert!(f.meldung.starts_with("Do kaun ma nix zuaweisn."), "{}", f.meldung);
+        let f = fehler("SOG AU s = \"a\" OIDA\ns -= \"b\" OIDA");
+        assert_eq!(f.meldung, "A KETTN -= a KETTN? Des geht si ned aus.");
+    }
+
+    #[test]
+    fn listen_werden_erkannt() {
+        let programm = ok("SOG AU a = [1, 2, 3] OIDA\nSOG AU b = [1, 2.5] OIDA\nSOG AU c = [[\"x\"], []] OIDA\n\
+                           SOG AU d = a[0] + LÄNGN(a) OIDA\nSOG AU e = c[0][0] OIDA");
+        let typ = |n: usize| match &programm.haupt[n].art {
+            AnweisungArt::Deklaration { wert, .. } => wert.typ,
+            _ => unreachable!(),
+        };
+        let t = &programm.typen;
+        assert_eq!(t.element(typ(0)), Some(Typ::Zoi));
+        assert_eq!(t.element(typ(1)), Some(Typ::Kommazoi));
+        assert_eq!(t.element(t.element(typ(2)).unwrap()), Some(Typ::Kettn));
+        assert_eq!(typ(3), Typ::Zoi);
+        assert_eq!(typ(4), Typ::Kettn);
+    }
+
+    #[test]
+    fn leere_liste_braucht_einen_typ() {
+        ok("SOG AU a LISTN VON ZOI = [] OIDA\nHAU EINE(a, 5) OIDA\na = [] OIDA");
+        ok("FUNKTIAUN f(xs LISTN VON KOMMAZOI) GIBT ZRUCK LISTN VON KETTN\n GIB ZRUCK [] OIDA\nPASST SCHO\nSOG AU r = f([]) OIDA\nSOG AU s = f([1, 2]) OIDA");
+        let f = fehler("SOG AU a = [] OIDA");
+        assert!(f.meldung.starts_with("Bei [] waaß i ned, wos fia a LISTN des sei soll."), "{}", f.meldung);
+        let f = fehler("SCHREIB(LÄNGN([])) OIDA");
+        assert!(f.meldung.starts_with("Bei [] waaß i ned"), "{}", f.meldung);
+    }
+
+    #[test]
+    fn listen_mit_fehlern() {
+        let f = fehler("SOG AU a = [1, \"zwa\"] OIDA");
+        assert_eq!(f.meldung, "In ana LISTN muass ollas vom gleichn Typ sei: do steht a KETTN, davua oba a ZOI.");
+        let f = fehler("SOG AU a = [1, 2] OIDA\nSOG AU b = a[\"null\"] OIDA");
+        assert_eq!(f.meldung, "De Stö in ana LISTN muass a ZOI sei, des do is oba a KETTN.");
+        let f = fehler("SOG AU s = \"abc\" OIDA\nSOG AU b = s[0] OIDA");
+        assert_eq!(f.meldung, "Mit [...] kummt ma nur in a LISTN eine, des do is oba a KETTN. Fia Texte gibt's STICKL.");
+        let f = fehler("SOG AU a = [1, 2] OIDA\na[0] = \"x\" OIDA");
+        assert_eq!(f.meldung, "'a[...]' is a ZOI, do kaunst ka KETTN einetuan.");
+        let f = fehler("SOG AU a LISTN VON ZOI = [1.5] OIDA");
+        assert_eq!(f.meldung, "'a' soll a LISTN VON ZOI sei, oba des do is a LISTN VON KOMMAZOI.");
+    }
+
+    #[test]
+    fn listen_funktionen() {
+        ok("SOG AU a = [1.5] OIDA\nHAU EINE(a, 2) OIDA\nDAZUA(a, 3.5) OIDA\nHAU AUSSE(a, 0) OIDA");
+        let f = fehler("SOG AU a = [1] OIDA\nHAU EINE(a, \"zwa\") OIDA");
+        assert_eq!(f.meldung, "In de LISTN ghört a ZOI eine, du gibst oba a KETTN her.");
+        let f = fehler("HAU EINE(5, 1) OIDA");
+        assert_eq!(f.meldung, "'HAU EINE' wü ois 1. Wert a LISTN, du gibst eam a ZOI.");
+        let f = fehler("SOG AU a = [1] OIDA\nHAU AUSSE(a, 0.5) OIDA");
+        assert_eq!(f.meldung, "De Stö in ana LISTN muass a ZOI sei, des do is oba a KOMMAZOI.");
+        let f = fehler("SOG AU a = [1] OIDA\nHAU AUSSE(a) OIDA");
+        assert_eq!(f.meldung, "'HAU AUSSE' wü 2 Werte hom, du gibst eam an Wert.");
+    }
+
+    #[test]
+    fn fia_jede() {
+        let programm = ok(&format!(
+            "{PUNKT}SOG AU ps = [Punkt(1, 2)] OIDA\nFIA JEDE p IN ps TUA\n SCHREIB(p.x) OIDA\nPASST SCHO"
+        ));
+        let AnweisungArt::FiaJede { id, rumpf, .. } = &programm.haupt[1].art else { panic!() };
+        let AnweisungArt::Schreib { argumente } = &rumpf[0].art else { panic!() };
+        let AusdruckArt::Feld { objekt, .. } = &argumente[0].art else { panic!() };
+        assert!(matches!(objekt.art, AusdruckArt::Variable { id: innen, .. } if innen == *id));
+        assert_eq!(objekt.typ, Typ::Struktur(0));
+
+        let f = fehler("FIA JEDE x IN 5 TUA PASST SCHO");
+        assert_eq!(f.meldung, "FIA JEDE geht nur mit ana LISTN, des do is oba a ZOI.");
+        let f = fehler("FIA JEDE x IN [1] TUA PASST SCHO\nSCHREIB(x) OIDA");
+        assert!(f.meldung.contains("'x' kenn i ned"), "{}", f.meldung);
+        ok("FIA JEDE x IN [1, 2] TUA WENN x = 1 DAUN WEIDA OIDA PASST SCHO HAU OB OIDA PASST SCHO");
+    }
+
+    #[test]
+    fn strukturen_und_listen_kann_man_nicht_vergleichen() {
+        let f = fehler(&format!("{PUNKT}SOG AU a = Punkt(1, 2) = Punkt(1, 2) OIDA"));
+        assert_eq!(f.meldung, "A Punkt == a Punkt? Des geht si ned aus.");
+        let f = fehler("SOG AU a = [1] = [1] OIDA");
+        assert_eq!(f.meldung, "A LISTN VON ZOI == a LISTN VON ZOI? Des geht si ned aus.");
     }
 }

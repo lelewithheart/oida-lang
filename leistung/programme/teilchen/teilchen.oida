@@ -1,0 +1,32 @@
+# Hunderttausend Teilchen in einer Liste, 300 Runden lang bewegt. Misst Listen von Strukturen.
+
+STRUKTUR Teilchen
+    x KOMMAZOI
+    y KOMMAZOI
+    vx KOMMAZOI
+    vy KOMMAZOI
+PASST SCHO
+
+SOG AU alle LISTN VON Teilchen = [] OIDA
+FIA i VON 0 BIS 99999 TUA
+    HAU EINE(alle, Teilchen(i * 37 % 1000, i * 91 % 1000, i % 7 - 3, i % 5 - 2)) OIDA
+PASST SCHO
+
+FIA runde VON 1 BIS 300 TUA
+    FIA i VON 0 BIS LÄNGN(alle) - 1 TUA
+        alle[i].x += alle[i].vx * 0.5 OIDA
+        alle[i].y += alle[i].vy * 0.5 OIDA
+        WENN alle[i].x < 0 ODA alle[i].x > 1000 DAUN
+            alle[i].vx = -alle[i].vx OIDA
+        PASST SCHO
+        WENN alle[i].y < 0 ODA alle[i].y > 1000 DAUN
+            alle[i].vy = -alle[i].vy OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+SOG AU summe = 0.0 OIDA
+FIA JEDE t IN alle TUA
+    summe += t.x + t.y OIDA
+PASST SCHO
+SCHREIB(ZOI(summe)) OIDA

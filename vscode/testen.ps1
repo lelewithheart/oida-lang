@@ -23,6 +23,10 @@ $orte = @(
 )
 $vscode = $orte | Where-Object { Test-Path (Join-Path $_ 'Code.exe') } | Select-Object -First 1
 if (-not $vscode) { throw 'VS Code nicht gefunden. Installieren mit: winget install Microsoft.VisualStudioCode' }
+# Waehrend VS Code sich selbst aktualisiert, laesst es sich nicht ein zweites Mal starten.
+if (Test-Path (Join-Path $vscode 'updating_version')) {
+    throw 'VS Code wird gerade aktualisiert. Alle VS-Code-Fenster schliessen, VS Code einmal neu starten und dann nochmal testen.'
+}
 if (-not (Test-Path (Join-Path $wurzel 'target\release\oida.exe')) -and -not (Test-Path (Join-Path $wurzel 'target\debug\oida.exe'))) {
     throw 'Der Compiler ist noch nicht gebaut. Zuerst: cargo build --release'
 }

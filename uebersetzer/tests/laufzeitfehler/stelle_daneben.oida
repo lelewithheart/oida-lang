@@ -1,0 +1,4 @@
+SOG AU zahlen = [10, 20, 30] OIDA
+SCHREIB(zahlen[2]) OIDA
+SOG AU i = 3 OIDA
+SCHREIB(zahlen[i]) OIDA

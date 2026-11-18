@@ -1,0 +1,151 @@
+# Listen: wachsen, schrumpfen, Elemente lesen und ändern, durchgehen.
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+STRUKTUR Gegner
+    name KETTN
+    pos Punkt
+    beute LISTN VON KETTN
+PASST SCHO
+
+# Zahlen
+SOG AU zahlen = [3, 1, 4] OIDA
+HAU EINE(zahlen, 1) OIDA
+DAZUA(zahlen, 5) OIDA
+SCHREIB(zahlen, LÄNGN(zahlen), zahlen[0], zahlen[LÄNGN(zahlen) - 1]) OIDA
+zahlen[1] = 100 OIDA
+zahlen[2] += 6 OIDA
+HAU AUSSE(zahlen, 0) OIDA
+SCHREIB(zahlen) OIDA
+
+SOG AU summe = 0 OIDA
+FIA JEDE z IN zahlen TUA
+    summe += z OIDA
+PASST SCHO
+SCHREIB("Summe:", summe) OIDA
+
+# Leere Listen brauchen den Typ dazu
+SOG AU leer LISTN VON KOMMAZOI = [] OIDA
+SCHREIB(leer, LÄNGN(leer)) OIDA
+FIA i VON 1 BIS 20 TUA
+    HAU EINE(leer, i / 2.0) OIDA
+PASST SCHO
+SCHREIB(LÄNGN(leer), leer[0], leer[19]) OIDA
+SOG AU komma LISTN VON KOMMAZOI = [1, 2] OIDA
+SCHREIB(komma, [WOAHR, FOISCH]) OIDA
+
+# Zwei Variablen, eine Liste: Beide sehen die Änderung
+SOG AU a = [1, 2] OIDA
+SOG AU b = a OIDA
+HAU EINE(b, 3) OIDA
+SCHREIB(a, b) OIDA
+b = [9] OIDA
+SCHREIB(a, b) OIDA
+
+# Texte in Listen
+SOG AU namen = ["Resi", "Franz"] OIDA
+HAU EINE(namen, "Schurli" + "!") OIDA
+namen[0] += " Huber" OIDA
+SOG AU erste = namen[0] OIDA
+HAU AUSSE(namen, 0) OIDA
+SCHREIB(erste, namen, LÄNGN(namen[1])) OIDA
+FIA JEDE n IN namen TUA
+    SOG AU laut = SCHREI(n) OIDA
+    WENN n = "Franz" DAUN
+        WEIDA OIDA
+    PASST SCHO
+    SCHREIB(laut) OIDA
+PASST SCHO
+
+# Strukturen in Listen liegen direkt drin; ändern geht über die Stelle
+SOG AU punkte = [Punkt(1, 2), Punkt(3, 4)] OIDA
+punkte[0].x = 10 OIDA
+punkte[1].y += 5 OIDA
+HAU EINE(punkte, Punkt(punkte[0].x + 1, 0)) OIDA
+SCHREIB(punkte, punkte[2].x) OIDA
+# Das Element in FIA JEDE ist eine Kopie: Die Liste bleibt, wie sie ist
+FIA JEDE p IN punkte TUA
+    p.x = 0 OIDA
+PASST SCHO
+SCHREIB(punkte[0]) OIDA
+SOG AU kopie = punkte[1] OIDA
+kopie.x = -3 OIDA
+SCHREIB(kopie, punkte[1]) OIDA
+
+# Listen in Listen
+SOG AU gitter = [[1, 2], [3]] OIDA
+HAU EINE(gitter[1], 4) OIDA
+HAU EINE(gitter, []) OIDA
+gitter[0][1] = 20 OIDA
+SCHREIB(gitter, LÄNGN(gitter), LÄNGN(gitter[2]), gitter[1][1]) OIDA
+
+# Listen und Texte in Strukturen, Strukturen in Listen
+SOG AU horde = [Gegner("Hansi", Punkt(0, 0), ["Goid"]), Gegner("Zwerg", Punkt(5, 5), [])] OIDA
+HAU EINE(horde[1].beute, "Schwert") OIDA
+HAU EINE(horde[0].beute, "Trank") OIDA
+horde[0].name += " der Grausliche" OIDA
+horde[1].pos.x -= 1 OIDA
+SCHREIB(horde) OIDA
+SOG AU hansi = horde[0] OIDA
+hansi.name = "nur a Kopie" OIDA
+HAU EINE(hansi.beute, "g'meinsam") OIDA
+SCHREIB(horde[0].name, horde[0].beute) OIDA
+HAU AUSSE(horde, 0) OIDA
+SCHREIB(LÄNGN(horde), horde[0].name, hansi.beute) OIDA
+
+# Listen in Funktionen: Die Funktion bekommt dieselbe Liste
+FUNKTIAUN verdoppeln(liste LISTN VON ZOI)
+    FIA i VON 0 BIS LÄNGN(liste) - 1 TUA
+        liste[i] *= 2 OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN gerade_bis(n ZOI) GIBT ZRUCK LISTN VON ZOI
+    SOG AU aus LISTN VON ZOI = [] OIDA
+    FIA i VON 0 BIS n SCHRITT 2 TUA
+        HAU EINE(aus, i) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+FUNKTIAUN erster_langer(woerter LISTN VON KETTN, ab ZOI) GIBT ZRUCK KETTN
+    FIA JEDE w IN woerter TUA
+        WENN LÄNGN(w) >= ab DAUN
+            GIB ZRUCK w OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK "kans" OIDA
+PASST SCHO
+
+SOG AU g = gerade_bis(8) OIDA
+verdoppeln(g) OIDA
+SCHREIB(g, gerade_bis(4)[1], LÄNGN(gerade_bis(100))) OIDA
+SCHREIB(erster_langer(["a", "bcd", "efgh"], 3), erster_langer([], 1), erster_langer(namen, 99)) OIDA
+verdoppeln([1, 2]) OIDA
+gerade_bis(6) OIDA
+
+# Die Liste darf sich in der Schleife ändern
+SOG AU wachsend = [1] OIDA
+FIA JEDE w IN wachsend TUA
+    WENN w < 4 DAUN
+        HAU EINE(wachsend, w + 1) OIDA
+    PASST SCHO
+PASST SCHO
+SOG AU schrumpfend = [1, 2, 3, 4] OIDA
+FIA JEDE s IN schrumpfend TUA
+    HAU AUSSE(schrumpfend, LÄNGN(schrumpfend) - 1) OIDA
+PASST SCHO
+SCHREIB(wachsend, schrumpfend) OIDA
+
+# Die Schleife behält ihre Liste, auch wenn die Variable eine neue bekommt
+SOG AU alt = ["x", "y"] OIDA
+FIA JEDE e IN alt TUA
+    alt = ["neu"] OIDA
+    SCHREIB(e, alt) OIDA
+    WENN e = "y" DAUN
+        HAU OB OIDA
+    PASST SCHO
+PASST SCHO

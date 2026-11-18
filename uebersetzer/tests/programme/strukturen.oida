@@ -1,0 +1,89 @@
+# Strukturen: Werte, die direkt in der Variable liegen. Zuweisen heißt kopieren.
+
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+
+STRUKTUR Gegner
+    name KETTN
+    pos Punkt
+    lebn ZOI
+    boss JONA
+PASST SCHO
+
+STRUKTUR Leer
+PASST SCHO
+
+SOG AU p = Punkt(1, 2.5) OIDA
+SCHREIB(p.x, p.y, p) OIDA
+
+# Felder ändern
+p.x = 10 OIDA
+p.y += 0.5 OIDA
+p.y *= 2 OIDA
+SCHREIB(p) OIDA
+
+# Eine Kopie ist unabhängig vom Original
+SOG AU q = p OIDA
+q.x = -1 OIDA
+SCHREIB(p.x, q.x) OIDA
+
+# Strukturen in Strukturen, mit Text
+SOG AU g = Gegner("Hansi", Punkt(3, 4), 100, FOISCH) OIDA
+g.pos.x += 1.5 OIDA
+g.name += " der Grausliche" OIDA
+g.lebn -= 30 OIDA
+g.boss = NED g.boss OIDA
+SCHREIB(g) OIDA
+SCHREIB(g.name, g.pos.x, g.pos.y, g.lebn, g.boss) OIDA
+
+# Auch die Kopie einer Struktur mit Text ist unabhängig
+SOG AU h = g OIDA
+h.name = "Franz" OIDA
+h.pos = Punkt(0, 0) OIDA
+SCHREIB(g.name, g.pos, h.name, h.pos) OIDA
+
+# Strukturen in Funktionen hinein und heraus: immer als Kopie
+FUNKTIAUN abstand(a Punkt, b Punkt) GIBT ZRUCK KOMMAZOI
+    SOG AU dx = a.x - b.x OIDA
+    SOG AU dy = a.y - b.y OIDA
+    GIB ZRUCK WURZL(dx * dx + dy * dy) OIDA
+PASST SCHO
+
+FUNKTIAUN verschoben(p Punkt, dx KOMMAZOI) GIBT ZRUCK Punkt
+    p.x += dx OIDA
+    GIB ZRUCK p OIDA
+PASST SCHO
+
+FUNKTIAUN treffer(opfer Gegner, schaden ZOI) GIBT ZRUCK Gegner
+    opfer.lebn -= schaden OIDA
+    WENN opfer.lebn <= 0 DAUN
+        opfer.name += " (hin)" OIDA
+    PASST SCHO
+    GIB ZRUCK opfer OIDA
+PASST SCHO
+
+SOG AU ursprung = Punkt(0, 0) OIDA
+SCHREIB(abstand(ursprung, Punkt(3, 4))) OIDA
+SCHREIB(verschoben(ursprung, 5), ursprung) OIDA
+SCHREIB(verschoben(Punkt(1, 1), 1).x) OIDA
+g = treffer(g, 50) OIDA
+SCHREIB(g.name, g.lebn) OIDA
+g = treffer(g, 50) OIDA
+SCHREIB(g.name, g.lebn) OIDA
+SCHREIB(treffer(Gegner("Zwerg", Punkt(0, 0), 1, WOAHR), 5).name) OIDA
+treffer(g, 1) OIDA
+
+# Eine Struktur ohne Felder
+SOG AU nix = Leer() OIDA
+SCHREIB(nix) OIDA
+
+# Strukturen in Blöcken und Schleifen
+FIA i VON 1 BIS 3 TUA
+    SOG AU neu = Gegner("Nr. " + KETTN(i), Punkt(i, i * i), i * 10, i = 2) OIDA
+    WENN neu.boss DAUN
+        WEIDA OIDA
+    PASST SCHO
+    SCHREIB(neu.name, neu.pos.y) OIDA
+PASST SCHO

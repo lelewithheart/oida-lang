@@ -3,17 +3,19 @@
 //! Grammatik (grob):
 //!
 //! ```text
-//! programm   = { funktion | anweisung }
+//! programm   = { struktur | funktion | anweisung }
+//! struktur   = STRUKTUR name { name typ [ OIDA ] } PASST SCHO [ OIDA ]
 //! funktion   = FUNKTIAUN name "(" [ name typ { "," name typ } ] ")" [ GIBT ZRUCK typ ]
 //!              { anweisung } PASST SCHO [ OIDA ]
+//! typ        = ZOI | KOMMAZOI | JONA | KETTN | name | LISTN VON typ
 //! anweisung  = SOG AU name [ typ ] "=" ausdruck OIDA
-//!            | name "=" ausdruck OIDA
+//!            | ziel ( "=" | "+=" | "-=" | "*=" | "/=" | "%=" ) ausdruck OIDA
 //!            | WENN ausdruck DAUN { anweisung } [ SUNST ( wenn | { anweisung } ) ] PASST SCHO [ OIDA ]
 //!            | SOLONG ausdruck TUA { anweisung } PASST SCHO [ OIDA ]
 //!            | FIA name VON ausdruck BIS ausdruck [ SCHRITT ausdruck ] TUA { anweisung } PASST SCHO [ OIDA ]
+//!            | FIA JEDE name IN ausdruck TUA { anweisung } PASST SCHO [ OIDA ]
 //!            | HAU OB OIDA
 //!            | WEIDA OIDA
-//!            | name ( "+=" | "-=" | "*=" | "/=" | "%=" ) ausdruck OIDA
 //!            | GIB ZRUCK [ ausdruck ] OIDA
 //!            | SCHREIB "(" [ ausdruck { "," ausdruck } ] ")" OIDA
 //!            | ausdruck OIDA
@@ -24,9 +26,12 @@
 //! summe      = produkt { ( "+" | "-" ) produkt }
 //! produkt    = unaer { ( "*" | "/" | "%" ) unaer }
 //! unaer      = "-" unaer | primaer
-//! primaer    = zahl | text | WOAHR | FOISCH | PI | name [ "(" argumente ")" ]
+//! primaer    = atom { "." name | "[" ausdruck "]" }
+//! atom       = zahl | text | WOAHR | FOISCH | PI | name [ "(" argumente ")" ]
 //!            | eingebaute_funktion "(" argumente ")"
-//!            | typ "(" ausdruck ")" | "(" ausdruck ")"
+//!            | ( ZOI | KOMMAZOI | JONA | KETTN ) "(" ausdruck ")"
+//!            | "[" [ ausdruck { "," ausdruck } ] "]" | "(" ausdruck ")"
+//! ziel       = name { "." name | "[" ausdruck "]" }
 //! ```
 
 use crate::ast::*;
@@ -96,6 +101,9 @@ impl Parser<'_> {
             TokenArt::Text(_) => "a Text".to_string(),
             TokenArt::KlammerAuf => "'('".to_string(),
             TokenArt::KlammerZu => "')'".to_string(),
+            TokenArt::EckigAuf => "'['".to_string(),
+            TokenArt::EckigZu => "']'".to_string(),
+            TokenArt::Punkt => "'.'".to_string(),
             TokenArt::Komma => "','".to_string(),
             TokenArt::Plus => "'+'".to_string(),
             TokenArt::Minus => "'-'".to_string(),
@@ -187,20 +195,31 @@ impl Parser<'_> {
         }
     }
 
-    fn typ(&mut self) -> Result<Typ, Fehler> {
-        match self.typ_hier() {
-            Some(typ) => {
-                self.weiter();
-                Ok(typ)
-            }
-            None => Err(self.unerwartet(&format!(
-                "a Typ ({}, {}, {} oda {})",
-                self.wort(Schluessel::Int),
-                self.wort(Schluessel::Float),
-                self.wort(Schluessel::Boolean),
-                self.wort(Schluessel::Text)
-            ))),
+    /// Ein Typ: einer der vier einfachen, der Name einer Struktur oder `LISTN VON <typ>`.
+    fn typ_angabe(&mut self) -> Result<TypAngabe, Fehler> {
+        if let Some(typ) = self.typ_hier() {
+            self.weiter();
+            return Ok(TypAngabe::Einfach(typ));
         }
+        if self.nimm(Schluessel::List) {
+            self.erwarte_schluessel(Schluessel::From)?;
+            return Ok(TypAngabe::Liste(Box::new(self.typ_angabe()?)));
+        }
+        let token = self.aktuell().clone();
+        if let TokenArt::Name(name) = token.art {
+            self.weiter();
+            return Ok(TypAngabe::Name { name, pos: token.pos });
+        }
+        Err(self.unerwartet(&format!(
+            "a Typ ({}, {}, {}, {}, {} {} ... oda a {})",
+            self.wort(Schluessel::Int),
+            self.wort(Schluessel::Float),
+            self.wort(Schluessel::Boolean),
+            self.wort(Schluessel::Text),
+            self.wort(Schluessel::List),
+            self.wort(Schluessel::From),
+            self.wort(Schluessel::Struct)
+        )))
     }
 
     // ---------------------------------------------------------- Programm
@@ -214,6 +233,10 @@ impl Parser<'_> {
                 TokenArt::Schluessel(Schluessel::Function) => {
                     let funktion = self.funktion()?;
                     programm.funktionen.push(funktion);
+                }
+                TokenArt::Schluessel(Schluessel::Struct) => {
+                    let struktur = self.struktur()?;
+                    programm.strukturen.push(struktur);
                 }
                 TokenArt::Schluessel(Schluessel::End) => {
                     return Err(Fehler::neu(
@@ -241,6 +264,22 @@ impl Parser<'_> {
         )
     }
 
+    fn struktur(&mut self) -> Result<StrukturDef, Fehler> {
+        let pos = self.weiter().pos; // STRUKTUR
+        let wofuer = format!("de {}", self.wort(Schluessel::Struct));
+        let (name, _) = self.name(&wofuer)?;
+        let mut felder = Vec::new();
+        while !self.ist(Schluessel::End) && self.aktuell().art != TokenArt::DateiEnde {
+            let (feld, feld_pos) = self.name("des Föd")?;
+            let angabe = self.typ_angabe()?;
+            // Ein OIDA hinter dem Feld darf sein, muss aber nicht.
+            self.nimm(Schluessel::Oida);
+            felder.push(FeldDef { name: feld, angabe, pos: feld_pos });
+        }
+        self.erwarte_end(pos, Schluessel::Struct)?;
+        Ok(StrukturDef { name, felder, pos })
+    }
+
     fn funktion(&mut self) -> Result<Funktion, Fehler> {
         let pos = self.weiter().pos; // FUNKTIAUN
         let wofuer = format!("de {}", self.wort(Schluessel::Function));
@@ -250,8 +289,9 @@ impl Parser<'_> {
         if self.aktuell().art != TokenArt::KlammerZu {
             loop {
                 let (pname, ppos) = self.name("den Parameter")?;
-                let typ = self.typ()?;
-                parameter.push(Parameter { name: pname, typ, pos: ppos, id: 0 });
+                let angabe = self.typ_angabe()?;
+                let typ = einfacher_typ(&angabe);
+                parameter.push(Parameter { name: pname, angabe, typ, pos: ppos, id: 0 });
                 if self.aktuell().art == TokenArt::Komma {
                     self.weiter();
                 } else {
@@ -260,10 +300,11 @@ impl Parser<'_> {
             }
         }
         self.erwarte(TokenArt::KlammerZu, "a ',' oda a ')'")?;
-        let rueckgabe = if self.nimm(Schluessel::Returns) { self.typ()? } else { Typ::Nix };
+        let rueckgabe_angabe = if self.nimm(Schluessel::Returns) { Some(self.typ_angabe()?) } else { None };
+        let rueckgabe = rueckgabe_angabe.as_ref().map_or(Typ::Nix, einfacher_typ);
         let rumpf = self.block()?;
         self.erwarte_end(pos, Schluessel::Function)?;
-        Ok(Funktion { name, parameter, rueckgabe, rumpf, pos })
+        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos })
     }
 
     /// Anweisungen bis PASST SCHO, SUNST oder zum Ende der Datei.
@@ -275,13 +316,10 @@ impl Parser<'_> {
                 TokenArt::DateiEnde
                 | TokenArt::Schluessel(Schluessel::End)
                 | TokenArt::Schluessel(Schluessel::Else) => return Ok(anweisungen),
-                TokenArt::Schluessel(Schluessel::Function) => {
+                TokenArt::Schluessel(wort @ (Schluessel::Function | Schluessel::Struct)) => {
                     return Err(Fehler::neu(
                         token.pos,
-                        format!(
-                            "A {} kaunst ned in wos aundas einebaun, de ghört gaunz noch außn.",
-                            self.wort(Schluessel::Function)
-                        ),
+                        format!("A {} kaunst ned in wos aundas einebaun, de ghört gaunz noch außn.", self.wort(wort)),
                     ));
                 }
                 _ => anweisungen.push(self.anweisung()?),
@@ -318,11 +356,16 @@ impl Parser<'_> {
             TokenArt::Schluessel(Schluessel::Declare) => {
                 self.weiter();
                 let (name, _) = self.name("de Variable")?;
-                let typ = if self.typ_hier().is_some() { Some(self.typ()?) } else { None };
+                // Steht vor dem = noch etwas, ist es der Typ.
+                let angabe = if self.aktuell().art != TokenArt::Gleich && self.kann_typ_anfangen() {
+                    Some(self.typ_angabe()?)
+                } else {
+                    None
+                };
                 self.erwarte(TokenArt::Gleich, "a '='")?;
                 let wert = self.ausdruck()?;
                 self.erwarte_oida()?;
-                AnweisungArt::Deklaration { name, typ, wert, id: 0 }
+                AnweisungArt::Deklaration { name, angabe, wert, id: 0 }
             }
             TokenArt::Schluessel(Schluessel::If) => {
                 self.weiter();
@@ -335,6 +378,17 @@ impl Parser<'_> {
                 let rumpf = self.block()?;
                 self.erwarte_end(pos, Schluessel::While)?;
                 AnweisungArt::Solong { bedingung, rumpf }
+            }
+            TokenArt::Schluessel(Schluessel::For) if *self.naechstes() == TokenArt::Schluessel(Schluessel::Each) => {
+                self.weiter();
+                self.weiter();
+                let (name, _) = self.name("des Element")?;
+                self.erwarte_schluessel(Schluessel::In)?;
+                let liste = self.ausdruck()?;
+                self.erwarte_schluessel(Schluessel::Do)?;
+                let rumpf = self.block()?;
+                self.erwarte_end(pos, Schluessel::For)?;
+                AnweisungArt::FiaJede { name, id: 0, liste, rumpf }
             }
             TokenArt::Schluessel(Schluessel::For) => {
                 self.weiter();
@@ -372,24 +426,25 @@ impl Parser<'_> {
                 self.erwarte_oida()?;
                 AnweisungArt::Schreib { argumente }
             }
-            TokenArt::Name(name) if *self.naechstes() == TokenArt::Gleich => {
-                self.weiter();
-                self.weiter();
-                let wert = self.ausdruck()?;
-                self.erwarte_oida()?;
-                AnweisungArt::Zuweisung { name, wert, id: 0 }
-            }
-            TokenArt::Name(name) if rechen_zuweisung(self.naechstes()).is_some() => {
-                // x += 1 heißt x = x + 1
-                let op = rechen_zuweisung(self.naechstes()).unwrap();
-                self.weiter();
-                let op_pos = self.weiter().pos;
-                let rechts = self.ausdruck()?;
-                self.erwarte_oida()?;
-                let links = Ausdruck::neu(AusdruckArt::Variable { name: name.clone(), id: 0 }, pos);
-                AnweisungArt::Zuweisung { name, wert: binaer(op, links, rechts, op_pos), id: 0 }
-            }
             _ => {
+                // Zuweisung? Dann steht vorne ein Ziel (x, p.x, liste[i]) und danach = oder +=.
+                if matches!(token.art, TokenArt::Name(_)) {
+                    let anfang = self.i;
+                    if let Ok(ziel) = self.primaer() {
+                        let op = match &self.aktuell().art {
+                            TokenArt::Gleich => Some(None),
+                            anderes => rechen_zuweisung(anderes).map(Some),
+                        };
+                        if let Some(op) = op {
+                            self.weiter();
+                            let wert = self.ausdruck()?;
+                            self.erwarte_oida()?;
+                            return Ok(Anweisung { art: AnweisungArt::Zuweisung { ziel, op, wert }, pos });
+                        }
+                    }
+                    // Doch keine Zuweisung: von vorne als Ausdruck lesen.
+                    self.i = anfang;
+                }
                 // "IF x > 3 THEN": gleich sagen, wie es richtig heißt.
                 if *self.naechstes() != TokenArt::KlammerAuf {
                     if let Some(fehler) = self.englisch() {
@@ -454,6 +509,10 @@ impl Parser<'_> {
 
     // --------------------------------------------------------- Ausdrücke
 
+    fn kann_typ_anfangen(&self) -> bool {
+        self.typ_hier().is_some() || self.ist(Schluessel::List) || matches!(self.aktuell().art, TokenArt::Name(_))
+    }
+
     fn kann_ausdruck_anfangen(&self) -> bool {
         match &self.aktuell().art {
             TokenArt::Name(_)
@@ -461,6 +520,7 @@ impl Parser<'_> {
             | TokenArt::Kommazoi(_)
             | TokenArt::Text(_)
             | TokenArt::KlammerAuf
+            | TokenArt::EckigAuf
             | TokenArt::Minus => true,
             TokenArt::Schluessel(s) => {
                 matches!(s, Schluessel::True | Schluessel::False | Schluessel::Not | Schluessel::Pi)
@@ -567,7 +627,31 @@ impl Parser<'_> {
         self.primaer()
     }
 
+    /// Ein Wert und was direkt daran hängt: Felder (`.x`) und Stellen (`[i]`).
     fn primaer(&mut self) -> Result<Ausdruck, Fehler> {
+        let mut ausdruck = self.atom()?;
+        loop {
+            match self.aktuell().art {
+                TokenArt::Punkt => {
+                    self.weiter();
+                    let (name, pos) = self.name("des Föd")?;
+                    ausdruck = Ausdruck::neu(AusdruckArt::Feld { objekt: Box::new(ausdruck), name, nummer: 0 }, pos);
+                }
+                TokenArt::EckigAuf => {
+                    let pos = self.weiter().pos;
+                    let index = self.ausdruck()?;
+                    self.erwarte(TokenArt::EckigZu, "a ']'")?;
+                    ausdruck = Ausdruck::neu(
+                        AusdruckArt::Stelle { liste: Box::new(ausdruck), index: Box::new(index) },
+                        pos,
+                    );
+                }
+                _ => return Ok(ausdruck),
+            }
+        }
+    }
+
+    fn atom(&mut self) -> Result<Ausdruck, Fehler> {
         let token = self.aktuell().clone();
         let pos = token.pos;
         let art = match token.art {
@@ -616,6 +700,23 @@ impl Parser<'_> {
                 self.erwarte(TokenArt::KlammerZu, "a ')'")?;
                 return Ok(innen);
             }
+            TokenArt::EckigAuf => {
+                // [a, b, c]: eine neue Liste
+                self.weiter();
+                let mut elemente = Vec::new();
+                if self.aktuell().art != TokenArt::EckigZu {
+                    loop {
+                        elemente.push(self.ausdruck()?);
+                        if self.aktuell().art == TokenArt::Komma {
+                            self.weiter();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                self.erwarte(TokenArt::EckigZu, "a ',' oda a ']'")?;
+                AusdruckArt::ListenWert { elemente }
+            }
             _ => {
                 if let Some(ziel) = self.typ_hier() {
                     // ZOI(x), KETTN(x) ...: Umwandlung
@@ -630,6 +731,15 @@ impl Parser<'_> {
             }
         };
         Ok(Ausdruck::neu(art, pos))
+    }
+}
+
+/// Bei den vier einfachen Typen steht der Typ schon beim Lesen fest. Strukturen
+/// und Listen löst erst die Typprüfung auf.
+fn einfacher_typ(angabe: &TypAngabe) -> Typ {
+    match angabe {
+        TypAngabe::Einfach(typ) => *typ,
+        _ => Typ::Nix,
     }
 }
 
@@ -670,6 +780,8 @@ fn eingebaut(schluessel: Schluessel) -> Option<Eingebaut> {
         Schluessel::Round => Eingebaut::Runden,
         Schluessel::Random => Eingebaut::Zufall,
         Schluessel::Seed => Eingebaut::Samen,
+        Schluessel::Add => Eingebaut::Dazu,
+        Schluessel::Remove => Eingebaut::Raus,
         _ => return None,
     })
 }
@@ -714,13 +826,19 @@ mod tests {
                 format!("{funktion:?}({})", argumente.iter().map(klammern).collect::<Vec<_>>().join(", "))
             }
             AusdruckArt::Umwandlung { ziel, innen } => format!("{ziel:?}({})", klammern(innen)),
+            AusdruckArt::Feld { objekt, name, .. } => format!("{}.{name}", klammern(objekt)),
+            AusdruckArt::Stelle { liste, index } => format!("{}[{}]", klammern(liste), klammern(index)),
+            AusdruckArt::ListenWert { elemente } => {
+                format!("[{}]", elemente.iter().map(klammern).collect::<Vec<_>>().join(", "))
+            }
+            AusdruckArt::Bau { .. } => unreachable!("entsteht erst in der Typprüfung"),
         }
     }
 
     fn ausdruck(quelltext: &str) -> String {
         let programm = parse(&format!("x = {quelltext} OIDA"));
         match &programm.haupt[0].art {
-            AnweisungArt::Zuweisung { wert, .. } => klammern(wert),
+            AnweisungArt::Zuweisung { wert, op: None, .. } => klammern(wert),
             anderes => panic!("keine Zuweisung: {anderes:?}"),
         }
     }
@@ -746,10 +864,11 @@ mod tests {
     #[test]
     fn deklaration_mit_und_ohne_typ() {
         let p = parse("SOG AU a = 1 OIDA SOG AU b KOMMAZOI = 2 OIDA");
-        assert!(matches!(&p.haupt[0].art, AnweisungArt::Deklaration { name, typ: None, .. } if name == "a"));
-        assert!(
-            matches!(&p.haupt[1].art, AnweisungArt::Deklaration { name, typ: Some(Typ::Kommazoi), .. } if name == "b")
-        );
+        assert!(matches!(&p.haupt[0].art, AnweisungArt::Deklaration { name, angabe: None, .. } if name == "a"));
+        assert!(matches!(
+            &p.haupt[1].art,
+            AnweisungArt::Deklaration { name, angabe: Some(TypAngabe::Einfach(Typ::Kommazoi)), .. } if name == "b"
+        ));
     }
 
     #[test]
@@ -769,7 +888,7 @@ mod tests {
     fn schleife() {
         let p = parse("SOLONG i < 10 TUA i = i + 1 OIDA PASST SCHO OIDA");
         let AnweisungArt::Solong { rumpf, .. } = &p.haupt[0].art else { panic!() };
-        assert!(matches!(&rumpf[0].art, AnweisungArt::Zuweisung { name, .. } if name == "i"));
+        assert!(matches!(&rumpf[0].art, AnweisungArt::Zuweisung { ziel, .. } if klammern(ziel) == "i"));
     }
 
     #[test]
@@ -797,11 +916,10 @@ mod tests {
     #[test]
     fn rechnen_und_zuweisen() {
         let p = parse("x += 2 * y OIDA x %= 3 OIDA");
-        let AnweisungArt::Zuweisung { name, wert, .. } = &p.haupt[0].art else { panic!() };
-        assert_eq!(name, "x");
-        assert_eq!(klammern(wert), "(x + (2 * y))");
-        let AnweisungArt::Zuweisung { wert, .. } = &p.haupt[1].art else { panic!() };
-        assert_eq!(klammern(wert), "(x % 3)");
+        let AnweisungArt::Zuweisung { ziel, op, wert } = &p.haupt[0].art else { panic!() };
+        assert_eq!((klammern(ziel), *op, klammern(wert)), ("x".to_string(), Some(BinaerOp::Plus), "(2 * y)".to_string()));
+        let AnweisungArt::Zuweisung { op, wert, .. } = &p.haupt[1].art else { panic!() };
+        assert_eq!((*op, klammern(wert)), (Some(BinaerOp::Rest), "3".to_string()));
     }
 
     #[test]
@@ -811,6 +929,67 @@ mod tests {
         assert_eq!(ausdruck("2 * PI"), format!("(2 * {:?})", std::f64::consts::PI));
         // Ohne Klammer ist es ein normaler Name.
         assert_eq!(ausdruck("winkl + hoch"), "(winkl + hoch)");
+    }
+
+    #[test]
+    fn struktur_mit_feldern() {
+        let p = parse("STRUKTUR Gegner\n  pos Punkt\n  lebn KOMMAZOI OIDA\n  beute LISTN VON LISTN VON ZOI\nPASST SCHO");
+        let s = &p.strukturen[0];
+        assert_eq!(s.name, "Gegner");
+        assert_eq!(s.felder.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), vec!["pos", "lebn", "beute"]);
+        assert!(matches!(&s.felder[0].angabe, TypAngabe::Name { name, .. } if name == "Punkt"));
+        assert_eq!(s.felder[1].angabe, TypAngabe::Einfach(Typ::Kommazoi));
+        assert_eq!(
+            s.felder[2].angabe,
+            TypAngabe::Liste(Box::new(TypAngabe::Liste(Box::new(TypAngabe::Einfach(Typ::Zoi)))))
+        );
+    }
+
+    #[test]
+    fn felder_stellen_und_listen() {
+        assert_eq!(ausdruck("a.b.c + liste[i + 1].x"), "(a.b.c + liste[(i + 1)].x)");
+        assert_eq!(ausdruck("[1, 2 * 3, f(x)][0]"), "[1, (2 * 3), f(x)][0]");
+        assert_eq!(ausdruck("[]"), "[]");
+        assert_eq!(ausdruck("Punkt(1, 2).x"), "Punkt(1, 2).x");
+        assert_eq!(ausdruck("-p.x"), "(-p.x)");
+    }
+
+    #[test]
+    fn zuweisung_an_feld_und_stelle() {
+        let p = parse("p.x = 1 OIDA liste[i].pos.y += 2 OIDA liste[0] = [] OIDA");
+        let ziele: Vec<String> = p
+            .haupt
+            .iter()
+            .map(|a| match &a.art {
+                AnweisungArt::Zuweisung { ziel, .. } => klammern(ziel),
+                anderes => panic!("keine Zuweisung: {anderes:?}"),
+            })
+            .collect();
+        assert_eq!(ziele, vec!["p.x", "liste[i].pos.y", "liste[0]"]);
+        // Ein Vergleich am Anfang bleibt ein Vergleich.
+        let p = parse("f(x) == 1 OIDA");
+        assert!(matches!(&p.haupt[0].art, AnweisungArt::Ausdruck(_)));
+    }
+
+    #[test]
+    fn typen_bei_variablen_und_funktionen() {
+        let p = parse(
+            "SOG AU xs LISTN VON Punkt = [] OIDA\nFUNKTIAUN f(p Punkt, xs LISTN VON ZOI) GIBT ZRUCK LISTN VON Punkt\nPASST SCHO",
+        );
+        let AnweisungArt::Deklaration { angabe: Some(TypAngabe::Liste(innen)), .. } = &p.haupt[0].art else { panic!() };
+        assert!(matches!(&**innen, TypAngabe::Name { name, .. } if name == "Punkt"));
+        let f = &p.funktionen[0];
+        assert!(matches!(&f.parameter[0].angabe, TypAngabe::Name { .. }));
+        assert_eq!(f.parameter[1].angabe, TypAngabe::Liste(Box::new(TypAngabe::Einfach(Typ::Zoi))));
+        assert!(matches!(&f.rueckgabe_angabe, Some(TypAngabe::Liste(_))));
+    }
+
+    #[test]
+    fn fia_jede() {
+        let p = parse("FIA JEDE g IN gegner TUA SCHREIB(g) OIDA PASST SCHO");
+        let AnweisungArt::FiaJede { name, liste, rumpf, .. } = &p.haupt[0].art else { panic!() };
+        assert_eq!((name.as_str(), klammern(liste), rumpf.len()), ("g", "gegner".to_string(), 1));
+        assert_eq!(fehler("FIA JEDE g gegner TUA PASST SCHO").meldung, "Do ghört IN her, ned 'gegner'.");
     }
 
     #[test]

@@ -1,0 +1,15 @@
+1.0 2.5 Punkt(1.0, 2.5)
+Punkt(10.0, 6.0)
+10.0 -1.0
+Gegner("Hansi der Grausliche", Punkt(4.5, 4.0), 70, WOAHR)
+Hansi der Grausliche 4.5 4.0 70 WOAHR
+Hansi der Grausliche Punkt(4.5, 4.0) Franz Punkt(0.0, 0.0)
+5.0
+Punkt(5.0, 0.0) Punkt(0.0, 0.0)
+2.0
+Hansi der Grausliche 20
+Hansi der Grausliche (hin) -30
+Zwerg (hin)
+Leer()
+Nr. 1 1.0
+Nr. 3 9.0

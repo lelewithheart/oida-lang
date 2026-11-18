@@ -8,7 +8,7 @@ Rechner: AMD Ryzen 5 8645HS w/ Radeon 760M Graphics, 14 GB Arbeitsspeicher, Micr
 
 | Sprache | Art | Version |
 |---|---|---|
-| OIDA | übersetzt (LLVM) | oida 0.1.0 |
+| OIDA | übersetzt (LLVM) | oida 0.3.0 |
 | C | übersetzt (LLVM, clang -O2) | clang version 23.1.5 |
 | Rust | übersetzt (LLVM, opt-level 3) | rustc 1.100.0 (0ef1bc386 2026-11-09) |
 | C# | Bytecode + JIT (.NET) | .NET SDK 10.0.403 |
@@ -22,13 +22,14 @@ Kleiner ist besser. Der mittlere Wert (Median) von mehreren Runden, samt Starten
 
 | Programm | OIDA | C | Rust | C# | Java | JavaScript | Python |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| hallo | 23 ms | 26 ms | 26 ms | 129 ms | 147 ms | 100 ms | 189 ms |
-| fib | 415 ms | 477 ms | 386 ms | 671 ms | 585 ms | 1,66 s | 19,61 s |
-| primzahlen | 502 ms | 490 ms | 490 ms | 660 ms | 678 ms | 586 ms | 19,02 s |
-| collatz | 199 ms | 212 ms | 205 ms | 398 ms | 455 ms | 2,91 s | 29,84 s |
-| mandelbrot | 251 ms | 372 ms | 248 ms | 345 ms | 511 ms | 326 ms | 28,85 s |
-| texte | 172 ms | 115 ms | 224 ms | 144 ms | 193 ms | 143 ms | 611 ms |
-| ausgabe | 119 ms | 531 ms | 184 ms | 257 ms | 488 ms | 369 ms | 5,28 s |
+| hallo | 27 ms | 23 ms | 21 ms | 121 ms | 114 ms | 87 ms | 171 ms |
+| fib | 437 ms | 496 ms | 410 ms | 666 ms | 680 ms | 1,71 s | 19,79 s |
+| primzahlen | 510 ms | 496 ms | 497 ms | 665 ms | 671 ms | 606 ms | 19,92 s |
+| collatz | 207 ms | 200 ms | 198 ms | 389 ms | 451 ms | 2,95 s | 31,70 s |
+| mandelbrot | 243 ms | 372 ms | 249 ms | 335 ms | 497 ms | 323 ms | 28,84 s |
+| teilchen | 108 ms | 80 ms | 91 ms | 244 ms | 323 ms | 300 ms | 13,66 s |
+| texte | 174 ms | 112 ms | 217 ms | 168 ms | 193 ms | 152 ms | 647 ms |
+| ausgabe | 124 ms | 538 ms | 196 ms | 270 ms | 483 ms | 376 ms | 4,99 s |
 
 ## Überblick: Zeit im Verhältnis zu OIDA
 
@@ -36,14 +37,15 @@ Kleiner ist besser. Der mittlere Wert (Median) von mehreren Runden, samt Starten
 
 | Programm | OIDA | C | Rust | C# | Java | JavaScript | Python |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| hallo | 1,00× | 1,13× | 1,12× | 5,62× | 6,39× | 4,37× | 8,26× |
-| fib | 1,00× | 1,15× | 0,93× | 1,62× | 1,41× | 4,01× | 47× |
-| primzahlen | 1,00× | 0,98× | 0,98× | 1,31× | 1,35× | 1,17× | 38× |
-| collatz | 1,00× | 1,07× | 1,03× | 2,01× | 2,29× | 15× | 150× |
-| mandelbrot | 1,00× | 1,48× | 0,99× | 1,37× | 2,03× | 1,30× | 115× |
-| texte | 1,00× | 0,67× | 1,30× | 0,84× | 1,12× | 0,83× | 3,56× |
-| ausgabe | 1,00× | 4,46× | 1,54× | 2,15× | 4,09× | 3,10× | 44× |
-| **Mittel** | **1,00×** | **1,29×** | **1,11×** | **1,79×** | **2,21×** | **2,68×** | **33×** |
+| hallo | 1,00× | 0,85× | 0,77× | 4,52× | 4,27× | 3,25× | 6,39× |
+| fib | 1,00× | 1,13× | 0,94× | 1,52× | 1,55× | 3,91× | 45× |
+| primzahlen | 1,00× | 0,97× | 0,97× | 1,30× | 1,32× | 1,19× | 39× |
+| collatz | 1,00× | 0,96× | 0,96× | 1,88× | 2,18× | 14× | 153× |
+| mandelbrot | 1,00× | 1,53× | 1,02× | 1,38× | 2,04× | 1,33× | 119× |
+| teilchen | 1,00× | 0,74× | 0,84× | 2,26× | 2,99× | 2,79× | 127× |
+| texte | 1,00× | 0,64× | 1,25× | 0,97× | 1,11× | 0,87× | 3,72× |
+| ausgabe | 1,00× | 4,35× | 1,59× | 2,19× | 3,91× | 3,04× | 40× |
+| **Mittel** | **1,00×** | **1,14×** | **1,02×** | **1,80×** | **2,18×** | **2,61×** | **38×** |
 
 ## Überblick: Speicher
 
@@ -53,13 +55,14 @@ Der höchste Arbeitsspeicher, den das Programm gebraucht hat. Kleiner ist besser
 
 | Programm | OIDA | C | Rust | C# | Java | JavaScript | Python |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| hallo | 4,9 MB | 4,8 MB | 4,9 MB | 23,5 MB | 56,7 MB | 34,6 MB | 23,6 MB |
+| hallo | 4,9 MB | 4,8 MB | 4,9 MB | 23,5 MB | 56,7 MB | 34,5 MB | 23,5 MB |
 | fib | 4,9 MB | 4,8 MB | 4,9 MB | 23,6 MB | 57,1 MB | 36,5 MB | 23,4 MB |
-| primzahlen | 4,9 MB | 4,8 MB | 4,9 MB | 23,6 MB | 57,4 MB | 37,3 MB | 23,4 MB |
-| collatz | 4,9 MB | 4,8 MB | 4,9 MB | 24,2 MB | 57,9 MB | 37,3 MB | 23,4 MB |
-| mandelbrot | 4,9 MB | 4,8 MB | 4,9 MB | 23,7 MB | 57,9 MB | 38,6 MB | 23,4 MB |
-| texte | 4,9 MB | 4,8 MB | 5,0 MB | 33,7 MB | 96,9 MB | 45,3 MB | 23,5 MB |
-| ausgabe | 5,0 MB | 4,8 MB | 4,9 MB | 34,6 MB | 169,7 MB | 80,4 MB | 25,0 MB |
+| primzahlen | 4,9 MB | 4,8 MB | 4,9 MB | 23,5 MB | 57,5 MB | 37,1 MB | 23,5 MB |
+| collatz | 4,9 MB | 4,8 MB | 4,9 MB | 24,2 MB | 57,9 MB | 37,4 MB | 23,4 MB |
+| mandelbrot | 4,9 MB | 4,8 MB | 4,9 MB | 23,6 MB | 57,9 MB | 38,4 MB | 23,4 MB |
+| teilchen | 9,2 MB | 7,4 MB | 9,4 MB | 30,2 MB | 64,2 MB | 73,3 MB | 47,1 MB |
+| texte | 5,0 MB | 4,8 MB | 5,0 MB | 33,5 MB | 97,3 MB | 45,0 MB | 23,5 MB |
+| ausgabe | 5,0 MB | 4,8 MB | 4,9 MB | 34,4 MB | 170,3 MB | 80,3 MB | 25,0 MB |
 
 ## Die Programme im Einzelnen
 
@@ -69,13 +72,13 @@ Nur eine Zeile ausgeben. Misst, wie lange ein Programm zum Starten braucht.
 
 | Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
 |---|---:|---:|---:|---:|---:|---:|
-| OIDA | 23 ms | 1,00× | 7 | 4,9 MB | 389 ms | 293 KB |
-| C | 26 ms | 1,13× | 7 | 4,8 MB | 369 ms | 60 KB |
-| Rust | 26 ms | 1,12× | 7 | 4,9 MB | 535 ms | 412 KB |
-| C# | 129 ms | 5,62× | 7 | 23,5 MB | 1,04 s | 4 KB |
-| Java | 147 ms | 6,39× | 7 | 56,7 MB | 1,02 s | 0 KB |
-| JavaScript | 100 ms | 4,37× | 7 | 34,6 MB | – | – |
-| Python | 189 ms | 8,26× | 7 | 23,6 MB | – | – |
+| OIDA | 27 ms | 1,00× | 7 | 4,9 MB | 456 ms | 294 KB |
+| C | 23 ms | 0,85× | 7 | 4,8 MB | 374 ms | 60 KB |
+| Rust | 21 ms | 0,77× | 7 | 4,9 MB | 508 ms | 412 KB |
+| C# | 121 ms | 4,52× | 7 | 23,5 MB | 1,27 s | 4 KB |
+| Java | 114 ms | 4,27× | 7 | 56,7 MB | 971 ms | 0 KB |
+| JavaScript | 87 ms | 3,25× | 7 | 34,5 MB | – | – |
+| Python | 171 ms | 6,39× | 7 | 23,5 MB | – | – |
 
 ### fib
 
@@ -83,13 +86,13 @@ Fibonacci-Zahl 40, rekursiv. Misst Funktionsaufrufe (rund 330 Millionen).
 
 | Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
 |---|---:|---:|---:|---:|---:|---:|
-| OIDA | 415 ms | 1,00× | 7 | 4,9 MB | 408 ms | 292 KB |
-| C | 477 ms | 1,15× | 7 | 4,8 MB | 364 ms | 61 KB |
-| Rust | 386 ms | 0,93× | 7 | 4,9 MB | 524 ms | 414 KB |
-| C# | 671 ms | 1,62× | 7 | 23,6 MB | 949 ms | 4 KB |
-| Java | 585 ms | 1,41× | 7 | 57,1 MB | 839 ms | 1 KB |
-| JavaScript | 1,66 s | 4,01× | 5 | 36,5 MB | – | – |
-| Python | 19,61 s | 47× | 3 | 23,4 MB | – | – |
+| OIDA | 437 ms | 1,00× | 7 | 4,9 MB | 399 ms | 294 KB |
+| C | 496 ms | 1,13× | 7 | 4,8 MB | 392 ms | 61 KB |
+| Rust | 410 ms | 0,94× | 7 | 4,9 MB | 560 ms | 414 KB |
+| C# | 666 ms | 1,52× | 7 | 23,6 MB | 994 ms | 4 KB |
+| Java | 680 ms | 1,55× | 7 | 57,1 MB | 879 ms | 1 KB |
+| JavaScript | 1,71 s | 3,91× | 5 | 36,5 MB | – | – |
+| Python | 19,79 s | 45× | 3 | 23,4 MB | – | – |
 
 ### primzahlen
 
@@ -97,13 +100,13 @@ Primzahlen unter 2 Millionen zählen, durch Probeteilen. Misst Schleifen und Tei
 
 | Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
 |---|---:|---:|---:|---:|---:|---:|
-| OIDA | 502 ms | 1,00× | 7 | 4,9 MB | 432 ms | 292 KB |
-| C | 490 ms | 0,98× | 7 | 4,8 MB | 359 ms | 61 KB |
-| Rust | 490 ms | 0,98× | 7 | 4,9 MB | 512 ms | 414 KB |
-| C# | 660 ms | 1,31× | 7 | 23,6 MB | 1,03 s | 4 KB |
-| Java | 678 ms | 1,35× | 7 | 57,4 MB | 872 ms | 1 KB |
-| JavaScript | 586 ms | 1,17× | 7 | 37,3 MB | – | – |
-| Python | 19,02 s | 38× | 3 | 23,4 MB | – | – |
+| OIDA | 510 ms | 1,00× | 7 | 4,9 MB | 395 ms | 294 KB |
+| C | 496 ms | 0,97× | 7 | 4,8 MB | 354 ms | 61 KB |
+| Rust | 497 ms | 0,97× | 7 | 4,9 MB | 594 ms | 414 KB |
+| C# | 665 ms | 1,30× | 7 | 23,5 MB | 1,12 s | 4 KB |
+| Java | 671 ms | 1,32× | 7 | 57,5 MB | 878 ms | 1 KB |
+| JavaScript | 606 ms | 1,19× | 7 | 37,1 MB | – | – |
+| Python | 19,92 s | 39× | 3 | 23,5 MB | – | – |
 
 ### collatz
 
@@ -111,13 +114,13 @@ Längste Collatz-Folge für Startwerte unter 1 Million. Misst Schleifen, Verzwei
 
 | Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
 |---|---:|---:|---:|---:|---:|---:|
-| OIDA | 199 ms | 1,00× | 7 | 4,9 MB | 442 ms | 292 KB |
-| C | 212 ms | 1,07× | 7 | 4,8 MB | 378 ms | 61 KB |
-| Rust | 205 ms | 1,03× | 7 | 4,9 MB | 606 ms | 414 KB |
-| C# | 398 ms | 2,01× | 7 | 24,2 MB | 1,01 s | 4 KB |
-| Java | 455 ms | 2,29× | 7 | 57,9 MB | 858 ms | 1 KB |
-| JavaScript | 2,91 s | 15× | 5 | 37,3 MB | – | – |
-| Python | 29,84 s | 150× | 1 | 23,4 MB | – | – |
+| OIDA | 207 ms | 1,00× | 7 | 4,9 MB | 400 ms | 294 KB |
+| C | 200 ms | 0,96× | 7 | 4,8 MB | 384 ms | 61 KB |
+| Rust | 198 ms | 0,96× | 7 | 4,9 MB | 578 ms | 414 KB |
+| C# | 389 ms | 1,88× | 7 | 24,2 MB | 999 ms | 4 KB |
+| Java | 451 ms | 2,18× | 7 | 57,9 MB | 822 ms | 1 KB |
+| JavaScript | 2,95 s | 14× | 5 | 37,4 MB | – | – |
+| Python | 31,70 s | 153× | 1 | 23,4 MB | – | – |
 
 ### mandelbrot
 
@@ -125,13 +128,27 @@ Mandelbrot-Menge auf 1000 x 1000 Punkten. Höchstens 300 Schritte je Punkt; miss
 
 | Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
 |---|---:|---:|---:|---:|---:|---:|
-| OIDA | 251 ms | 1,00× | 7 | 4,9 MB | 441 ms | 292 KB |
-| C | 372 ms | 1,48× | 7 | 4,8 MB | 358 ms | 62 KB |
-| Rust | 248 ms | 0,99× | 7 | 4,9 MB | 565 ms | 414 KB |
-| C# | 345 ms | 1,37× | 7 | 23,7 MB | 1,08 s | 4 KB |
-| Java | 511 ms | 2,03× | 7 | 57,9 MB | 921 ms | 1 KB |
-| JavaScript | 326 ms | 1,30× | 7 | 38,6 MB | – | – |
-| Python | 28,85 s | 115× | 1 | 23,4 MB | – | – |
+| OIDA | 243 ms | 1,00× | 7 | 4,9 MB | 379 ms | 294 KB |
+| C | 372 ms | 1,53× | 7 | 4,8 MB | 348 ms | 62 KB |
+| Rust | 249 ms | 1,02× | 7 | 4,9 MB | 547 ms | 414 KB |
+| C# | 335 ms | 1,38× | 7 | 23,6 MB | 944 ms | 4 KB |
+| Java | 497 ms | 2,04× | 7 | 57,9 MB | 812 ms | 1 KB |
+| JavaScript | 323 ms | 1,33× | 7 | 38,4 MB | – | – |
+| Python | 28,84 s | 119× | 1 | 23,4 MB | – | – |
+
+### teilchen
+
+Hunderttausend Teilchen in einer Liste, 300 Runden lang bewegt. Misst Listen von Strukturen.
+
+| Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
+|---|---:|---:|---:|---:|---:|---:|
+| OIDA | 108 ms | 1,00× | 7 | 9,2 MB | 452 ms | 300 KB |
+| C | 80 ms | 0,74× | 7 | 7,4 MB | 437 ms | 62 KB |
+| Rust | 91 ms | 0,84× | 7 | 9,4 MB | 743 ms | 414 KB |
+| C# | 244 ms | 2,26× | 7 | 30,2 MB | 1,25 s | 4 KB |
+| Java | 323 ms | 2,99× | 7 | 64,2 MB | 991 ms | 1 KB |
+| JavaScript | 300 ms | 2,79× | 7 | 73,3 MB | – | – |
+| Python | 13,66 s | 127× | 3 | 47,1 MB | – | – |
 
 ### texte
 
@@ -139,13 +156,13 @@ Eine Million kurze Texte zusammenbauen und vergleichen. Misst Texte und den Spei
 
 | Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
 |---|---:|---:|---:|---:|---:|---:|
-| OIDA | 172 ms | 1,00× | 7 | 4,9 MB | 343 ms | 296 KB |
-| C | 115 ms | 0,67× | 7 | 4,8 MB | 357 ms | 63 KB |
-| Rust | 224 ms | 1,30× | 7 | 5,0 MB | 502 ms | 416 KB |
-| C# | 144 ms | 0,84× | 7 | 33,7 MB | 945 ms | 4 KB |
-| Java | 193 ms | 1,12× | 7 | 96,9 MB | 823 ms | 1 KB |
-| JavaScript | 143 ms | 0,83× | 7 | 45,3 MB | – | – |
-| Python | 611 ms | 3,56× | 7 | 23,5 MB | – | – |
+| OIDA | 174 ms | 1,00× | 7 | 5,0 MB | 384 ms | 298 KB |
+| C | 112 ms | 0,64× | 7 | 4,8 MB | 451 ms | 63 KB |
+| Rust | 217 ms | 1,25× | 7 | 5,0 MB | 574 ms | 416 KB |
+| C# | 168 ms | 0,97× | 7 | 33,5 MB | 1,08 s | 4 KB |
+| Java | 193 ms | 1,11× | 7 | 97,3 MB | 881 ms | 1 KB |
+| JavaScript | 152 ms | 0,87× | 7 | 45,0 MB | – | – |
+| Python | 647 ms | 3,72× | 7 | 23,5 MB | – | – |
 
 ### ausgabe
 
@@ -153,11 +170,11 @@ Zwei Millionen Zeilen ausgeben. Misst die Ausgabe.
 
 | Sprache | Zeit | zu OIDA | Runden | Speicher | Bauen | Größe |
 |---|---:|---:|---:|---:|---:|---:|
-| OIDA | 119 ms | 1,00× | 7 | 5,0 MB | 353 ms | 292 KB |
-| C | 531 ms | 4,46× | 7 | 4,8 MB | 314 ms | 61 KB |
-| Rust | 184 ms | 1,54× | 7 | 4,9 MB | 591 ms | 420 KB |
-| C# | 257 ms | 2,15× | 7 | 34,6 MB | 916 ms | 4 KB |
-| Java | 488 ms | 4,09× | 7 | 169,7 MB | 840 ms | 1 KB |
-| JavaScript | 369 ms | 3,10× | 7 | 80,4 MB | – | – |
-| Python | 5,28 s | 44× | 3 | 25,0 MB | – | – |
+| OIDA | 124 ms | 1,00× | 7 | 5,0 MB | 416 ms | 294 KB |
+| C | 538 ms | 4,35× | 7 | 4,8 MB | 368 ms | 61 KB |
+| Rust | 196 ms | 1,59× | 7 | 4,9 MB | 808 ms | 420 KB |
+| C# | 270 ms | 2,19× | 7 | 34,4 MB | 1,06 s | 4 KB |
+| Java | 483 ms | 3,91× | 7 | 170,3 MB | 904 ms | 1 KB |
+| JavaScript | 376 ms | 3,04× | 7 | 80,3 MB | – | – |
+| Python | 4,99 s | 40× | 3 | 25,0 MB | – | – |
 

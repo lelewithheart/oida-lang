@@ -53,6 +53,16 @@ STEP      = SCHRITT
 BREAK     = HAU OB, VERLOSS
 CONTINUE  = WEIDA
 
+# --- Strukturen:  STRUKTUR Punkt  x KOMMAZOI  y KOMMAZOI  PASST SCHO ---------
+STRUCT    = STRUKTUR
+
+# --- Listen:  LISTN VON ZOI,  FIA JEDE x IN liste TUA ... PASST SCHO ---------
+LIST      = LISTN
+EACH      = JEDE, JEDN, JEDS
+IN        = IN
+ADD       = HAU EINE, DAZUA
+REMOVE    = HAU AUSSE
+
 # --- Funktionen -------------------------------------------------------------
 FUNCTION  = FUNKTIAUN
 RETURNS   = GIBT ZRUCK
