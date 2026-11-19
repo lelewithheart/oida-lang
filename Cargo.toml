@@ -6,7 +6,7 @@ members = ["uebersetzer", "laufzeit", "leistung/messen", "installer/windows"]
 default-members = ["uebersetzer", "laufzeit"]
 
 [workspace.package]
-version = "0.16.0"
+version = "0.17.0"
 edition = "2024"
 
 # Mit diesem Profil wird die Laufzeitbibliothek gebaut, die in jedes

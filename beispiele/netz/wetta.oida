@@ -1,0 +1,32 @@
+# Holt das Wetter für Wien aus dem Internet (vom freien Dienst open-meteo.com)
+# und liest die Antwort direkt in eine STRUKTUR. Braucht eine Verbindung ins Netz.
+#
+#     oida beispiele/netz/wetta.oida --renn
+
+BRAUCH netz OIDA
+
+# So viel von der Antwort, wie hier gebraucht wird; was sonst noch drinsteht, wird überlesen.
+STRUKTUR Jetzt
+    temperature KOMMAZOI
+    windspeed KOMMAZOI
+    time KETTN
+PASST SCHO
+
+STRUKTUR Wetta
+    current_weather Jetzt
+    elevation KOMMAZOI
+PASST SCHO
+
+FUNKTIAUN wetta_in(breitn KOMMAZOI, längn KOMMAZOI) GIBT ZRUCK Wetta ODA FEHLA
+    SOG AU adress = $"https://api.open-meteo.com/v1/forecast?latitude={breitn}&longitude={längn}&current_weather=true" OIDA
+    SOG AU inhalt = PROBIER hol_text(adress) OIDA
+    GIB ZRUCK PROBIER AUS JSON VON Wetta(inhalt) OIDA
+PASST SCHO
+
+PROBIER wetta = wetta_in(48.21, 16.37)
+    SOG AU jetzt = wetta.current_weather OIDA
+    SCHREIB($"In Wean hot's grod {jetzt.temperature:1} Grad, da Wind geht mit {jetzt.windspeed:0} km/h.") OIDA
+    SCHREIB($"(gmessn um {jetzt.time}, auf {wetta.elevation:0} Meta Höh)") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Des Wetta kriag i ned:", f.meldung) OIDA
+PASST SCHO

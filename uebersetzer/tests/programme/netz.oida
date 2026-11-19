@@ -1,0 +1,136 @@
+# Netzwerk ohne Internet: Das Programm redet über TCP mit sich selbst (horchen,
+# verbinden, annehmen), und alles, was schon vor dem Verbinden schiefgehen kann.
+# Seiten holen mit einem echten Server prüft der Test netz_holt_und_schickt.
+BRAUCH netz OIDA
+
+STRUKTUR Zug
+    spiela KETTN
+    föd ZOI
+    gwürflt LISTN VON ZOI
+PASST SCHO
+
+FUNKTIAUN zag(wos KETTN, ergebnis NIX ODA FEHLA)
+    PROBIER ergebnis
+        SCHREIB(wos + " -> passt") OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(wos + " -> geht ned: " + f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Die Meldung ohne die Nummer des Ports, die bei jedem Lauf anders ist.
+FUNKTIAUN ohne_port(meldung KETTN, port ZOI) GIBT ZRUCK KETTN
+    GIB ZRUCK ERSETZ(meldung, KETTN(port), "<port>") OIDA
+PASST SCHO
+
+FUNKTIAUN gespräch() GIBT ZRUCK ZOI ODA FEHLA
+    SCHREIB("--- horchn, vabindn, aunehma") OIDA
+    SOG AU horcha = PROBIER horch(0) OIDA
+    SOG AU port = horcha.port() OIDA
+    SOG AU hin = PROBIER vabind("127.0.0.1", port) OIDA
+    SOG AU her = PROBIER horcha.nächsta() OIDA
+    SCHREIB(port > 0, hört_auf_mit_port(hin.wer(), port), LÄNGN(her.wer()) > 0) OIDA
+
+    SCHREIB("--- Zeiln hin und her") OIDA
+    PROBIER hin.schick_zeile("Servas, wer do?") OIDA
+    SCHREIB(her.zeile() ODA HOID "nix") OIDA
+    PROBIER her.schick("I bin's.\r\nUnd no a Zeile mit ä, ö, ü\nhoibe ") OIDA
+    PROBIER her.schick("Zeile\n") OIDA
+    SCHREIB(hin.zeile() ODA HOID "nix") OIDA
+    SCHREIB(hin.zeile() ODA HOID "nix") OIDA
+    SCHREIB(hin.zeile() ODA HOID "nix") OIDA
+
+    SCHREIB("--- a Struktur ois JSON üba de Leitung") OIDA
+    PROBIER hin.schick_zeile(OIS JSON(Zug("Hansi", 7, [3, 4]))) OIDA
+    SOG AU zeile = her.zeile() ODA HOID "" OIDA
+    SOG AU zug = PROBIER AUS JSON VON Zug(zeile) OIDA
+    SCHREIB($"{zug.spiela} ziagt auf {zug.föd}, gwürflt: {zug.gwürflt[0] + zug.gwürflt[1]}") OIDA
+
+    SCHREIB("--- Bytes") OIDA
+    PROBIER her.schick_bytes([79, 73, 68, 65, 0, 255]) OIDA
+    SCHREIB(hin.bytes(100)) OIDA
+    zag("z'große Zoi", her.schick_bytes([1, 300])) OIDA
+
+    SCHREIB("--- zuamochn") OIDA
+    PROBIER hin.schick("da Rest ohne Zeilnend") OIDA
+    hin.zua() OIDA
+    SCHREIB(her.zeile() ODA HOID "nix") OIDA
+    SCHREIB(her.zeile() ODA HOID "aus", her.bytes(10), her.ollas() ODA HOID "?") OIDA
+    zag("noch'm Zuamochn schickn", hin.schick("z'spät")) OIDA
+    SCHREIB(hin.zeile() ODA HOID "aus") OIDA
+    hin.zua() OIDA
+    her.zua() OIDA
+
+    SCHREIB("--- zwa hintaranaund, jeda kriagt sei eigane Vabindung") OIDA
+    SOG AU ans = PROBIER vabind("localhost", port) OIDA
+    SOG AU zwa = PROBIER vabind("127.0.0.1", port) OIDA
+    PROBIER zwa.schick_zeile("i bin da zweite") OIDA
+    PROBIER ans.schick_zeile("i bin da erste") OIDA
+    SOG AU gost = PROBIER horcha.nächsta() OIDA
+    SCHREIB(gost.zeile() ODA HOID "nix") OIDA
+    gost.zua() OIDA
+    gost = PROBIER horcha.nächsta() OIDA
+    SCHREIB(gost.zeile() ODA HOID "nix") OIDA
+    gost.zua() OIDA
+    ans.zua() OIDA
+    zwa.zua() OIDA
+
+    SCHREIB("--- wos ned geht") OIDA
+    PROBIER nomoi = horch(port)
+        SCHREIB("des derf ned gehn", nomoi.port()) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(ohne_port(f.meldung, port)) OIDA
+    PASST SCHO
+    horcha.zua() OIDA
+    SCHREIB(horcha.port()) OIDA
+    PROBIER kana = horcha.nächsta()
+        SCHREIB("des derf ned gehn", kana.wer()) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(f.meldung) OIDA
+    PASST SCHO
+    GIB ZRUCK port OIDA
+PASST SCHO
+
+FUNKTIAUN hört_auf_mit_port(wer KETTN, port ZOI) GIBT ZRUCK JONA
+    SOG AU hintn = ":" + KETTN(port) OIDA
+    GIB ZRUCK LÄNGN(wer) > LÄNGN(hintn) UND STICKL(wer, LÄNGN(wer) - LÄNGN(hintn)) == hintn OIDA
+PASST SCHO
+
+SOG AU port = gespräch() ODA HOID -1 OIDA
+SCHREIB(port > 0) OIDA
+
+# Jetzt horcht dort niemand mehr.
+PROBIER v = vabind("127.0.0.1", port)
+    SCHREIB("des derf ned gehn", v.wer()) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(ohne_port(f.meldung, port)) OIDA
+PASST SCHO
+PROBIER antwort = hol("http://127.0.0.1:" + KETTN(port) + "/")
+    SCHREIB("des derf ned gehn", antwort.code) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(ohne_port(f.meldung, port)) OIDA
+PASST SCHO
+
+# Die Endung .invalid ist dafür reserviert, dass es sie nicht gibt.
+SCHREIB(hol("http://den-gibts-ned.invalid/")) OIDA
+PROBIER v = vabind("den-gibts-ned.invalid", 80)
+    SCHREIB("des derf ned gehn", v.wer()) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+PROBIER v = vabind("127.0.0.1", 70000)
+    SCHREIB("des derf ned gehn", v.wer()) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+
+SCHREIB("--- Adressn und Aufrogn, de kane san") OIDA
+SCHREIB(hol("example.com")) OIDA
+SCHREIB(hol("ftp://example.com/datei")) OIDA
+SCHREIB(hol("http://nam:passwort@example.com/")) OIDA
+SCHREIB(hol("http://example.com:99999/")) OIDA
+SCHREIB(hol_text("http://")) OIDA
+SCHREIB(aufrog("HOL MA", "http://example.com/", [], "")) OIDA
+SCHREIB(aufrog("GET", "http://example.com/", ["ka Kopf"], "")) OIDA
+SCHREIB(aufrog("GET", "http://example.com/", ["A: b\nB: c"], "")) OIDA
+SCHREIB(lod_owa("servas", "nix.txt")) OIDA
+SCHREIB(is_guat(Antwort(200, "", VAZEICHNIS VON KETTN UND KETTN())), is_guat(Antwort(299, "", VAZEICHNIS VON KETTN UND KETTN())), is_guat(Antwort(404, "", VAZEICHNIS VON KETTN UND KETTN())), is_guat(Antwort(199, "", VAZEICHNIS VON KETTN UND KETTN()))) OIDA

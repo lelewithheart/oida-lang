@@ -1,0 +1,22 @@
+--- hoin
+200 WOAHR Servas vom Server! (/servas?wer=gr%C3%BC%C3%9F%20di)
+text/plain; charset=utf-8 a=1, b=2 fehlt
+Servas vom Server! (/servas)
+--- a Code wia 404 is a Antwort, ka Fehla
+404 FOISCH nix do
+http://127.0.0.1:<port>/gibtsned: Do kummt da Code 404 zruck.
+--- schickn
+200 POST /echo||text/plain; charset=utf-8|a Text mit ä und €
+POST /echo||application/json|{"nam":"Hansi","punkte":1200}
+Staund("Susi", 120)
+--- aundare Oatn und eigane Köpf
+DELETE /echo|servas||
+PUT /echo||text/oida|neich
+--- Umleitung, Inhalt in Stickln
+Servas vom Server! (/servas)
+Servas, OIDA
+--- Bytes und Dateien
+[0, 255, 79, 73, 68, 65, 10]
+7 [0, 255, 79, 73, 68, 65, 10]
+http://127.0.0.1:<port>/gibtsned: Do kummt da Code 404 zruck. FOISCH
+den/ordna/gibts/ned.bin: De gibt's ned.

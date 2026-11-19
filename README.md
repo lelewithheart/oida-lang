@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.16.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.17.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -45,7 +45,8 @@ Argumente von der Kommandozeile, Umgebungsvariablen, andere Programme starten. N
 direkt aus einer `STRUKTUR` und zurück, ohne dass man dafür etwas schreiben muss. Und OIDA läuft
 jetzt auch unter [Linux](#windows-und-linux), und für beide Systeme gibt es [Installer](#installieren).
 Zuletzt dazugekommen: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten)
-(`$"Servas {nam}"`) und `==` für Strukturen und Listen.
+(`$"Servas {nam}"`), `==` für Strukturen und Listen, und das [Netzwerk](#netzwerk): Seiten holen
+über HTTP und HTTPS und eigene Verbindungen über TCP.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Für Windows und Linux (64 Bit). Fenster und Ton gibt es derzeit nur unter Windows.
@@ -250,7 +251,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.16)
+## Die Sprache (v0.17)
 
 ### Typen
 
@@ -947,7 +948,8 @@ SCHREIB(sortiert(nur(zahlen, FUNKTIAUN(z ZOI) => z > 2), FUNKTIAUN(a ZOI, b ZOI)
 
 Dazu kommen vier Teile, die mit Windows reden; sie haben unten eigene Abschnitte:
 **`BRAUCH dateien OIDA`**, **`BRAUCH programm OIDA`**, **`BRAUCH fensta OIDA`** und **`BRAUCH ton OIDA`**.
-Und **`BRAUCH json OIDA`** für [JSON](#json), dessen Aufbau man nicht vorher kennt.
+Und **`BRAUCH json OIDA`** für [JSON](#json), dessen Aufbau man nicht vorher kennt, und
+**`BRAUCH netz OIDA`** für das [Netzwerk](#netzwerk).
 
 Weil alles im ganzen Programm gilt, kann eine eigene Funktion nicht so heißen wie eine aus einem
 Teil der Bibliothek, den man dazuholt. Eine Variable schon (`SOG AU summe = 0 OIDA` geht).
@@ -1311,6 +1313,136 @@ riesigen Datei. Tiefer als 400 Stufen verschachtelt geht nicht.
 Wie schnell das ist, gemessen mit 200 000 Strukturen (26 MB JSON): schreiben 0,25 s, in
 Strukturen lesen rund 0,7 s, als `Json` lesen rund 0,9 s. Python braucht für dasselbe 0,45 s
 zum Schreiben und 0,5 bis 0,8 s zum Lesen. Beim Lesen ist also noch Luft nach oben.
+
+### Netzwerk
+
+`BRAUCH netz OIDA` bringt zwei Dinge: Seiten und Daten aus dem Netz holen und hinschicken (HTTP
+und HTTPS), und selbst mit einem anderen Programm reden (TCP). Beides geht unter Windows und
+unter Linux gleich.
+
+#### Holen und schicken: HTTP und HTTPS
+
+```
+BRAUCH netz OIDA
+
+PROBIER antwort = hol("https://example.com")
+    SCHREIB(antwort.code, LÄNGN(antwort.inhalt)) OIDA               # 200 und die Länge der Seite
+    SCHREIB(antwort.köpf["content-type"] ODA HOID "?") OIDA         # text/html
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA                                         # Den Rechner example.com find i ned.
+PASST SCHO
+```
+
+Zusammen mit [JSON](#json) ist eine Schnittstelle im Netz zwei Zeilen: holen, und die Antwort
+direkt in eine `STRUKTUR` lesen.
+
+```
+STRUKTUR Staund
+    nam KETTN
+    punkte ZOI
+PASST SCHO
+
+FUNKTIAUN lod_staund(adress KETTN) GIBT ZRUCK Staund ODA FEHLA
+    SOG AU inhalt = PROBIER hol_text(adress) OIDA
+    GIB ZRUCK PROBIER AUS JSON VON Staund(inhalt) OIDA
+PASST SCHO
+
+FUNKTIAUN speichan(adress KETTN, staund Staund) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU antwort = PROBIER schick_json(adress, OIS JSON(staund)) OIDA
+    WENN NED is_guat(antwort) DAUN
+        GIB ZRUCK FEHLA($"Da Server sogt {antwort.code}: {antwort.inhalt}") OIDA
+    PASST SCHO
+PASST SCHO
+```
+
+| Funktion | Ergebnis |
+|---|---|
+| `hol(adress)` | holt, was dort liegt (GET): `Antwort ODA FEHLA` |
+| `hol_text(adress)` | nur der Text; ist die Antwort nicht gut (etwa 404), ist das hier ein `FEHLA` |
+| `hol_bytes(adress)` | der Inhalt als `LISTN VON ZOI`, für alles, was kein Text ist |
+| `lod_owa(adress, pfad)` | lädt herunter und speichert als Datei, Byte für Byte |
+| `schick(adress, text)` | schickt einen Text hin (POST): `Antwort ODA FEHLA` |
+| `schick_json(adress, json)` | schickt JSON hin (POST); den Text macht `OIS JSON(wert)` |
+| `aufrog(oat, adress, köpf, inhalt)` | die allgemeine Anfrage: `aufrog("PUT", adress, ["Authorization: Bearer obc"], inhalt)` |
+| `is_guat(antwort)` | war der Code einer von 200 bis 299? |
+| `netz_wortzeit(sekundn)` | wie lange gewartet wird (am Anfang 30 Sekunden, 0: ohne Ende) |
+
+Eine `Antwort` hat `code` (200: passt, 404: gibt's nicht, 500: der Server hat ein Problem),
+`inhalt` (als Text) und `köpf` (ein `VAZEICHNIS`, die Namen klein geschrieben).
+
+- Ein `FEHLA` kommt nur, wenn gar keine Antwort kommt. Ein Code wie 404 ist eine Antwort; ob sie
+  gut war, sagt `is_guat`.
+- Umleitungen werden verfolgt (höchstens zehn hintereinander, nie von `https` zurück auf `http`).
+- Bei `https` wird immer geprüft, ob die andere Seite die ist, für die sie sich ausgibt: Ihr
+  Zertifikat muss von einer Stelle stammen, der das System traut, noch gelten und für genau
+  diesen Namen ausgestellt sein. Abschalten lässt sich das nicht.
+- Leerzeichen und Umlaute in der Adresse werden von selbst verpackt (`grüß di` wird `gr%C3%BC%C3%9F%20di`).
+
+| Was los ist | `f.meldung` |
+|---|---|
+| kein Netz, oder den Namen gibt es nicht | `Den Rechner example.invalid find i ned.` |
+| dort horcht niemand | `127.0.0.1 nimmt auf Port 8080 kane Vabindungen au.` |
+| es kommt nichts | `example.com gibt ka Antwort.` |
+| dem Zertifikat ist nicht zu trauen | `Dem Zertifikat vo expired.badssl.com trau i ned (certificate has expired).` |
+| keine Adresse | `De Adress 'example.com' muass mit http:// oda https:// aufaunga.` |
+
+(Was in der Klammer hinter dem Zertifikat steht, kommt vom System; unter Windows fehlt es.)
+
+#### Selbst reden: TCP
+
+Eine Verbindung ist eine Leitung zwischen zwei Programmen: Was das eine hineinschickt, liest das
+andere heraus. Eines horcht auf einem Port und wartet, das andere verbindet sich dorthin.
+
+```
+BRAUCH netz OIDA
+
+# Die eine Seite: horchen und jedem Gast antworten, einem nach dem anderen.
+FUNKTIAUN server() GIBT ZRUCK NIX ODA FEHLA
+    SOG AU horcha = PROBIER horch(4711) OIDA
+    SOLONG WOAHR TUA
+        SOG AU gost = PROBIER horcha.nächsta() OIDA      # wartet, bis jemand kommt
+        SOG AU zeile = gost.zeile() ODA HOID "" OIDA
+        PROBIER gost.schick_zeile($"Du host gsogt: {zeile}") OIDA
+        gost.zua() OIDA
+    PASST SCHO
+PASST SCHO
+
+# Die andere Seite: verbinden, eine Zeile schicken, die Antwort lesen.
+FUNKTIAUN frog(wos KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU v = PROBIER vabind("localhost", 4711) OIDA
+    PROBIER v.schick_zeile(wos) OIDA
+    SOG AU antwort = v.zeile() ODA HOID "nix" OIDA
+    v.zua() OIDA
+    GIB ZRUCK antwort OIDA
+PASST SCHO
+```
+
+| | |
+|---|---|
+| `vabind(rechna, port)` | verbindet sich zu einem Programm, das dort horcht: `Vabindung ODA FEHLA` |
+| `horch(port)` | horcht auf einem Port, erreichbar nur von diesem Rechner: `Horcha ODA FEHLA` |
+| `horch_fia_olle(port)` | ... erreichbar auch von anderen Rechnern im Netz |
+| `horcha.nächsta()` | wartet, bis sich jemand verbindet: `Vabindung ODA FEHLA` |
+| `horcha.port()` | auf welchem Port gehorcht wird (nach `horch(0)`: irgendein freier) |
+| `v.schick(text)`, `v.schick_zeile(text)` | schickt den Text, mit `schick_zeile` samt Zeilenende |
+| `v.zeile()` | die nächste Zeile, oder `NIX`, wenn die andere Seite zugemacht hat |
+| `v.ollas()` | alles, was noch kommt, bis die andere Seite zumacht |
+| `v.schick_bytes(zoin)`, `v.bytes(höchstns)` | dasselbe mit Bytes (`LISTN VON ZOI`, jede Zahl von 0 bis 255) |
+| `v.wer()` | mit wem die Verbindung besteht: `"127.0.0.1:51234"` |
+| `v.zua()`, `horcha.zua()` | zumachen |
+
+Zwei Beispiele: [`beispiele/netz/wetta.oida`](beispiele/netz/wetta.oida) holt das Wetter aus dem
+Internet und liest es in eine `STRUKTUR`; [`beispiele/netz/plaudan.oida`](beispiele/netz/plaudan.oida)
+ist ein kleiner Server, mit dem man plaudern kann.
+
+Was noch fehlt: Ein Server bedient einen Gast nach dem anderen, nicht mehrere zugleich (das
+kommt mit den Threads). Einen Server für `https` gibt es nicht, auch kein UDP und keine
+WebSockets. Antworten werden ungepackt verlangt (kein gzip). Unter Linux geht eine Anfrage
+immer direkt hinaus, ohne Proxy; Windows nimmt den Proxy, der dort eingestellt ist.
+
+Darunter: Unter Windows macht HTTP und HTTPS WinHTTP, das zu Windows gehört. Unter Linux spricht
+OIDA HTTP selbst und nimmt für HTTPS die OpenSSL-Bibliothek des Systems (`libssl`, auf fast
+jedem Linux schon da). Beides lädt ein Programm erst, wenn es das Netz wirklich braucht.
 
 ### Ein Fenster: zeichnen, Tasten und Maus
 
@@ -1763,6 +1895,7 @@ laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt
   src/dateien.rs         Dateien, Ordner und Pfade
   src/programm.rs        Argumente, Umgebung, aufhören, andere Programme starten
   src/json.rs            JSON lesen und schreiben, nach der Beschreibung des Typs vom Compiler
+  src/netz.rs            TCP; HTTP und HTTPS (Windows: WinHTTP, Linux: selbst, mit OpenSSL)
   src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus; nur unter Windows
   src/fenster/           Farbverläufe, Leuchten, Mischen; freie Formen, Ausschnitte; Bilder
   src/ton.rs             Töne errechnen, mischen und an Windows geben; nur unter Windows
@@ -1792,6 +1925,8 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - In einen Text mit `$` lassen sich Listen und Strukturen noch nicht als Ganzes einsetzen.
 - Aufzählungen und eine Verzweigung nach Fällen (wie `switch`) fehlen noch.
+- Im Netz: Ein Server bedient einen Gast nach dem anderen (Threads fehlen noch); kein Server für
+  `https`, kein UDP, keine WebSockets, kein gzip; unter Linux kein Proxy.
 - Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
 - Im Fenster fehlen noch: getippter Text als Eingabe, Gamepad, Vollbild und mehr als ein Fenster.
   Leuchten gibt es nur beim Zeichnen ins Fenster, nicht in ein Bild.
@@ -1844,8 +1979,8 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 11b | [Installer](#installieren): eine `setup.exe` für Windows, für Linux eine Datei, die sich selbst auspackt, und ein `.deb` | fertig |
 | 11c | Fenster und Ton unter Linux | später |
 | 12 | Die Sprache selbst, Teil 1: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten), Kommastellen, Zahlen wie `1_000`, `0xFF`, `1e9`; `==` für Strukturen, Listen und Verzeichnisse | fertig |
-| 13 | Die Sprache selbst, Teil 2: Aufzählungen, Verzweigung nach Fällen, fragen, was ein Objekt wirklich ist | offen |
-| 14 | Netzwerk: HTTP und HTTPS als Client, dazu rohe TCP-Verbindungen | offen |
+| 13 | [Netzwerk](#netzwerk): HTTP und HTTPS als Client, dazu TCP-Verbindungen in beide Richtungen | fertig |
+| 14 | Die Sprache selbst, Teil 2: Aufzählungen, Verzweigung nach Fällen, fragen, was ein Objekt wirklich ist | offen |
 | 15 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
 | 16 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 

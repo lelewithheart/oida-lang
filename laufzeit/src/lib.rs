@@ -31,6 +31,7 @@ mod dateien;
 #[cfg(windows)]
 mod fenster;
 mod json;
+mod netz;
 mod programm;
 #[cfg(windows)]
 mod ton;

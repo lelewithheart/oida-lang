@@ -1,0 +1,244 @@
+# OIDA-Bibliothek: Netzwerk.     Dazuholen mit:  BRAUCH netz OIDA
+#
+# Zwei Dinge:
+#
+# 1. Seiten und Daten aus dem Netz holen und hinschicken (HTTP und HTTPS):
+#
+#        PROBIER antwort = hol("https://example.com")
+#            SCHREIB(antwort.code, LÄNGN(antwort.inhalt)) OIDA
+#        WONNS SCHIEFGEHT f
+#            SCHREIB(f.meldung) OIDA             # Den Rechner example.com find i ned.
+#        PASST SCHO
+#
+# 2. Selbst mit einem anderen Programm reden, Zeile für Zeile oder Byte für
+#    Byte (TCP): mit vabind() hin zu einem anderen, mit horch() warten, bis
+#    jemand kommt.
+#
+# Geht unter Windows und unter Linux gleich. Bei HTTPS wird immer geprüft, ob
+# die andere Seite die ist, für die sie sich ausgibt (ihr Zertifikat).
+
+BRAUCH dateien OIDA
+
+# Wie lange auf eine Verbindung oder eine Antwort gewartet wird, in Sekunden.
+# Am Anfang sind es 30; 0 heißt: ohne Ende warten.
+FUNKTIAUN netz_wortzeit(sekundn ZOI) VON DRAUSSN "oida_netz_wartezeit" OIDA
+
+# ---------------------------------------------------------- HTTP und HTTPS
+
+# Was auf eine Anfrage zurückkommt.
+STRUKTUR Antwort
+    code ZOI                                # 200: passt, 404: gibt's ned, 500: drüben is wos hi
+    inhalt KETTN                            # was zurückgekommen ist, als Text
+    köpf VAZEICHNIS VON KETTN UND KETTN     # die Köpfe; die Namen klein geschrieben ("content-type")
+PASST SCHO
+
+FUNKTIAUN netz_roh_aufrog(oat KETTN, adress KETTN, köpf LISTN VON KETTN, inhalt KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_netz_anfrage" OIDA
+FUNKTIAUN netz_roh_code() GIBT ZRUCK ZOI VON DRAUSSN "oida_netz_antwort_code" OIDA
+FUNKTIAUN netz_roh_inhalt() GIBT ZRUCK KETTN VON DRAUSSN "oida_netz_antwort_inhalt" OIDA
+FUNKTIAUN netz_roh_köpf() GIBT ZRUCK LISTN VON KETTN VON DRAUSSN "oida_netz_antwort_koepfe" OIDA
+FUNKTIAUN netz_roh_bytes() GIBT ZRUCK LISTN VON ZOI VON DRAUSSN "oida_netz_antwort_bytes" OIDA
+FUNKTIAUN netz_roh_speichan(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_netz_antwort_speichern" OIDA
+
+# Die allgemeine Anfrage: welche Art ("GET", "POST", "PUT", "DELETE" ...), wohin,
+# mit welchen Köpfen (jeder als "Nom: Wert") und mit welchem Inhalt.
+#
+#     aufrog("PUT", "https://rechna/ding/7", ["Authorization: Bearer obc"], "neich")
+#
+# Ein FEHLA kommt nur, wenn gar keine Antwort kommt (kein Netz, den Rechner
+# gibt es nicht, dem Zertifikat ist nicht zu trauen). Ein Code wie 404 ist eine
+# Antwort: Ob sie gut war, sagt is_guat(antwort). Umleitungen werden verfolgt.
+FUNKTIAUN aufrog(oat KETTN, adress KETTN, köpf LISTN VON KETTN, inhalt KETTN) GIBT ZRUCK Antwort ODA FEHLA
+    WENN NED netz_roh_aufrog(oat, adress, köpf, inhalt) DAUN
+        GIB ZRUCK FEHLA(datei_fehla()) OIDA
+    PASST SCHO
+    SOG AU kemma = VAZEICHNIS VON KETTN UND KETTN() OIDA
+    SOG AU flach = netz_roh_köpf() OIDA
+    SOG AU i = 0 OIDA
+    SOLONG i + 1 < LÄNGN(flach) TUA
+        # Kommt ein Kopf öfter vor, stehen seine Werte mit Beistrich hintereinander.
+        SOG AU bisher = kemma[flach[i]] OIDA
+        WENN bisher != NIX DAUN
+            kemma[flach[i]] = bisher + ", " + flach[i + 1] OIDA
+        SUNST
+            kemma[flach[i]] = flach[i + 1] OIDA
+        PASST SCHO
+        i += 2 OIDA
+    PASST SCHO
+    GIB ZRUCK Antwort(netz_roh_code(), netz_roh_inhalt(), kemma) OIDA
+PASST SCHO
+
+# War die Antwort gut (ein Code von 200 bis 299)?
+FUNKTIAUN is_guat(antwort Antwort) GIBT ZRUCK JONA
+    GIB ZRUCK antwort.code >= 200 UND antwort.code < 300 OIDA
+PASST SCHO
+
+# Holt, was unter der Adresse liegt.
+FUNKTIAUN hol(adress KETTN) GIBT ZRUCK Antwort ODA FEHLA
+    GIB ZRUCK PROBIER aufrog("GET", adress, [], "") OIDA
+PASST SCHO
+
+# Holt den Text unter der Adresse. Ist die Antwort nicht gut (etwa 404), ist das hier ein FEHLA.
+FUNKTIAUN hol_text(adress KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU antwort = PROBIER hol(adress) OIDA
+    WENN NED is_guat(antwort) DAUN
+        GIB ZRUCK FEHLA(adress + ": Do kummt da Code " + KETTN(antwort.code) + " zruck.") OIDA
+    PASST SCHO
+    GIB ZRUCK antwort.inhalt OIDA
+PASST SCHO
+
+# Holt, was unter der Adresse liegt, als Bytes (für Bilder und alles, was kein Text ist).
+FUNKTIAUN hol_bytes(adress KETTN) GIBT ZRUCK LISTN VON ZOI ODA FEHLA
+    SOG AU antwort = PROBIER hol(adress) OIDA
+    WENN NED is_guat(antwort) DAUN
+        GIB ZRUCK FEHLA(adress + ": Do kummt da Code " + KETTN(antwort.code) + " zruck.") OIDA
+    PASST SCHO
+    GIB ZRUCK netz_roh_bytes() OIDA
+PASST SCHO
+
+# Lädt eine Datei herunter und speichert sie unter `pfad`, Byte für Byte.
+FUNKTIAUN lod_owa(adress KETTN, pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU antwort = PROBIER hol(adress) OIDA
+    WENN NED is_guat(antwort) DAUN
+        GIB ZRUCK FEHLA(adress + ": Do kummt da Code " + KETTN(antwort.code) + " zruck.") OIDA
+    PASST SCHO
+    WENN NED netz_roh_speichan(pfad) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Schickt einen Text hin (POST) und gibt zurück, was die andere Seite dazu sagt.
+FUNKTIAUN schick(adress KETTN, inhalt KETTN) GIBT ZRUCK Antwort ODA FEHLA
+    GIB ZRUCK PROBIER aufrog("POST", adress, ["Content-Type: text/plain; charset=utf-8"], inhalt) OIDA
+PASST SCHO
+
+# Schickt JSON hin (POST). Den Text macht man mit OIS JSON(wert):
+#     PROBIER antwort = schick_json("https://rechna/punkte", OIS JSON(staund))
+FUNKTIAUN schick_json(adress KETTN, json KETTN) GIBT ZRUCK Antwort ODA FEHLA
+    GIB ZRUCK PROBIER aufrog("POST", adress, ["Content-Type: application/json"], json) OIDA
+PASST SCHO
+
+# ----------------------------------------------- Verbindungen selbst (TCP)
+
+FUNKTIAUN netz_roh_vabindn(rechna KETTN, port ZOI) GIBT ZRUCK ZOI VON DRAUSSN "oida_netz_verbinden" OIDA
+FUNKTIAUN netz_roh_schickn(numma ZOI, inhalt KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_netz_schicken" OIDA
+FUNKTIAUN netz_roh_bytes_schickn(numma ZOI, zoin LISTN VON ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_netz_bytes_schicken" OIDA
+FUNKTIAUN netz_roh_zeile(numma ZOI) GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN "oida_netz_zeile" OIDA
+FUNKTIAUN netz_roh_ollas(numma ZOI) GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN "oida_netz_alles_lesen" OIDA
+FUNKTIAUN netz_roh_bytes_lesn(numma ZOI, höchstns ZOI) GIBT ZRUCK LISTN VON ZOI VON DRAUSSN "oida_netz_bytes_lesen" OIDA
+FUNKTIAUN netz_roh_wer(numma ZOI) GIBT ZRUCK KETTN VON DRAUSSN "oida_netz_gegenueber" OIDA
+FUNKTIAUN netz_roh_zua(numma ZOI) VON DRAUSSN "oida_netz_zu" OIDA
+FUNKTIAUN netz_roh_horchn(port ZOI, olle JONA) GIBT ZRUCK ZOI VON DRAUSSN "oida_netz_horchen" OIDA
+FUNKTIAUN netz_roh_horcha_port(numma ZOI) GIBT ZRUCK ZOI VON DRAUSSN "oida_netz_horcher_port" OIDA
+FUNKTIAUN netz_roh_aunehma(numma ZOI) GIBT ZRUCK ZOI VON DRAUSSN "oida_netz_annehmen" OIDA
+FUNKTIAUN netz_roh_horcha_zua(numma ZOI) VON DRAUSSN "oida_netz_horcher_zu" OIDA
+
+# Eine offene Verbindung zu einem anderen Programm. Was die eine Seite schickt,
+# kann die andere lesen. Am Schluss zumachen: zua().
+KLASSE Vabindung
+    numma ZOI
+
+    # Schickt den Text, so wie er ist.
+    FUNKTIAUN schick(inhalt KETTN) GIBT ZRUCK NIX ODA FEHLA
+        WENN NED netz_roh_schickn(MEI.numma, inhalt) DAUN
+            GIB ZRUCK FEHLA(datei_fehla()) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Schickt den Text und ein Zeilenende dahinter. Die andere Seite liest ihn mit zeile().
+    FUNKTIAUN schick_zeile(inhalt KETTN) GIBT ZRUCK NIX ODA FEHLA
+        WENN NED netz_roh_schickn(MEI.numma, inhalt + "\n") DAUN
+            GIB ZRUCK FEHLA(datei_fehla()) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Schickt Bytes: Jede Zahl muss von 0 bis 255 gehen.
+    FUNKTIAUN schick_bytes(zoin LISTN VON ZOI) GIBT ZRUCK NIX ODA FEHLA
+        WENN NED netz_roh_bytes_schickn(MEI.numma, zoin) DAUN
+            GIB ZRUCK FEHLA(datei_fehla()) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Die nächste Zeile ohne ihr Zeilenende. NIX heißt: Die andere Seite hat
+    # zugemacht (oder es kommt in der Wartezeit nichts mehr).
+    FUNKTIAUN zeile() GIBT ZRUCK VIELLEICHT KETTN
+        GIB ZRUCK netz_roh_zeile(MEI.numma) OIDA
+    PASST SCHO
+
+    # Alles, was noch kommt, bis die andere Seite zumacht.
+    FUNKTIAUN ollas() GIBT ZRUCK KETTN ODA FEHLA
+        SOG AU inhalt = netz_roh_ollas(MEI.numma) OIDA
+        WENN inhalt == NIX DAUN
+            GIB ZRUCK FEHLA(datei_fehla()) OIDA
+        PASST SCHO
+        GIB ZRUCK inhalt OIDA
+    PASST SCHO
+
+    # Bis zu so viele Bytes, sobald welche da sind. Eine leere Liste heißt: Da kommt nichts mehr.
+    FUNKTIAUN bytes(höchstns ZOI) GIBT ZRUCK LISTN VON ZOI
+        GIB ZRUCK netz_roh_bytes_lesn(MEI.numma, höchstns) OIDA
+    PASST SCHO
+
+    # Mit wem die Verbindung besteht, zum Beispiel "127.0.0.1:51234".
+    FUNKTIAUN wer() GIBT ZRUCK KETTN
+        GIB ZRUCK netz_roh_wer(MEI.numma) OIDA
+    PASST SCHO
+
+    FUNKTIAUN zua()
+        netz_roh_zua(MEI.numma) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Baut eine Verbindung zu einem Programm auf, das auf diesem Rechner und Port horcht:
+#     SOG AU v = PROBIER vabind("localhost", 4711) OIDA
+FUNKTIAUN vabind(rechna KETTN, port ZOI) GIBT ZRUCK Vabindung ODA FEHLA
+    SOG AU numma = netz_roh_vabindn(rechna, port) OIDA
+    WENN numma < 0 DAUN
+        GIB ZRUCK FEHLA(datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK Vabindung(numma) OIDA
+PASST SCHO
+
+# Einer, der auf einem Port darauf wartet, dass sich jemand verbindet.
+KLASSE Horcha
+    numma ZOI
+
+    # Auf welchem Port gehorcht wird (wichtig, wenn man mit 0 irgendeinen freien genommen hat).
+    FUNKTIAUN port() GIBT ZRUCK ZOI
+        GIB ZRUCK netz_roh_horcha_port(MEI.numma) OIDA
+    PASST SCHO
+
+    # Wartet, bis sich jemand verbindet, und gibt die Verbindung zu ihm zurück.
+    FUNKTIAUN nächsta() GIBT ZRUCK Vabindung ODA FEHLA
+        SOG AU numma = netz_roh_aunehma(MEI.numma) OIDA
+        WENN numma < 0 DAUN
+            GIB ZRUCK FEHLA(datei_fehla()) OIDA
+        PASST SCHO
+        GIB ZRUCK Vabindung(numma) OIDA
+    PASST SCHO
+
+    FUNKTIAUN zua()
+        netz_roh_horcha_zua(MEI.numma) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN horcha_auf(port ZOI, olle JONA) GIBT ZRUCK Horcha ODA FEHLA
+    SOG AU numma = netz_roh_horchn(port, olle) OIDA
+    WENN numma < 0 DAUN
+        GIB ZRUCK FEHLA("Port " + KETTN(port) + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK Horcha(numma) OIDA
+PASST SCHO
+
+# Horcht auf einem Port, erreichbar nur von diesem Rechner aus. Port 0 heißt:
+# irgendeinen freien (welcher es ist, sagt port()).
+#     SOG AU horcha = PROBIER horch(4711) OIDA
+#     SOG AU gost = PROBIER horcha.nächsta() OIDA
+FUNKTIAUN horch(port ZOI) GIBT ZRUCK Horcha ODA FEHLA
+    GIB ZRUCK PROBIER horcha_auf(port, FOISCH) OIDA
+PASST SCHO
+
+# Horcht auf einem Port, erreichbar auch von anderen Rechnern im Netz. Das
+# will überlegt sein: Wer hier horcht, lässt andere herein.
+FUNKTIAUN horch_fia_olle(port ZOI) GIBT ZRUCK Horcha ODA FEHLA
+    GIB ZRUCK PROBIER horcha_auf(port, WOAHR) OIDA
+PASST SCHO

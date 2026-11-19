@@ -44,7 +44,7 @@ Copy-Item (Join-Path $wurzel 'woerterbuch.txt') (Join-Path $inhalt 'woerterbuch-
 # Beispiele: die Programme selbst, ohne die erwarteten Ausgaben der Tests und ohne
 # das grosse Spiel mit seiner Musik (das liegt im Projekt).
 Get-ChildItem (Join-Path $wurzel 'beispiele') -Filter '*.oida' | Copy-Item -Destination (Join-Path $inhalt 'beispiele')
-foreach ($ordner in @('turnier', 'spui')) {
+foreach ($ordner in @('turnier', 'spui', 'netz')) {
     $ziel = Join-Path $inhalt "beispiele\$ordner"
     New-Item -ItemType Directory -Force $ziel | Out-Null
     Get-ChildItem (Join-Path $wurzel "beispiele\$ordner") -File | Where-Object { $_.Extension -ne '.erwartet' } | Copy-Item -Destination $ziel

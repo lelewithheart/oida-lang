@@ -1,0 +1,55 @@
+# Ein kleiner Server, mit dem man plaudern kann: Er horcht auf Port 4711 und
+# sagt jede Zeile zurück, die man ihm schickt (in Großbuchstaben).
+#
+#     oida beispiele/netz/plaudan.oida --renn
+#
+# In einem zweiten Terminal verbindet man sich, zum Beispiel mit
+#
+#     curl telnet://localhost:4711          (Windows und Linux)
+#
+# oder mit einem eigenen OIDA-Programm: vabind("localhost", 4711).
+# "pfiat di" beendet das Gespräch, "sperr zua" den ganzen Server.
+
+BRAUCH netz OIDA
+
+# Redet mit einem Gast, bis er geht. Gibt zurück, ob der Server weiterlaufen soll.
+FUNKTIAUN plaudan(gost Vabindung) GIBT ZRUCK JONA ODA FEHLA
+    PROBIER gost.schick_zeile("Servas! Schreib wos, i sog's da zruck. (pfiat di / sperr zua)") OIDA
+    SOG AU zeile = gost.zeile() OIDA
+    SOLONG zeile != NIX TUA
+        WENN FLÜSTER(STUTZ(zeile)) == "pfiat di" DAUN
+            PROBIER gost.schick_zeile("Pfiat di!") OIDA
+            GIB ZRUCK WOAHR OIDA
+        PASST SCHO
+        WENN FLÜSTER(STUTZ(zeile)) == "sperr zua" DAUN
+            PROBIER gost.schick_zeile("Guat, i sperr zua.") OIDA
+            GIB ZRUCK FOISCH OIDA
+        PASST SCHO
+        PROBIER gost.schick_zeile($"{SCHREI(zeile)} ({LÄNGN(zeile)} Zeichn)") OIDA
+        zeile = gost.zeile() OIDA
+    PASST SCHO
+    GIB ZRUCK WOAHR OIDA
+PASST SCHO
+
+FUNKTIAUN server(port ZOI) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU horcha = PROBIER horch(port) OIDA
+    # Ein Gast darf beim Tippen so lange brauchen, wie er will.
+    netz_wortzeit(0) OIDA
+    SCHREIB($"I horch auf Port {horcha.port()}. Aufhean mit Strg+C oder \"sperr zua\".") OIDA
+    SOG AU offn = WOAHR OIDA
+    SOLONG offn TUA
+        SOG AU gost = PROBIER horcha.nächsta() OIDA
+        SCHREIB($"{gost.wer()} is do.") OIDA
+        # Geht mit einem Gast etwas schief (er reißt die Verbindung ab), läuft der Server weiter.
+        offn = plaudan(gost) ODA HOID WOAHR OIDA
+        gost.zua() OIDA
+        SCHREIB("... und wieda weg.") OIDA
+    PASST SCHO
+    horcha.zua() OIDA
+PASST SCHO
+
+PROBIER server(4711)
+    SCHREIB("Zua.") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Des geht ned:", f.meldung) OIDA
+PASST SCHO

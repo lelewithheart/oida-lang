@@ -1,0 +1,92 @@
+# Seiten holen und schicken, gegen den kleinen Server, den der Test
+# netz_holt_und_schickt startet (sein Port steht in OIDA_TEST_PORT).
+BRAUCH netz OIDA
+BRAUCH programm OIDA
+BRAUCH dateien OIDA
+
+STRUKTUR Staund
+    nam KETTN
+    punkte ZOI
+PASST SCHO
+
+SOG AU port = umgebung("OIDA_TEST_PORT") ODA HOID "0" OIDA
+SOG AU basis = "http://127.0.0.1:" + port OIDA
+
+FUNKTIAUN ohne_port(meldung KETTN, port KETTN) GIBT ZRUCK KETTN
+    GIB ZRUCK ERSETZ(meldung, port, "<port>") OIDA
+PASST SCHO
+
+SCHREIB("--- hoin") OIDA
+PROBIER antwort = hol(basis + "/servas?wer=grüß di")
+    SCHREIB(antwort.code, is_guat(antwort), antwort.inhalt) OIDA
+    SCHREIB(antwort.köpf["content-type"] ODA HOID "?", antwort.köpf["set-cookie"] ODA HOID "?", antwort.köpf["gibts-ned"] ODA HOID "fehlt") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+SCHREIB(hol_text(basis + "/servas") ODA HOID "?") OIDA
+
+SCHREIB("--- a Code wia 404 is a Antwort, ka Fehla") OIDA
+PROBIER antwort = hol(basis + "/gibtsned")
+    SCHREIB(antwort.code, is_guat(antwort), antwort.inhalt) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER inhalt = hol_text(basis + "/gibtsned")
+    SCHREIB("des derf ned gehn:", inhalt) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(ohne_port(f.meldung, port)) OIDA
+PASST SCHO
+
+SCHREIB("--- schickn") OIDA
+PROBIER antwort = schick(basis + "/echo", "a Text mit ä und €")
+    SCHREIB(antwort.code, antwort.inhalt) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER antwort = schick_json(basis + "/echo", OIS JSON(Staund("Hansi", 1200)))
+    SCHREIB(antwort.inhalt) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+
+# JSON hin, JSON zurück: Der Server zählt 50 Punkte dazu.
+FUNKTIAUN punkte_dazua(basis KETTN, staund Staund) GIBT ZRUCK Staund ODA FEHLA
+    SOG AU antwort = PROBIER schick_json(basis + "/punkte", OIS JSON(staund)) OIDA
+    GIB ZRUCK PROBIER AUS JSON VON Staund(antwort.inhalt) OIDA
+PASST SCHO
+SCHREIB(punkte_dazua(basis, Staund("Susi", 70))) OIDA
+
+SCHREIB("--- aundare Oatn und eigane Köpf") OIDA
+PROBIER antwort = aufrog("DELETE", basis + "/echo", ["X-Probe: servas", "Accept: text/plain"], "")
+    SCHREIB(antwort.inhalt) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER antwort = aufrog("put", basis + "/echo", ["Content-Type: text/oida"], "neich")
+    SCHREIB(antwort.inhalt) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+
+SCHREIB("--- Umleitung, Inhalt in Stickln") OIDA
+SCHREIB(hol_text(basis + "/oid") ODA HOID "?") OIDA
+SCHREIB(hol_text(basis + "/stickln") ODA HOID "?") OIDA
+
+SCHREIB("--- Bytes und Dateien") OIDA
+SCHREIB(hol_bytes(basis + "/bytes") ODA HOID []) OIDA
+PROBIER lod_owa(basis + "/bytes", "glodn.bin")
+    SCHREIB(datei_größe("glodn.bin") ODA HOID -1, lies_bytes("glodn.bin") ODA HOID []) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER lod_owa(basis + "/gibtsned", "ned_do.bin")
+    SCHREIB("des derf ned gehn") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(ohne_port(f.meldung, port), gibts_datei("ned_do.bin")) OIDA
+PASST SCHO
+PROBIER lod_owa(basis + "/bytes", "den/ordna/gibts/ned.bin")
+    SCHREIB("des derf ned gehn") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+SOG AU weg = lösch_datei("glodn.bin") OIDA

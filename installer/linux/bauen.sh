@@ -53,7 +53,7 @@ install -D -m 644 "$wurzel/installer/LIESMICH.txt" "$baum/share/oida/LIESMICH.tx
 install -D -m 644 "$wurzel/woerterbuch.txt" "$baum/share/oida/woerterbuch-vorlog.txt"
 # Beispiele: die Programme selbst, ohne die erwarteten Ausgaben der Tests. Das Spiel
 # mit Fenster (spui) und das große mit Musik (roguewave) laufen unter Linux noch nicht.
-for datei in "$wurzel"/beispiele/*.oida "$wurzel"/beispiele/turnier/*.oida; do
+for datei in "$wurzel"/beispiele/*.oida "$wurzel"/beispiele/turnier/*.oida "$wurzel"/beispiele/netz/*.oida; do
     install -D -m 644 "$datei" "$baum/share/oida/beispiele/${datei#"$wurzel/beispiele/"}"
 done
 # Die VS-Code-Erweiterung baut derzeit nur vscode\bauen.ps1 unter Windows; liegt sie da, kommt sie mit.

@@ -1,0 +1,42 @@
+--- horchn, vabindn, aunehma
+WOAHR WOAHR WOAHR
+--- Zeiln hin und her
+Servas, wer do?
+I bin's.
+Und no a Zeile mit ä, ö, ü
+hoibe Zeile
+--- a Struktur ois JSON üba de Leitung
+Hansi ziagt auf 7, gwürflt: 7
+--- Bytes
+[79, 73, 68, 65, 0, 255]
+z'große Zoi -> geht ned: An da Stö 1 steht 300, a Byte geht oba nur vo 0 bis 255.
+--- zuamochn
+da Rest ohne Zeilnend
+aus [] 
+noch'm Zuamochn schickn -> geht ned: De Vabindung is scho zua.
+aus
+--- zwa hintaranaund, jeda kriagt sei eigane Vabindung
+i bin da erste
+i bin da zweite
+--- wos ned geht
+Port <port>: Der Port is scho bsetzt.
+-1
+Der Horcha is scho zua.
+WOAHR
+127.0.0.1 nimmt auf Port <port> kane Vabindungen au.
+127.0.0.1 nimmt auf Port <port> kane Vabindungen au.
+FEHLA("Den Rechner den-gibts-ned.invalid find i ned.")
+Den Rechner den-gibts-ned.invalid find i ned.
+An Port gibt's nur von 0 bis 65535.
+--- Adressn und Aufrogn, de kane san
+FEHLA("De Adress 'example.com' muass mit http:// oda https:// aufaunga.")
+FEHLA("De Adress 'ftp://example.com/datei' muass mit http:// oda https:// aufaunga.")
+FEHLA("Nom und Passwort in da Adress (vor'm @) gehn ned. Gib's ois Kopf mit: Authorization.")
+FEHLA("Der Port in 'http://example.com:99999/' is ka Zoi von 1 bis 65535.")
+FEHLA("In da Adress 'http://' fehlt da Rechner, oda sei Nom hot Zeichn, de ned gehn (Umlaute, Leerzeichn).")
+FEHLA("'HOL MA' is ka Oat vo Aufrog. Es gibt GET, POST, PUT, DELETE und a poa aundare.")
+FEHLA("'ka Kopf' is ka Kopf. So ghört's: "Nom: Wert".")
+FEHLA("'A: b
+B: c' is ka Kopf. So ghört's: "Nom: Wert".")
+FEHLA("De Adress 'servas' muass mit http:// oda https:// aufaunga.")
+WOAHR WOAHR FOISCH FOISCH

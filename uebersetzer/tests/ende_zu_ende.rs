@@ -224,6 +224,74 @@ fn programm_kennt_seine_argumente_und_hoert_mit_code_auf() {
     assert_eq!(lies(&datei), "no gschwind gschriebn\n");
 }
 
+/// Ein kleiner HTTP-Server für den Test darunter. Gibt den Port zurück, auf dem er horcht.
+fn probe_server() -> u16 {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let horcher = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = horcher.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for mut strom in horcher.incoming().flatten() {
+            let mut leser = BufReader::new(strom.try_clone().unwrap());
+            let mut kopf = Vec::new();
+            loop {
+                let mut zeile = String::new();
+                if leser.read_line(&mut zeile).unwrap_or(0) == 0 || zeile == "\r\n" {
+                    break;
+                }
+                kopf.push(zeile.trim_end().to_string());
+            }
+            let wert = |name: &str| {
+                kopf.iter().find_map(|z| z.to_ascii_lowercase().strip_prefix(&format!("{name}:")).map(|w| w.trim().to_string())).unwrap_or_default()
+            };
+            let mut inhalt = vec![0; wert("content-length").parse().unwrap_or(0)];
+            let _ = leser.read_exact(&mut inhalt);
+            let inhalt = String::from_utf8_lossy(&inhalt).into_owned();
+            let erste: Vec<&str> = kopf.first().map(|z| z.split_whitespace().collect()).unwrap_or_default();
+            let (methode, pfad) = (erste.first().copied().unwrap_or(""), erste.get(1).copied().unwrap_or(""));
+            let fertig = |code: &str, koepfe: &str, inhalt: &[u8]| {
+                let mut antwort = format!("HTTP/1.1 {code}\r\nContent-Length: {}\r\n{koepfe}\r\n", inhalt.len()).into_bytes();
+                antwort.extend_from_slice(inhalt);
+                antwort
+            };
+            let antwort = match pfad.split('?').next().unwrap_or("") {
+                "/servas" => fertig(
+                    "200 OK",
+                    "Content-Type: text/plain; charset=utf-8\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\n",
+                    format!("Servas vom Server! ({pfad})").as_bytes(),
+                ),
+                "/echo" => fertig("200 OK", "", format!("{methode} {pfad}|{}|{}|{inhalt}", wert("x-probe"), wert("content-type")).as_bytes()),
+                // {"nam":"Susi","punkte":70} -> 50 Punkte mehr, und ein Eintrag, den das Programm nicht kennt.
+                "/punkte" => {
+                    let punkte: i64 = inhalt.rsplit(':').next().unwrap_or("").trim_end_matches('}').trim().parse().unwrap_or(-1);
+                    let name = inhalt.split('"').nth(3).unwrap_or("?");
+                    fertig("200 OK", "Content-Type: application/json\r\n", format!("{{\"dazua\": 50, \"nam\": \"{name}\", \"punkte\": {}}}", punkte + 50).as_bytes())
+                }
+                "/oid" => fertig("301 Moved Permanently", "Location: /servas\r\n", b""),
+                "/stickln" => b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nServa\r\n3\r\ns, \r\n4\r\nOIDA\r\n0\r\n\r\n".to_vec(),
+                "/bytes" => fertig("200 OK", "Content-Type: application/octet-stream\r\n", &[0, 255, 79, 73, 68, 65, 10]),
+                _ => fertig("404 Not Found", "", b"nix do"),
+            };
+            let _ = strom.write_all(&antwort);
+            let _ = strom.shutdown(std::net::Shutdown::Both);
+        }
+    });
+    port
+}
+
+#[test]
+fn netz_holt_und_schickt() {
+    // HTTP von Anfang bis Ende: Das OIDA-Programm redet mit einem Server in diesem Test.
+    let arbeit = arbeitsordner("netz");
+    let quelle = tests().join("werkzeug").join("netz_http.oida");
+    let exe = arbeit.join("netz_http.exe");
+    uebersetze(&quelle, &exe, &[]);
+    let port = probe_server();
+    let lauf = befehl(&exe, None).env("OIDA_TEST_PORT", port.to_string()).env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
+    assert_eq!(text(&lauf.stdout), lies(&quelle.with_extension("erwartet")));
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+    assert_eq!(lauf.status.code(), Some(0));
+}
+
 #[test]
 fn eigenes_woerterbuch() {
     let arbeit = arbeitsordner("woerterbuch");
