@@ -1,0 +1,74 @@
+--- Ordna
+FOISCH FOISCH
+aulegn -> passt
+no amoi -> passt
+WOAHR WOAHR FOISCH
+schreibn -> passt
+schreibn -> passt
+inhalt -> 3 ["a", "Ans.txt", "zwa.txt"]
+laar -> 0 []
+fehlt -> geht ned: den_gibts_ned: De gibt's ned.
+a Datei -> geht ned: oida_test_ordna/zwa.txt: Des is ka Ordna.
+ned laar -> geht ned: oida_test_ordna/a: Da Ordna is ned laar.
+laar -> passt
+scho weg -> geht ned: oida_test_ordna/a/b/c: De gibt's ned.
+FOISCH FOISCH
+--- üba a Datei
+größe -> 2
+größe -> geht ned: oida_test_ordna/fehlt.txt: De gibt's ned.
+größe -> geht ned: oida_test_ordna: Des is a Ordna, ka Datei.
+WOAHR -1
+kopiern -> passt
+22 WOAHR
+vaschiabn -> passt
+FOISCH 22
+in a -> 2 ["b", "via.txt"]
+kopiern -> geht ned: oida_test_ordna/drei.txt -> oida_test_ordna/zwa.txt: De gibt's ned.
+vaschiabn -> geht ned: oida_test_ordna/drei.txt -> oida_test_ordna/zwa.txt: De gibt's ned.
+Ordna umbenenna -> passt
+inhalt -> 3 ["Ans.txt", "z", "zwa.txt"]
+--- Pfade
+daten/stand.txt daten/stand.txt stand.txt C:/x.txt
+stand.txt stand []
+daten/tiaf []
+PNG [] daten/stand
+WOAHR WOAHR
+--- Zeile fia Zeile
+vü schreibn -> passt
+[20000, 208894] 228894
+auhänga -> geht ned: oida_test_ordna/groß.txt: De Datei is scho zua.
+[20002, 208913]
+jede Zeile -> passt
+20002 ohne End
+jede Zeile -> geht ned: oida_test_ordna/fehlt.txt: De gibt's ned.
+Zeile 1 | 22 | Zeile 2 | aus | zua
+FEHLA("oida_test_ordna/fehlt.txt: De gibt's ned.")
+--- Bytes
+schreibn -> passt
+[79, 73, 68, 65, 0, 255, 10] 7
+FEHLA("oida_test_ordna/roh.bin: Des is ka Text (ka UTF-8).")
+z'groß -> geht ned: oida_test_ordna/roh.bin: An da Stö 2 steht 300, a Byte geht oba nur vo 0 bis 255.
+unta null -> geht ned: oida_test_ordna/roh.bin: An da Stö 0 steht -1, a Byte geht oba nur vo 0 bis 255.
+7 FEHLA("oida_test_ordna/fehlt.bin: De gibt's ned.")
+laar -> passt
+[] 100
+--- des Programm und sei Umgebung
+[] 0
+1 ned do ned do
+setzn -> passt
+setzn -> geht ned: A=B: So kaun a Umgebungsvariable ned haaßn.
+griaß di
+WOAHR WOAHR WOAHR WOAHR
+wechsln -> passt
+WOAHR WOAHR
+zruck -> passt
+FOISCH WOAHR
+wechsln -> geht ned: den_gibts_ned: De gibt's ned.
+--- aundare Programme startn
+0 Servas []
+7 [] daneben
+1
+0 ["ans", "drei", "zwa"]
+des_programm_gibts_ned_4711: De gibt's ned.
+aufräuma -> passt
+FOISCH

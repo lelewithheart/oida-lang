@@ -27,6 +27,7 @@
 
 mod dateien;
 mod fenster;
+mod programm;
 mod ton;
 
 use std::alloc::{Layout, alloc, dealloc, handle_alloc_error};
@@ -456,6 +457,28 @@ unsafe fn liste<'a>(liste: *mut ListenKopf) -> &'a mut ListenKopf {
 pub extern "C" fn oida_liste_neu(groesse: i64, platz: i64) -> *mut ListenKopf {
     zustand().lebende_texte += 1;
     Box::into_raw(Box::new(ListenKopf { zaehler: 1, laenge: 0, platz, daten: neue_daten(platz, groesse) }))
+}
+
+/// Eine fertige Liste aus ganzen Zahlen: für Funktionen der Laufzeit, die eine
+/// `LISTN VON ZOI` zurückgeben.
+fn liste_aus_zahlen(zahlen: &[i64]) -> *mut ListenKopf {
+    let liste = oida_liste_neu(8, zahlen.len() as i64);
+    unsafe {
+        std::ptr::copy_nonoverlapping(zahlen.as_ptr(), (*liste).daten as *mut i64, zahlen.len());
+        (*liste).laenge = zahlen.len() as i64;
+    }
+    liste
+}
+
+/// Eine fertige Liste aus Texten (`LISTN VON KETTN`). Die Texte gehören der Liste.
+fn liste_aus_texten(texte: &[String]) -> *mut ListenKopf {
+    let zeiger: Vec<*mut TextKopf> = texte.iter().map(|t| neuer_text(t.as_bytes())).collect();
+    let liste = oida_liste_neu(8, zeiger.len() as i64);
+    unsafe {
+        std::ptr::copy_nonoverlapping(zeiger.as_ptr(), (*liste).daten as *mut *mut TextKopf, zeiger.len());
+        (*liste).laenge = zeiger.len() as i64;
+    }
+    liste
 }
 
 /// Macht hinten Platz für ein weiteres Element und gibt zurück, wo es
@@ -925,6 +948,8 @@ pub extern "C" fn oida_start() {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_ende() {
     leeren();
+    // Dateien, die noch zum Schreiben offen sind, bekommen ihren Rest.
+    dateien::alles_zu();
     if zustand().pruefen {
         eprintln!("OIDA: {} Texte, Listen und Objekte übrig", zustand().lebende_texte);
     }

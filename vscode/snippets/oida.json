@@ -72,7 +72,7 @@
   },
   "BRAUCH": {
     "prefix": "brauch",
-    "body": ["BRAUCH ${1|listen,texte,mathe,dateien,fensta,ton,\"datei.oida\"|} OIDA"],
+    "body": ["BRAUCH ${1|listen,texte,mathe,dateien,programm,fensta,ton,\"datei.oida\"|} OIDA"],
     "description": "Bibliothek oder eigene Datei dazuholen"
   },
   "FUNKTIAUN VON T": {

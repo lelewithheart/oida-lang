@@ -1,0 +1,72 @@
+# Ein kleines Werkzeug für die Kommandozeile: zeigt einen Ordner als Baum,
+# mit der Größe jeder Datei, und zählt zusammen.
+#
+#     baam.exe C:\meine\sachen
+#
+# Ohne Angabe legt es sich einen kleinen Ordner zum Herzeigen an und räumt
+# ihn danach wieder weg.
+
+BRAUCH dateien OIDA
+BRAUCH programm OIDA
+
+# Zeigt, was im Ordner liegt, und gibt zurück, wie viele Bytes es zusammen sind.
+FUNKTIAUN zeig_baam(ordna KETTN, eingruckt KETTN) GIBT ZRUCK ZOI ODA FEHLA
+    SOG AU gsamt = 0 OIDA
+    SOG AU nama = PROBIER ordna_inhalt(ordna) OIDA
+    FIA JEDE nam IN nama TUA
+        SOG AU pfad = pfad_zamm(ordna, nam) OIDA
+        WENN gibts_ordna(pfad) DAUN
+            SCHREIB(eingruckt + nam + "/") OIDA
+            SOG AU drin = PROBIER zeig_baam(pfad, eingruckt + "    ") OIDA
+            gsamt += drin OIDA
+        SUNST
+            SOG AU größe = PROBIER datei_größe(pfad) OIDA
+            SCHREIB(eingruckt + nam + "  (" + KETTN(größe) + " Bytes)") OIDA
+            gsamt += größe OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK gsamt OIDA
+PASST SCHO
+
+# Ein Ordner zum Herzeigen: ein paar Dateien, ein paar Ordner ineinander.
+FUNKTIAUN leg_muster_au(grund KETTN) GIBT ZRUCK NIX ODA FEHLA
+    PROBIER leg_ordna_au(pfad_zamm(grund, "büda/urlaub")) OIDA
+    PROBIER leg_ordna_au(pfad_zamm(grund, "laar")) OIDA
+    PROBIER schreib_datei(pfad_zamm(grund, "lies_mi.txt"), "Servas!\n") OIDA
+    PROBIER schreib_datei(pfad_zamm(grund, "büda/haus.txt"), "a Haus mit Goatn") OIDA
+    PROBIER schreib_bytes(pfad_zamm(grund, "büda/urlaub/meer.bin"), [1, 2, 3, 4, 5]) OIDA
+    # Eine längere Datei, Zeile für Zeile geschrieben
+    SOG AU tog_buach = PROBIER schreiba_auf(pfad_zamm(grund, "büda/urlaub/togbuach.txt")) OIDA
+    FIA tog VON 1 BIS 14 TUA
+        PROBIER tog_buach.zeile("Tog " + KETTN(tog) + ": Sunn") OIDA
+    PASST SCHO
+    PROBIER tog_buach.zua() OIDA
+PASST SCHO
+
+SOG AU angaben = argumente() OIDA
+SOG AU ordna = "baam_muster" OIDA
+SOG AU muster = LÄNGN(angaben) == 0 OIDA
+WENN muster DAUN
+    PROBIER leg_muster_au(ordna)
+    WONNS SCHIEFGEHT f
+        schreib_fehla("Des Muster geht ned: " + f.meldung) OIDA
+        hea_auf(1) OIDA
+    PASST SCHO
+SUNST
+    ordna = angaben[0] OIDA
+PASST SCHO
+
+SCHREIB(pfad_nam(pfad_gaunz(ordna)) + "/") OIDA
+PROBIER gsamt = zeig_baam(ordna, "    ")
+    SCHREIB("Zusammen:", gsamt, "Bytes") OIDA
+WONNS SCHIEFGEHT f
+    schreib_fehla(f.meldung) OIDA
+    hea_auf(1) OIDA
+PASST SCHO
+
+WENN muster DAUN
+    PROBIER lösch_ordna_mit_ollm(ordna)
+    WONNS SCHIEFGEHT f
+        schreib_fehla(f.meldung) OIDA
+    PASST SCHO
+PASST SCHO

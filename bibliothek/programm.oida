@@ -1,0 +1,81 @@
+# OIDA-Bibliothek: das Programm und seine Umgebung.     Dazuholen mit:  BRAUCH programm OIDA
+#
+# Womit das Programm gestartet wurde, Umgebungsvariablen, der Ordner, in dem
+# es arbeitet, vorzeitig aufhören, und andere Programme starten.
+
+BRAUCH dateien OIDA
+
+# Was beim Starten hinter dem Namen des Programms stand:
+#     werkzeug.exe eingabe.txt --laut      ->  ["eingabe.txt", "--laut"]
+FUNKTIAUN argumente() GIBT ZRUCK LISTN VON KETTN VON DRAUSSN "oida_programm_argumente" OIDA
+
+# Der Wert einer Umgebungsvariable, oder NIX, wenn es sie nicht gibt:
+#     SOG AU daham = umgebung("USERPROFILE") ODA HOID "C:/" OIDA
+FUNKTIAUN umgebung(nam KETTN) GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN "oida_programm_umgebung" OIDA
+FUNKTIAUN umgebung_roh_setzn(nam KETTN, wert KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_programm_umgebung_setzen" OIDA
+
+# Setzt eine Umgebungsvariable. Sie gilt für dieses Programm und für alle, die es startet.
+FUNKTIAUN setz_umgebung(nam KETTN, wert KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED umgebung_roh_setzn(nam, wert) DAUN
+        GIB ZRUCK FEHLA(nam + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Der Ordner, in dem das Programm gestartet wurde, mit "/" am Ende. Dort landet
+# ein Pfad ohne Ordner. (Wo das Programm selbst liegt, sagt programm_ordna().)
+FUNKTIAUN arbeits_ordna() GIBT ZRUCK KETTN VON DRAUSSN "oida_programm_arbeitsordner" OIDA
+FUNKTIAUN ordna_roh_wechsln(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_programm_arbeitsordner_wechseln" OIDA
+
+# Ab jetzt meinen Pfade ohne Ordner diesen Ordner.
+FUNKTIAUN wechsl_ordna(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED ordna_roh_wechsln(pfad) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Der Ordner von Windows für Dateien, die man nur kurz braucht, mit "/" am Ende.
+FUNKTIAUN temp_ordna() GIBT ZRUCK KETTN VON DRAUSSN "oida_programm_temp_ordner" OIDA
+
+# Das Programm endet sofort, mit diesem Code (0 heißt: alles gut). Wer das
+# Programm gestartet hat, kann den Code abfragen. Was noch nicht ausgegeben
+# oder in eine Datei geschrieben war, kommt vorher noch hinaus.
+FUNKTIAUN hea_auf(code ZOI) VON DRAUSSN "oida_programm_aufhoeren" OIDA
+
+# Eine Zeile auf die Fehlerausgabe (statt auf die gewöhnliche wie SCHREIB): für
+# Meldungen, die nicht ins Ergebnis gehören, wenn jemand die Ausgabe in eine Datei umleitet.
+FUNKTIAUN schreib_fehla(inhalt KETTN) VON DRAUSSN "oida_programm_fehler_schreiben" OIDA
+
+# --- Andere Programme starten
+
+# Was von einem gestarteten Programm zurückkommt.
+STRUKTUR Lauf
+    code ZOI                # womit es geendet hat; 0 heißt meistens: alles gut
+    ausgabe KETTN           # was es ausgegeben hat
+    fehla_ausgabe KETTN     # was es auf die Fehlerausgabe geschrieben hat
+PASST SCHO
+
+FUNKTIAUN lauf_roh_startn(wos KETTN, angaben LISTN VON KETTN, eingabe KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_programm_starten" OIDA
+FUNKTIAUN lauf_roh_code() GIBT ZRUCK ZOI VON DRAUSSN "oida_programm_lauf_code" OIDA
+FUNKTIAUN lauf_roh_ausgabe() GIBT ZRUCK KETTN VON DRAUSSN "oida_programm_lauf_ausgabe" OIDA
+FUNKTIAUN lauf_roh_fehla() GIBT ZRUCK KETTN VON DRAUSSN "oida_programm_lauf_fehler" OIDA
+
+# Startet ein anderes Programm, gibt ihm `eingabe` zu lesen und wartet, bis es
+# fertig ist. Ein FEHLA kommt nur, wenn es sich gar nicht starten lässt; ob es
+# selbst zufrieden war, sagt der Code.
+FUNKTIAUN fiahr_aus_mit(wos KETTN, angaben LISTN VON KETTN, eingabe KETTN) GIBT ZRUCK Lauf ODA FEHLA
+    WENN NED lauf_roh_startn(wos, angaben, eingabe) DAUN
+        GIB ZRUCK FEHLA(wos + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK Lauf(lauf_roh_code(), lauf_roh_ausgabe(), lauf_roh_fehla()) OIDA
+PASST SCHO
+
+# Startet ein anderes Programm und wartet, bis es fertig ist:
+#     PROBIER lauf = fiahr_aus("git", ["status", "--short"])
+#         SCHREIB(lauf.code, lauf.ausgabe) OIDA
+#     WONNS SCHIEFGEHT f
+#         SCHREIB(f.meldung) OIDA             # git: De gibt's ned.
+#     PASST SCHO
+# Befehle der Eingabeaufforderung (dir, copy ...) gehen über "cmd": fiahr_aus("cmd", ["/c", "dir"])
+FUNKTIAUN fiahr_aus(wos KETTN, angaben LISTN VON KETTN) GIBT ZRUCK Lauf ODA FEHLA
+    GIB ZRUCK PROBIER fiahr_aus_mit(wos, angaben, "") OIDA
+PASST SCHO

@@ -1,0 +1,208 @@
+# Ordner, Pfade, große Dateien Zeile für Zeile, Bytes, und das Programm selbst
+# mit seiner Umgebung. Alles spielt sich in einem eigenen Ordner ab, der am
+# Anfang und am Ende weggeräumt wird.
+
+BRAUCH dateien OIDA
+BRAUCH programm OIDA
+BRAUCH texte OIDA
+BRAUCH listen OIDA
+
+SOG AU grund = "oida_test_ordna" OIDA
+
+# Zeigt, ob etwas geklappt hat, das nichts zurückgibt.
+FUNKTIAUN zeig(wos KETTN, ergebnis NIX ODA FEHLA)
+    PROBIER ergebnis
+        SCHREIB(wos, "-> passt") OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(wos, "-> geht ned:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN zeig_zoi(wos KETTN, ergebnis ZOI ODA FEHLA)
+    PROBIER wert = ergebnis
+        SCHREIB(wos, "->", wert) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(wos, "-> geht ned:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN zeig_listn(wos KETTN, ergebnis LISTN VON KETTN ODA FEHLA)
+    PROBIER nama = ergebnis
+        SCHREIB(wos, "->", LÄNGN(nama), nama) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(wos, "-> geht ned:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Was von einem früheren Lauf übrig ist, kommt weg.
+WENN gibts_ordna(grund) DAUN
+    zeig("aufräuma", lösch_ordna_mit_ollm(grund)) OIDA
+PASST SCHO
+
+SCHREIB("--- Ordna") OIDA
+SCHREIB(gibts_ordna(grund), gibts_datei(grund)) OIDA
+zeig("aulegn", leg_ordna_au(grund + "/a/b/c")) OIDA
+zeig("no amoi", leg_ordna_au(grund + "/a/b/c")) OIDA
+SCHREIB(gibts_ordna(grund), gibts_ordna(grund + "/a/b"), gibts_datei(grund)) OIDA
+SOG AU zwa = pfad_zamm(grund, "zwa.txt") OIDA
+zeig("schreibn", schreib_datei(zwa, "22")) OIDA
+zeig("schreibn", schreib_datei(pfad_zamm(grund, "Ans.txt"), "1")) OIDA
+zeig_listn("inhalt", ordna_inhalt(grund)) OIDA
+zeig_listn("laar", ordna_inhalt(grund + "/a/b/c")) OIDA
+zeig_listn("fehlt", ordna_inhalt("den_gibts_ned")) OIDA
+zeig_listn("a Datei", ordna_inhalt(zwa)) OIDA
+zeig("ned laar", lösch_ordna(grund + "/a")) OIDA
+zeig("laar", lösch_ordna(grund + "/a/b/c")) OIDA
+zeig("scho weg", lösch_ordna(grund + "/a/b/c")) OIDA
+SCHREIB(gibts_ordna(grund + "/a/b/c"), gibts_ordna(zwa)) OIDA
+
+SCHREIB("--- üba a Datei") OIDA
+zeig_zoi("größe", datei_größe(zwa)) OIDA
+zeig_zoi("größe", datei_größe(pfad_zamm(grund, "fehlt.txt"))) OIDA
+zeig_zoi("größe", datei_größe(grund)) OIDA
+SCHREIB((gändat_um(zwa) ODA HOID 0) > 1700000000, gändat_um("fehlt.txt") ODA HOID -1) OIDA
+SOG AU drei = pfad_zamm(grund, "drei.txt") OIDA
+zeig("kopiern", kopier_datei(zwa, drei)) OIDA
+SCHREIB(lies_datei(drei) ODA HOID "?", gibts_datei(zwa)) OIDA
+zeig("vaschiabn", vaschiab(drei, grund + "/a/via.txt")) OIDA
+SCHREIB(gibts_datei(drei), lies_datei(grund + "/a/via.txt") ODA HOID "?") OIDA
+zeig_listn("in a", ordna_inhalt(grund + "/a")) OIDA
+zeig("kopiern", kopier_datei(drei, zwa)) OIDA
+zeig("vaschiabn", vaschiab(drei, zwa)) OIDA
+zeig("Ordna umbenenna", vaschiab(grund + "/a", grund + "/z")) OIDA
+zeig_listn("inhalt", ordna_inhalt(grund)) OIDA
+
+SCHREIB("--- Pfade") OIDA
+SCHREIB(pfad_zamm("daten", "stand.txt"), pfad_zamm("daten/", "stand.txt"), pfad_zamm("", "stand.txt"), pfad_zamm("a", "C:/x.txt")) OIDA
+SCHREIB(pfad_nam("daten/stand.txt"), pfad_nam("stand"), "[" + pfad_nam("") + "]") OIDA
+SCHREIB(pfad_ordna("daten/tiaf/stand.txt"), "[" + pfad_ordna("stand.txt") + "]") OIDA
+SCHREIB(pfad_endung("büd.groß.PNG"), "[" + pfad_endung("ohne") + "]", pfad_ohne_endung("daten/stand.txt")) OIDA
+SCHREIB(hört_auf(pfad_gaunz(grund), "/" + grund), pfad_gaunz("x.txt") == arbeits_ordna() + "x.txt") OIDA
+
+SCHREIB("--- Zeile fia Zeile") OIDA
+SOG AU groß = pfad_zamm(grund, "groß.txt") OIDA
+
+FUNKTIAUN schreib_vü(pfad KETTN, wievü ZOI) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU datei = PROBIER schreiba_auf(pfad) OIDA
+    FIA i VON 1 BIS wievü TUA
+        PROBIER datei.zeile("Zeile " + KETTN(i)) OIDA
+    PASST SCHO
+    PROBIER datei.zua() OIDA
+PASST SCHO
+
+# Zählt die Zeilen und ihre Zeichen, ohne die Datei ganz im Speicher zu haben.
+FUNKTIAUN zöh(pfad KETTN) GIBT ZRUCK LISTN VON ZOI ODA FEHLA
+    SOG AU datei = PROBIER lesa_auf(pfad) OIDA
+    SOG AU zeilen = 0 OIDA
+    SOG AU zeichn = 0 OIDA
+    SOG AU zeile = datei.zeile() OIDA
+    SOLONG zeile != NIX TUA
+        zeilen += 1 OIDA
+        zeichn += LÄNGN(zeile) OIDA
+        zeile = datei.zeile() OIDA
+    PASST SCHO
+    datei.zua() OIDA
+    GIB ZRUCK [zeilen, zeichn] OIDA
+PASST SCHO
+
+zeig("vü schreibn", schreib_vü(groß, 20000)) OIDA
+SCHREIB(zöh(groß) ODA HOID [], datei_größe(groß) ODA HOID -1) OIDA
+
+# Hinten anhängen, einmal mit und einmal ohne Zeilenende
+FUNKTIAUN häng_hintn_au(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU datei = PROBIER schreiba_dazua(pfad) OIDA
+    PROBIER datei.stickl_dazua("halbe ") OIDA
+    PROBIER datei.stickl_dazua("Zeile") OIDA
+    PROBIER datei.zeile("") OIDA
+    PROBIER datei.stickl_dazua("ohne End") OIDA
+    PROBIER datei.zua() OIDA
+    # Nach dem Zumachen geht nichts mehr hinein.
+    PROBIER datei.zeile("z'spät") OIDA
+PASST SCHO
+zeig("auhänga", häng_hintn_au(groß)) OIDA
+SCHREIB(zöh(groß) ODA HOID []) OIDA
+
+# jede_zeile ruft eine Funktion für jede Zeile auf.
+KLASSE Sammla
+    anzahl ZOI = 0
+    letzte KETTN = ""
+
+    FUNKTIAUN nimm(zeile KETTN)
+        MEI.anzahl += 1 OIDA
+        MEI.letzte = zeile OIDA
+    PASST SCHO
+PASST SCHO
+SOG AU sammla = Sammla() OIDA
+zeig("jede Zeile", jede_zeile(groß, FUNKTIAUN(z KETTN) => sammla.nimm(z))) OIDA
+SCHREIB(sammla.anzahl, sammla.letzte) OIDA
+zeig("jede Zeile", jede_zeile(pfad_zamm(grund, "fehlt.txt"), FUNKTIAUN(z KETTN) => sammla.nimm(z))) OIDA
+
+# Zwei Dateien zugleich offen: Jede merkt sich ihre eigene Stelle.
+FUNKTIAUN zwa_zugleich(ans KETTN, zwa KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU a = PROBIER lesa_auf(ans) OIDA
+    SOG AU b = PROBIER lesa_auf(zwa) OIDA
+    SOG AU aus = (a.zeile() ODA HOID "aus") + " | " + (b.zeile() ODA HOID "aus") OIDA
+    aus += " | " + (a.zeile() ODA HOID "aus") + " | " + (b.zeile() ODA HOID "aus") OIDA
+    a.zua() OIDA
+    b.zua() OIDA
+    # Aus einer geschlossenen Datei kommt nichts mehr.
+    GIB ZRUCK aus + " | " + (a.zeile() ODA HOID "zua") OIDA
+PASST SCHO
+SCHREIB(zwa_zugleich(groß, zwa) ODA HOID "?") OIDA
+SCHREIB(zwa_zugleich(groß, pfad_zamm(grund, "fehlt.txt"))) OIDA
+
+SCHREIB("--- Bytes") OIDA
+SOG AU roh = pfad_zamm(grund, "roh.bin") OIDA
+zeig("schreibn", schreib_bytes(roh, [79, 73, 68, 65, 0, 255, 10])) OIDA
+SCHREIB(lies_bytes(roh) ODA HOID [], datei_größe(roh) ODA HOID -1) OIDA
+SCHREIB(lies_datei(roh)) OIDA
+zeig("z'groß", schreib_bytes(roh, [1, 2, 300])) OIDA
+zeig("unta null", schreib_bytes(roh, [-1])) OIDA
+SCHREIB(LÄNGN(lies_bytes(roh) ODA HOID []), lies_bytes(pfad_zamm(grund, "fehlt.bin"))) OIDA
+zeig("laar", schreib_bytes(roh, [])) OIDA
+SCHREIB(lies_bytes(roh) ODA HOID [9], summe(lies_bytes(zwa) ODA HOID [])) OIDA
+
+SCHREIB("--- des Programm und sei Umgebung") OIDA
+SCHREIB(argumente(), LÄNGN(argumente())) OIDA
+SCHREIB(umgebung("OIDA_SOMEN") ODA HOID "ned do", umgebung("OIDA_DE_GIBTS_NED") ODA HOID "ned do", umgebung("A=B") ODA HOID "ned do") OIDA
+zeig("setzn", setz_umgebung("OIDA_PROBE", "griaß di")) OIDA
+zeig("setzn", setz_umgebung("A=B", "x")) OIDA
+SCHREIB(umgebung("OIDA_PROBE") ODA HOID "ned do") OIDA
+SCHREIB(hört_auf(arbeits_ordna(), "/"), hört_auf(temp_ordna(), "/"), gibts_ordna(temp_ordna()), gibts_ordna(arbeits_ordna() + grund)) OIDA
+SOG AU daham = arbeits_ordna() OIDA
+zeig("wechsln", wechsl_ordna(grund)) OIDA
+SCHREIB(gibts_datei("zwa.txt"), arbeits_ordna() == daham + grund + "/") OIDA
+zeig("zruck", wechsl_ordna("..")) OIDA
+SCHREIB(gibts_datei("zwa.txt"), arbeits_ordna() == daham) OIDA
+zeig("wechsln", wechsl_ordna("den_gibts_ned")) OIDA
+
+SCHREIB("--- aundare Programme startn") OIDA
+PROBIER lauf = fiahr_aus("cmd", ["/c", "echo Servas"])
+    SCHREIB(lauf.code, STUTZ(lauf.ausgabe), "[" + lauf.fehla_ausgabe + "]") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER lauf = fiahr_aus("cmd", ["/c", "echo daneben 1>&2 & exit 7"])
+    SCHREIB(lauf.code, "[" + lauf.ausgabe + "]", STUTZ(lauf.fehla_ausgabe)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+# Das gestartete Programm sieht, was setz_umgebung gesetzt hat, und bekommt die Eingabe zu lesen.
+PROBIER lauf = fiahr_aus("cmd", ["/c", "echo %OIDA_SOMEN%"])
+    SCHREIB(STUTZ(lauf.ausgabe)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER lauf = fiahr_aus_mit("sort", [], "zwa\r\nans\r\ndrei\r\n")
+    SCHREIB(lauf.code, teil(STUTZ(ERSETZ(lauf.ausgabe, "\r", "")), "\n")) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("des kummt ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER lauf = fiahr_aus("des_programm_gibts_ned_4711", ["x"])
+    SCHREIB("des kummt ned", lauf.code) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+
+zeig("aufräuma", lösch_ordna_mit_ollm(grund)) OIDA
+SCHREIB(gibts_ordna(grund)) OIDA

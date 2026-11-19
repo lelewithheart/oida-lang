@@ -1,8 +1,11 @@
-# OIDA-Bibliothek: Dateien.         Dazuholen mit:  BRAUCH dateien OIDA
+# OIDA-Bibliothek: Dateien, Ordner und Pfade.     Dazuholen mit:  BRAUCH dateien OIDA
 #
 # Beim Lesen und Schreiben kann immer etwas schiefgehen (die Datei gibt es
 # nicht, der Ordner ist gesperrt ...). Darum geben die Funktionen hier einen
 # Wert ODA an FEHLA zurück; siehe PROBIER und ODA HOID.
+#
+# Pfade schreibt man mit "/" ("daten/stand.txt"); "\\" geht auch. Was die
+# Bibliothek an Pfaden zurückgibt, hat immer "/".
 
 BRAUCH texte OIDA
 
@@ -56,6 +59,219 @@ PASST SCHO
 
 FUNKTIAUN lösch_datei(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
     WENN NED datei_roh_löschn(pfad) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# --- Mehr über eine Datei
+
+FUNKTIAUN datei_roh_größe(pfad KETTN) GIBT ZRUCK ZOI VON DRAUSSN "oida_datei_groesse" OIDA
+FUNKTIAUN datei_roh_gändat(pfad KETTN) GIBT ZRUCK ZOI VON DRAUSSN "oida_datei_geaendert" OIDA
+FUNKTIAUN datei_roh_kopiern(vo_wo KETTN, wohi KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_datei_kopieren" OIDA
+FUNKTIAUN datei_roh_vaschiabn(vo_wo KETTN, wohi KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_datei_verschieben" OIDA
+
+# Wie groß die Datei ist, in Bytes.
+FUNKTIAUN datei_größe(pfad KETTN) GIBT ZRUCK ZOI ODA FEHLA
+    SOG AU größe = datei_roh_größe(pfad) OIDA
+    WENN größe < 0 DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK größe OIDA
+PASST SCHO
+
+# Wann die Datei (oder der Ordner) zuletzt geändert wurde: Sekunden seit dem
+# 1. Jänner 1970. Die größere Zahl ist die jüngere Datei.
+FUNKTIAUN gändat_um(pfad KETTN) GIBT ZRUCK ZOI ODA FEHLA
+    SOG AU wann = datei_roh_gändat(pfad) OIDA
+    WENN wann < 0 DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK wann OIDA
+PASST SCHO
+
+# Kopiert eine Datei. Gibt es das Ziel schon, wird es ersetzt.
+FUNKTIAUN kopier_datei(vo_wo KETTN, wohi KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED datei_roh_kopiern(vo_wo, wohi) DAUN
+        GIB ZRUCK FEHLA(vo_wo + " -> " + wohi + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Verschiebt eine Datei oder einen Ordner, oder gibt ihnen einen neuen Namen.
+FUNKTIAUN vaschiab(vo_wo KETTN, wohi KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED datei_roh_vaschiabn(vo_wo, wohi) DAUN
+        GIB ZRUCK FEHLA(vo_wo + " -> " + wohi + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# --- Ordner
+
+FUNKTIAUN gibts_ordna(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_ordner_gibts" OIDA
+FUNKTIAUN ordna_roh_inhalt(pfad KETTN) GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN "oida_ordner_inhalt" OIDA
+FUNKTIAUN ordna_roh_aulegn(pfad KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_ordner_anlegen" OIDA
+FUNKTIAUN ordna_roh_löschn(pfad KETTN, ollas JONA) GIBT ZRUCK JONA VON DRAUSSN "oida_ordner_loeschen" OIDA
+
+# Was im Ordner liegt: die Namen der Dateien und Ordner darin, nach dem Alphabet,
+# ohne den Ordner davor. Den ganzen Pfad macht pfad_zamm(ordna, nam).
+FUNKTIAUN ordna_inhalt(pfad KETTN) GIBT ZRUCK LISTN VON KETTN ODA FEHLA
+    SOG AU roh = ordna_roh_inhalt(pfad) OIDA
+    WENN roh == NIX DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    SOG AU nama LISTN VON KETTN = [] OIDA
+    WENN roh != "" DAUN
+        nama = teil(roh, "\n") OIDA
+    PASST SCHO
+    GIB ZRUCK nama OIDA
+PASST SCHO
+
+# Legt einen Ordner an, mit allen Ordnern davor, die noch fehlen. Gibt es ihn schon, passt das auch.
+FUNKTIAUN leg_ordna_au(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED ordna_roh_aulegn(pfad) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Löscht einen leeren Ordner. Liegt noch etwas drin, kommt ein FEHLA.
+FUNKTIAUN lösch_ordna(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED ordna_roh_löschn(pfad, FOISCH) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Löscht einen Ordner mit allem, was drin liegt. Das kommt nicht in den Papierkorb!
+FUNKTIAUN lösch_ordna_mit_ollm(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED ordna_roh_löschn(pfad, WOAHR) DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+PASST SCHO
+
+# --- Pfade zerlegen und zusammensetzen (dazu muss es die Datei nicht geben)
+
+# Hängt zwei Stücke mit genau einem "/" zusammen: pfad_zamm("daten", "stand.txt") ist "daten/stand.txt".
+# Ist das zweite Stück schon ein ganzer Pfad ("C:/..."), gilt es allein.
+FUNKTIAUN pfad_zamm(ordna KETTN, nam KETTN) GIBT ZRUCK KETTN VON DRAUSSN "oida_pfad_zusammen" OIDA
+# Der letzte Teil: pfad_nam("daten/stand.txt") ist "stand.txt".
+FUNKTIAUN pfad_nam(pfad KETTN) GIBT ZRUCK KETTN VON DRAUSSN "oida_pfad_name" OIDA
+# Alles davor: pfad_ordna("daten/stand.txt") ist "daten"; ohne Ordner kommt "".
+FUNKTIAUN pfad_ordna(pfad KETTN) GIBT ZRUCK KETTN VON DRAUSSN "oida_pfad_ordner" OIDA
+# Die Endung ohne Punkt: pfad_endung("stand.txt") ist "txt"; ohne Endung kommt "".
+FUNKTIAUN pfad_endung(pfad KETTN) GIBT ZRUCK KETTN VON DRAUSSN "oida_pfad_endung" OIDA
+# pfad_ohne_endung("daten/stand.txt") ist "daten/stand".
+FUNKTIAUN pfad_ohne_endung(pfad KETTN) GIBT ZRUCK KETTN VON DRAUSSN "oida_pfad_ohne_endung" OIDA
+# Der ganze Pfad ab dem Laufwerk: aus "stand.txt" wird etwa "C:/spü/stand.txt".
+FUNKTIAUN pfad_gaunz(pfad KETTN) GIBT ZRUCK KETTN VON DRAUSSN "oida_pfad_ganz" OIDA
+
+# --- Große Dateien: Zeile für Zeile, ohne alles auf einmal im Speicher zu haben
+
+FUNKTIAUN lesa_roh_auf(pfad KETTN) GIBT ZRUCK ZOI VON DRAUSSN "oida_leser_auf" OIDA
+FUNKTIAUN lesa_roh_zeile(numma ZOI) GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN "oida_leser_zeile" OIDA
+FUNKTIAUN lesa_roh_zua(numma ZOI) VON DRAUSSN "oida_leser_zu" OIDA
+FUNKTIAUN schreiba_roh_auf(pfad KETTN, hintn_dau JONA) GIBT ZRUCK ZOI VON DRAUSSN "oida_schreiber_auf" OIDA
+FUNKTIAUN schreiba_roh_schreibn(numma ZOI, inhalt KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_schreiber_schreiben" OIDA
+FUNKTIAUN schreiba_roh_zua(numma ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_schreiber_zu" OIDA
+
+# Eine Datei, die gerade gelesen wird. Man bekommt sie von lesa_auf():
+#
+#     SOG AU datei = PROBIER lesa_auf("groß.txt") OIDA
+#     SOG AU zeile = datei.zeile() OIDA
+#     SOLONG zeile != NIX TUA
+#         ...
+#         zeile = datei.zeile() OIDA
+#     PASST SCHO
+#     datei.zua() OIDA
+KLASSE Lesa
+    numma ZOI
+
+    # Die nächste Zeile ohne ihr Zeilenende, oder NIX, wenn die Datei aus ist.
+    FUNKTIAUN zeile() GIBT ZRUCK VIELLEICHT KETTN
+        GIB ZRUCK lesa_roh_zeile(MEI.numma) OIDA
+    PASST SCHO
+
+    FUNKTIAUN zua()
+        lesa_roh_zua(MEI.numma) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN lesa_auf(pfad KETTN) GIBT ZRUCK Lesa ODA FEHLA
+    SOG AU numma = lesa_roh_auf(pfad) OIDA
+    WENN numma < 0 DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK Lesa(numma) OIDA
+PASST SCHO
+
+# Ruft `wos` für jede Zeile der Datei auf, eine nach der anderen:
+#     PROBIER jede_zeile("groß.txt", zöh)          # FUNKTIAUN zöh(zeile KETTN) ...
+FUNKTIAUN jede_zeile(pfad KETTN, wos FUNKTIAUN(KETTN)) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU datei = PROBIER lesa_auf(pfad) OIDA
+    SOG AU zeile = datei.zeile() OIDA
+    SOLONG zeile != NIX TUA
+        wos(zeile) OIDA
+        zeile = datei.zeile() OIDA
+    PASST SCHO
+    datei.zua() OIDA
+PASST SCHO
+
+# Eine Datei, in die Stück für Stück geschrieben wird. Man bekommt sie von
+# schreiba_auf() (fängt leer an) oder schreiba_dazua() (hängt hinten an). Erst
+# mit zua() ist sicher alles in der Datei; am Ende vom Programm passiert das von selbst.
+KLASSE Schreiba
+    numma ZOI
+    pfad KETTN
+
+    # Schreibt den Text, so wie er ist.
+    FUNKTIAUN stickl_dazua(inhalt KETTN) GIBT ZRUCK NIX ODA FEHLA
+        WENN NED schreiba_roh_schreibn(MEI.numma, inhalt) DAUN
+            GIB ZRUCK FEHLA(MEI.pfad + ": " + datei_fehla()) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    # Schreibt den Text und ein Zeilenende dahinter.
+    FUNKTIAUN zeile(inhalt KETTN) GIBT ZRUCK NIX ODA FEHLA
+        WENN NED schreiba_roh_schreibn(MEI.numma, inhalt + "\n") DAUN
+            GIB ZRUCK FEHLA(MEI.pfad + ": " + datei_fehla()) OIDA
+        PASST SCHO
+    PASST SCHO
+
+    FUNKTIAUN zua() GIBT ZRUCK NIX ODA FEHLA
+        WENN NED schreiba_roh_zua(MEI.numma) DAUN
+            GIB ZRUCK FEHLA(MEI.pfad + ": " + datei_fehla()) OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN schreiba_auf(pfad KETTN) GIBT ZRUCK Schreiba ODA FEHLA
+    SOG AU numma = schreiba_roh_auf(pfad, FOISCH) OIDA
+    WENN numma < 0 DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK Schreiba(numma, pfad) OIDA
+PASST SCHO
+
+FUNKTIAUN schreiba_dazua(pfad KETTN) GIBT ZRUCK Schreiba ODA FEHLA
+    SOG AU numma = schreiba_roh_auf(pfad, WOAHR) OIDA
+    WENN numma < 0 DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK Schreiba(numma, pfad) OIDA
+PASST SCHO
+
+# --- Dateien, die kein Text sind (Bilder, eigene Formate): der Inhalt als Zahlen von 0 bis 255
+
+FUNKTIAUN bytes_roh_lesn(pfad KETTN) GIBT ZRUCK VIELLEICHT LISTN VON ZOI VON DRAUSSN "oida_bytes_lesen" OIDA
+FUNKTIAUN bytes_roh_schreibn(pfad KETTN, inhalt LISTN VON ZOI) GIBT ZRUCK JONA VON DRAUSSN "oida_bytes_schreiben" OIDA
+
+FUNKTIAUN lies_bytes(pfad KETTN) GIBT ZRUCK LISTN VON ZOI ODA FEHLA
+    SOG AU inhalt = bytes_roh_lesn(pfad) OIDA
+    WENN inhalt == NIX DAUN
+        GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
+    PASST SCHO
+    GIB ZRUCK inhalt OIDA
+PASST SCHO
+
+# Jede Zahl muss von 0 bis 255 gehen, sonst kommt ein FEHLA und die Datei bleibt, wie sie war.
+FUNKTIAUN schreib_bytes(pfad KETTN, inhalt LISTN VON ZOI) GIBT ZRUCK NIX ODA FEHLA
+    WENN NED bytes_roh_schreibn(pfad, inhalt) DAUN
         GIB ZRUCK FEHLA(pfad + ": " + datei_fehla()) OIDA
     PASST SCHO
 PASST SCHO

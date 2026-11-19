@@ -31,17 +31,17 @@ Passt! beispiele\fakultaet.exe is fertig.
 ```
 
 Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine normale Windows-`.exe`
-(rund 300 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
+(rund 340 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.11.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.12.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
 [Töne](#töne) und [Dateien](#dateien) sind da, und damit ist ein ganzes Spiel geschrieben,
-[RogueWave](#ein-ganzes-spiel-roguewave), rund 7500 Zeilen OIDA. Neu: Das Spiel ist auf dem
-heutigen Stand seiner Vorlage (Ausweichen, Power-ups, Ereignisse, Boss-Angriffe, Waffen, die sich
-weiterentwickeln, Musik aus MP3-Dateien).
+[RogueWave](#ein-ganzes-spiel-roguewave), rund 7500 Zeilen OIDA. Neu: Ordner, Pfade, große
+Dateien Zeile für Zeile, Bytes, und [das Programm selbst](#das-programm-und-seine-umgebung):
+Argumente von der Kommandozeile, Umgebungsvariablen, andere Programme starten.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -137,7 +137,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.11)
+## Die Sprache (v0.12)
 
 ### Typen
 
@@ -786,8 +786,8 @@ SCHREIB(sortiert(nur(zahlen, FUNKTIAUN(z ZOI) => z > 2), FUNKTIAUN(a ZOI, b ZOI)
 | `in_grad(bogn)`, `in_bogn(grad)` | Winkel umrechnen |
 | `zufoi_zwischn(untn, obn)` | zufällige `KOMMAZOI` in dem Bereich |
 
-Dazu kommen drei Teile, die mit Windows reden; sie haben unten eigene Abschnitte:
-**`BRAUCH dateien OIDA`**, **`BRAUCH fensta OIDA`** und **`BRAUCH ton OIDA`**.
+Dazu kommen vier Teile, die mit Windows reden; sie haben unten eigene Abschnitte:
+**`BRAUCH dateien OIDA`**, **`BRAUCH programm OIDA`**, **`BRAUCH fensta OIDA`** und **`BRAUCH ton OIDA`**.
 
 Weil alles im ganzen Programm gilt, kann eine eigene Funktion nicht so heißen wie eine aus einem
 Teil der Bibliothek, den man dazuholt. Eine Variable schon (`SOG AU summe = 0 OIDA` geht).
@@ -832,6 +832,147 @@ PASST SCHO
 Dateien sind UTF-8. Ein Pfad ohne Ordner meint den Ordner, in dem das Programm gestartet wurde.
 Was zum Programm gehört (Bilder, Musik, Speicherstände), findet man mit `programm_ordna()`, egal
 von wo es gestartet wurde: `lies_datei(programm_ordna() + "stand.txt")`.
+
+**Ordner und mehr über Dateien.** Pfade schreibt man mit `/` (`\` geht auch); was zurückkommt,
+hat immer `/`.
+
+```
+PROBIER leg_ordna_au("daten/sicherung")            # legt auch "daten" an, wenn es fehlt
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+
+FIA JEDE nam IN ordna_inhalt("daten") ODA HOID [] TUA
+    SOG AU pfad = pfad_zamm("daten", nam) OIDA
+    WENN gibts_ordna(pfad) DAUN
+        SCHREIB(nam + "/") OIDA
+    SUNST
+        SCHREIB(nam, datei_größe(pfad) ODA HOID 0, "Bytes") OIDA
+    PASST SCHO
+PASST SCHO
+```
+
+| Funktion | Ergebnis |
+|---|---|
+| `gibts_ordna(pfad)` | `JONA` |
+| `ordna_inhalt(pfad)` | die Namen im Ordner, nach dem Alphabet, als `LISTN VON KETTN ODA FEHLA` |
+| `leg_ordna_au(pfad)` | legt den Ordner an, mit allen davor, die fehlen; gibt es ihn schon, passt das auch |
+| `lösch_ordna(pfad)` | löscht einen leeren Ordner |
+| `lösch_ordna_mit_ollm(pfad)` | löscht einen Ordner samt Inhalt (nicht in den Papierkorb!) |
+| `datei_größe(pfad)` | Bytes, als `ZOI ODA FEHLA` |
+| `gändat_um(pfad)` | wann zuletzt geändert: Sekunden seit dem 1. Jänner 1970, als `ZOI ODA FEHLA` |
+| `kopier_datei(vo_wo, wohi)` | kopiert; ein Ziel, das es schon gibt, wird ersetzt |
+| `vaschiab(vo_wo, wohi)` | verschiebt eine Datei oder einen Ordner, oder benennt um |
+
+| Pfade (die Datei muss es dafür nicht geben) | |
+|---|---|
+| `pfad_zamm("daten", "stand.txt")` | `"daten/stand.txt"`: zwei Stücke mit genau einem `/` |
+| `pfad_nam("daten/stand.txt")` | `"stand.txt"` |
+| `pfad_ordna("daten/stand.txt")` | `"daten"` (ohne Ordner: `""`) |
+| `pfad_endung("stand.txt")` | `"txt"` (ohne Endung: `""`) |
+| `pfad_ohne_endung("daten/stand.txt")` | `"daten/stand"` |
+| `pfad_gaunz("stand.txt")` | der ganze Pfad ab dem Laufwerk, etwa `"C:/spü/stand.txt"` |
+
+**Große Dateien, Zeile für Zeile.** `lies_datei` holt alles auf einmal in den Speicher. Ein
+`Lesa` gibt eine Zeile nach der anderen her, ein `Schreiba` nimmt eine nach der anderen an: So
+geht auch eine Datei, die größer ist als der Speicher.
+
+```
+FUNKTIAUN zöh_zeilen(pfad KETTN) GIBT ZRUCK ZOI ODA FEHLA
+    SOG AU datei = PROBIER lesa_auf(pfad) OIDA
+    SOG AU anzahl = 0 OIDA
+    SOG AU zeile = datei.zeile() OIDA
+    SOLONG zeile != NIX TUA
+        anzahl += 1 OIDA
+        zeile = datei.zeile() OIDA
+    PASST SCHO
+    datei.zua() OIDA
+    GIB ZRUCK anzahl OIDA
+PASST SCHO
+
+FUNKTIAUN schreib_tabölln(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU datei = PROBIER schreiba_auf(pfad) OIDA
+    FIA i VON 1 BIS 1000000 TUA
+        PROBIER datei.zeile(KETTN(i) + ";" + KETTN(i * i)) OIDA
+    PASST SCHO
+    PROBIER datei.zua() OIDA
+PASST SCHO
+```
+
+| | |
+|---|---|
+| `lesa_auf(pfad)` | öffnet zum Lesen: `Lesa ODA FEHLA` |
+| `lesa.zeile()` | die nächste Zeile ohne Zeilenende, oder `NIX`, wenn die Datei aus ist |
+| `lesa.zua()` | macht die Datei zu |
+| `jede_zeile(pfad, wos)` | ruft die Funktion `wos` für jede Zeile auf |
+| `schreiba_auf(pfad)` | öffnet zum Schreiben, die Datei fängt leer an: `Schreiba ODA FEHLA` |
+| `schreiba_dazua(pfad)` | ... hängt hinten an |
+| `schreiba.zeile(text)` | schreibt den Text und ein Zeilenende |
+| `schreiba.stickl_dazua(text)` | schreibt den Text, so wie er ist |
+| `schreiba.zua()` | schreibt den Rest hinaus und macht zu |
+
+Vergisst man das `zua()`, macht es das Programm am Ende selbst; in der Datei steht dann trotzdem
+alles. Eine Zeile, die kein UTF-8 ist, kommt mit Ersatzzeichen statt als Fehler.
+
+**Dateien, die kein Text sind** (Bilder, eigene Formate), liest und schreibt man als Zahlen von 0
+bis 255:
+
+```
+SOG AU inhalt = lies_bytes("büd.png") ODA HOID [] OIDA
+SCHREIB(LÄNGN(inhalt) >= 4 UND inhalt[1] == 80 UND inhalt[2] == 78 UND inhalt[3] == 71) OIDA   # a PNG?
+```
+
+| | |
+|---|---|
+| `lies_bytes(pfad)` | `LISTN VON ZOI ODA FEHLA` |
+| `schreib_bytes(pfad, zoin)` | jede Zahl muss von 0 bis 255 gehen, sonst kommt ein `FEHLA` |
+
+Jedes Byte braucht dabei im Speicher eine ganze `ZOI` (8 Bytes): für Dateien bis einige Megabyte
+ist das in Ordnung, für sehr große noch nicht. Einen eigenen Typ für Bytes gibt es noch nicht.
+
+### Das Programm und seine Umgebung
+
+`BRAUCH programm OIDA` macht aus einem Programm ein Werkzeug für die Kommandozeile: Es erfährt,
+womit es gestartet wurde, kann mit einem Code aufhören und andere Programme starten.
+
+```
+BRAUCH programm OIDA
+
+SOG AU angaben = argumente() OIDA                 # werkzeug.exe eingabe.txt --laut
+WENN LÄNGN(angaben) == 0 DAUN
+    schreib_fehla("So geht's: werkzeug <datei>") OIDA
+    hea_auf(2) OIDA
+PASST SCHO
+
+SOG AU daham = umgebung("USERPROFILE") ODA HOID "C:/" OIDA
+
+PROBIER lauf = fiahr_aus("git", ["status", "--short"])
+    SCHREIB(lauf.code, lauf.ausgabe) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA                       # git: De gibt's ned.
+PASST SCHO
+```
+
+| Funktion | Ergebnis |
+|---|---|
+| `argumente()` | was beim Starten hinter dem Namen des Programms stand, als `LISTN VON KETTN` |
+| `umgebung(nam)` | der Wert der Umgebungsvariable, als `VIELLEICHT KETTN` |
+| `setz_umgebung(nam, wert)` | gilt für dieses Programm und alle, die es startet |
+| `arbeits_ordna()` | der Ordner, in dem das Programm gestartet wurde, mit `/` am Ende |
+| `wechsl_ordna(pfad)` | ab jetzt meinen Pfade ohne Ordner diesen Ordner |
+| `temp_ordna()` | der Ordner von Windows für Dateien, die man nur kurz braucht |
+| `hea_auf(code)` | das Programm endet sofort mit diesem Code (0 heißt: alles gut) |
+| `schreib_fehla(text)` | eine Zeile auf die Fehlerausgabe statt auf die gewöhnliche |
+| `fiahr_aus(programm, angaben)` | startet ein Programm und wartet darauf: `Lauf ODA FEHLA` |
+| `fiahr_aus_mit(programm, angaben, eingabe)` | ... und gibt ihm `eingabe` zu lesen |
+
+Ein `Lauf` hat `code` (womit das Programm geendet hat), `ausgabe` und `fehla_ausgabe`. Ein `FEHLA`
+kommt nur, wenn sich das Programm gar nicht starten lässt; ob es selbst zufrieden war, sagt der
+Code. Befehle der Eingabeaufforderung gehen über `cmd`: `fiahr_aus("cmd", ["/c", "dir"])`. Gibt
+ein Programm seine Ausgabe in der alten Zeichentabelle der Konsole aus, wird sie umgewandelt.
+
+Ein kleines Werkzeug mit alledem: [`beispiele/baam.oida`](beispiele/baam.oida) zeigt einen Ordner
+als Baum.
 
 ### Ein Fenster: zeichnen, Tasten und Maus
 
@@ -1281,7 +1422,8 @@ uebersetzer/           der Compiler (Rust), ergibt oida.exe
 laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt:
                        Ausgabe, Texte, Listen und Objekte samt Freigeben, Umwandlungen,
                        Fehler beim Laufen
-  src/dateien.rs         Dateien lesen und schreiben
+  src/dateien.rs         Dateien, Ordner und Pfade
+  src/programm.rs        Argumente, Umgebung, aufhören, andere Programme starten
   src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus
   src/fenster/           Farbverläufe, Leuchten, Mischen; freie Formen, Ausschnitte; Bilder
   src/ton.rs             Töne errechnen, mischen und an Windows geben
@@ -1326,11 +1468,15 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 
 ## Fahrplan
 
-Das Ziel: ein ganzes Programm in OIDA schreiben können. Der Maßstab dafür ist ein Spiel mit
-eigenem Fenster (ein Survivor-Roguelite, das es bisher als Browserspiel in JavaScript gibt),
-nachgebaut als natives OIDA-Programm. OIDA soll dabei so etwas wie ein besseres C# werden:
-Klassen, Generics und Funktionen als Werte, aber ohne Abstürze durch `null`, mit Strukturen als
-direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, die sofort startet.
+Das erste Ziel war: ein ganzes Programm in OIDA schreiben können. Der Maßstab dafür war ein
+Spiel mit eigenem Fenster (ein Survivor-Roguelite, das es als Browserspiel in JavaScript gibt),
+nachgebaut als natives OIDA-Programm; das steht. OIDA soll dabei so etwas wie ein besseres C#
+werden: Klassen, Generics und Funktionen als Werte, aber ohne Abstürze durch `null`, mit
+Strukturen als direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, die
+sofort startet.
+
+Das zweite Ziel: mit den großen Sprachen mithalten können. Dafür fehlt, was man für Werkzeuge
+und Programme im Netz braucht (die Schritte ab 10).
 
 | Schritt | Was dazukommt | Stand |
 |---|---|---|
@@ -1345,8 +1491,13 @@ direkten Werten, mit Fehlern ohne Exceptions und weiterhin als kleine `.exe`, di
 | 8 | Das Spiel nachbauen: [RogueWave](#ein-ganzes-spiel-roguewave); dazu feste Werte (`FIX`) | fertig für den Stand vom April |
 | 8a | Für den heutigen Stand des Spiels: Verläufe, Leuchten, Bilder, freie Formen, MP3-Musik, Mausrad | fertig |
 | 8b | Das Spielen selbst auf den heutigen Stand: Dash, Power-ups, neue Gegner, Ereignisse, Boss-Angriffe, Waffen-Entwicklungen, Endlos | fertig |
-| 8c | Alles rundherum: Beute, Truhen, Locker, Prestige, Skins, die neuen Menüs | offen |
+| 8c | Alles rundherum: Beute, Truhen, Locker, Prestige, Skins, die neuen Menüs | zurückgestellt |
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
+| 10 | Ordner, Pfade, große Dateien Zeile für Zeile, Bytes; Argumente, Umgebung, andere Programme starten | fertig |
+| 11 | JSON lesen und schreiben, auch direkt aus einer `STRUKTUR` und zurück | offen |
+| 12 | Netzwerk: HTTP und HTTPS als Client, dazu rohe TCP-Verbindungen | offen |
+| 13 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
+| 14 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind
 dort Springen zur Definition, Umbenennen und ein Debugger.

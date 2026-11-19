@@ -1654,14 +1654,16 @@ impl Pruefer<'_> {
         if f.aussen.is_some() {
             // Kein Rumpf zu prüfen. Nur die Typen müssen welche sein, die die Laufzeit versteht.
             let einfach = |t: Typ| matches!(t, Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn);
-            let zahlen_liste = |t: Typ| matches!(self.typen.element(t), Some(Typ::Zoi | Typ::Kommazoi));
-            let parameter_gut = f.parameter.iter().all(|p| einfach(p.typ) || zahlen_liste(p.typ));
+            // Listen von Zahlen oder Texten: Ihre Elemente liegen so im Speicher, wie die Laufzeit sie erwartet.
+            let liste = |t: Typ| matches!(self.typen.element(t), Some(Typ::Zoi | Typ::Kommazoi | Typ::Kettn));
+            let parameter_gut = f.parameter.iter().all(|p| einfach(p.typ) || liste(p.typ));
             let rueckgabe_gut = f.rueckgabe == Typ::Nix
                 || einfach(f.rueckgabe)
-                || self.typen.innen(f.rueckgabe) == Some(Typ::Kettn);
+                || liste(f.rueckgabe)
+                || self.typen.innen(f.rueckgabe).is_some_and(|innen| innen == Typ::Kettn || liste(innen));
             if !parameter_gut || !rueckgabe_gut || self.methoden_klasse.is_some() {
                 let meldung = format!(
-                    "Noch draußn gehn nur {}, {}, {}, {} und {} von Zoin; zruck a no {} {}. In ana {} geht's gor ned.",
+                    "Noch draußn gehn nur {}, {}, {}, {} und {} von Zoin oda Texten; zruck a no {} {} und {} {}. In ana {} geht's gor ned.",
                     self.wort(Schluessel::Int),
                     self.wort(Schluessel::Float),
                     self.wort(Schluessel::Boolean),
@@ -1669,6 +1671,8 @@ impl Pruefer<'_> {
                     self.wort(Schluessel::List),
                     self.wort(Schluessel::Maybe),
                     self.wort(Schluessel::Text),
+                    self.wort(Schluessel::Maybe),
+                    self.wort(Schluessel::List),
                     self.wort(Schluessel::Class)
                 );
                 self.melde(f.pos, meldung);
@@ -3783,6 +3787,30 @@ mod tests {
     fn geschrieben(anweisungen: &[Anweisung], stelle: usize) -> &Ausdruck {
         let AnweisungArt::Schreib { argumente } = &anweisungen[stelle].art else { panic!("{:?}", anweisungen[stelle]) };
         &argumente[0]
+    }
+
+    #[test]
+    fn nach_draussen_gehen_nur_typen_die_die_laufzeit_versteht() {
+        // Zahlen, Texte und Listen davon in beide Richtungen; zurück auch VIELLEICHT davon.
+        ok("FUNKTIAUN a(x ZOI, t KETTN, l LISTN VON KETTN, z LISTN VON KOMMAZOI) GIBT ZRUCK LISTN VON KETTN VON DRAUSSN \"oida_a\" OIDA\n\
+            FUNKTIAUN b(p KETTN) GIBT ZRUCK VIELLEICHT LISTN VON ZOI VON DRAUSSN \"oida_b\" OIDA\n\
+            FUNKTIAUN c() GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN \"oida_c\" OIDA\n\
+            FUNKTIAUN d(j JONA) GIBT ZRUCK LISTN VON ZOI VON DRAUSSN \"oida_d\" OIDA");
+        for falsch in [
+            "FUNKTIAUN a(l LISTN VON JONA) VON DRAUSSN \"oida_a\" OIDA",
+            "FUNKTIAUN a(l LISTN VON LISTN VON ZOI) VON DRAUSSN \"oida_a\" OIDA",
+            "FUNKTIAUN a() GIBT ZRUCK VIELLEICHT ZOI VON DRAUSSN \"oida_a\" OIDA",
+            "FUNKTIAUN a(v VIELLEICHT KETTN) VON DRAUSSN \"oida_a\" OIDA",
+            "FUNKTIAUN a() GIBT ZRUCK VIELLEICHT LISTN VON JONA VON DRAUSSN \"oida_a\" OIDA",
+            "STRUKTUR P\n x ZOI\nPASST SCHO\nFUNKTIAUN a() GIBT ZRUCK P VON DRAUSSN \"oida_a\" OIDA",
+        ] {
+            let f = fehler(falsch);
+            assert!(
+                f.meldung.starts_with("Noch draußn gehn nur ZOI, KOMMAZOI, JONA, KETTN und LISTN von Zoin oda Texten; zruck a no VIELLEICHT KETTN und VIELLEICHT LISTN."),
+                "{falsch}: {}",
+                f.meldung
+            );
+        }
     }
 
     #[test]

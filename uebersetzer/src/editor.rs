@@ -498,7 +498,7 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             w(Import).to_string(),
             w(Import).to_string(),
             vec![format!(
-                "{} ${{1|listen,texte,mathe,dateien,fensta,ton,\"datei.oida\"|}} {}",
+                "{} ${{1|listen,texte,mathe,dateien,programm,fensta,ton,\"datei.oida\"|}} {}",
                 w(Import),
                 w(Oida)
             )],

@@ -1,0 +1,32 @@
+# Ein kleines Werkzeug für die Kommandozeile: zeigt, womit es gestartet
+# wurde, schreibt eine Meldung auf die Fehlerausgabe und hört mit einem Code
+# auf, wenn man es verlangt.
+
+BRAUCH programm OIDA
+BRAUCH dateien OIDA
+
+SOG AU olle = argumente() OIDA
+SCHREIB(LÄNGN(olle), olle) OIDA
+FIA JEDE a IN olle TUA
+    SCHREIB("[" + a + "]") OIDA
+PASST SCHO
+
+# Eine Datei, die noch offen ist, wird auch dann fertig geschrieben, wenn das
+# Programm vorzeitig aufhört (oder das Zumachen vergisst).
+PROBIER datei = schreiba_auf("aufhean.txt")
+    PROBIER datei.zeile("no gschwind gschriebn")
+    WONNS SCHIEFGEHT f
+        SCHREIB(f.meldung) OIDA
+    PASST SCHO
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+
+WENN LÄNGN(olle) > 0 DAUN
+    WENN olle[0] == "--aus" DAUN
+        SCHREIB("glei is aus") OIDA
+        schreib_fehla("I hea auf, wäu du des so wüst.") OIDA
+        hea_auf(3) OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB("bis zum End") OIDA

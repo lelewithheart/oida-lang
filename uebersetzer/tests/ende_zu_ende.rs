@@ -191,6 +191,31 @@ fn fehler_beim_laufen_werden_gemeldet() {
 }
 
 #[test]
+fn programm_kennt_seine_argumente_und_hoert_mit_code_auf() {
+    // Ein Werkzeug für die Kommandozeile: Argumente (auch mit Leerzeichen und
+    // Umlauten), eine Meldung auf der Fehlerausgabe, ein eigener Code am Ende.
+    let arbeit = arbeitsordner("werkzeug");
+    let exe = arbeit.join("aufhean.exe");
+    uebersetze(&tests().join("werkzeug").join("aufhean.oida"), &exe, &[]);
+    let datei = arbeit.join("aufhean.txt");
+
+    let lauf = befehl(&exe, None).args(["--aus", "zwa Wörter", "", "a\"b"]).output().unwrap();
+    assert_eq!(lauf.status.code(), Some(3));
+    assert_eq!(text(&lauf.stdout), "4 [\"--aus\", \"zwa Wörter\", \"\", \"a\"b\"]\n[--aus]\n[zwa Wörter]\n[]\n[a\"b]\nglei is aus\n");
+    assert_eq!(text(&lauf.stderr), "I hea auf, wäu du des so wüst.\n");
+    // Was vor dem Aufhören in die offene Datei ging, steht drin.
+    assert_eq!(lies(&datei), "no gschwind gschriebn\n");
+
+    // Ohne Argumente läuft es bis zum Ende und endet mit 0; auch dann wird die Datei fertig.
+    fs::remove_file(&datei).unwrap();
+    let lauf = befehl(&exe, None).env("OIDA_TEXTE_PRUEFEN", "1").output().unwrap();
+    assert_eq!(lauf.status.code(), Some(0));
+    assert_eq!(text(&lauf.stdout), "0 []\nbis zum End\n");
+    assert_eq!(text(&lauf.stderr), "OIDA: 0 Texte, Listen und Objekte übrig\n");
+    assert_eq!(lies(&datei), "no gschwind gschriebn\n");
+}
+
+#[test]
 fn eigenes_woerterbuch() {
     let arbeit = arbeitsordner("woerterbuch");
     let woerterbuch = arbeit.join("meins.txt");
