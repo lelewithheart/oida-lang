@@ -1,11 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["uebersetzer", "laufzeit", "leistung/messen"]
-# Das Messwerkzeug redet direkt mit Windows und wird nur dort gebaut (cargo build -p oida-messen).
+members = ["uebersetzer", "laufzeit", "leistung/messen", "installer/windows"]
+# Das Messwerkzeug und der Windows-Installer reden direkt mit Windows und werden nur auf
+# Wunsch gebaut (cargo build -p oida-messen, installer/bauen.ps1).
 default-members = ["uebersetzer", "laufzeit"]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.15.0"
 edition = "2024"
 
 # Mit diesem Profil wird die Laufzeitbibliothek gebaut, die in jedes

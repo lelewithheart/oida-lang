@@ -1,0 +1,69 @@
+OIDA - de Programmiersproch
+===========================
+
+Servas! OIDA ist installiert. So geht es los:
+
+1. Ein Terminal aufmachen (ein neues, damit es den Befehl "oida" kennt).
+
+2. Ein Programm schreiben, zum Beispiel in eine Datei servas.oida:
+
+       SOG AU nam = "Wöd" OIDA
+       SCHREIB("Servas " + nam + "!") OIDA
+
+3. Übersetzen und gleich starten:
+
+       oida servas.oida --renn
+
+   Ohne --renn entsteht nur das fertige Programm: unter Windows servas.exe,
+   unter Linux servas.
+
+Beispiele liegen im Ordner "beispiele" neben dieser Datei. Was die Sprache
+alles kann, zeigt "oida --hilfe" und die Beschreibung im Projekt (README.md).
+
+
+Was OIDA braucht
+----------------
+
+OIDA macht aus deinem Programm zuerst LLVM-Code; daraus macht "clang" das
+fertige Programm. Darum muss clang da sein:
+
+  Windows:  llvm-mingw. Der Installer holt es auf Wunsch von
+            https://github.com/mstorsjo/llvm-mingw/releases und legt es nach
+            %LOCALAPPDATA%\Programs\llvm-mingw. Dort findet OIDA es von selbst.
+  Linux:    clang aus der Paketverwaltung, zum Beispiel
+            sudo apt install clang
+
+Liegt clang woanders, zeigt die Umgebungsvariable OIDA_CLANG darauf.
+
+
+Die Wörter ändern
+-------------------
+
+Alle Wörter der Sprache (WENN, SOLONG, SCHREIB ...) stehen in der Datei
+woerterbuch-vorlog.txt. Wer andere haben will, kopiert sie, ändert sie und
+gibt sie beim Übersetzen an:
+
+       oida servas.oida --woerterbuch meine-woerter.txt
+
+oder setzt die Umgebungsvariable OIDA_WOERTERBUCH auf die Datei.
+
+
+VS Code
+-------
+
+Die Datei oida-vscode.vsix ist eine Erweiterung für VS Code: Farben, Fehler
+schon beim Tippen, F5 zum Starten. Der Installer baut sie auf Wunsch ein;
+von Hand geht es mit
+
+       code --install-extension oida-vscode.vsix
+
+
+Wieder entfernen
+----------------
+
+  Windows:  in den Einstellungen unter "Installierte Apps" den Eintrag OIDA,
+            oder im Ordner von OIDA:  deinstalliern.exe --weg
+  Linux:    sh deinstalliern.sh --weg   (liegt neben dieser Datei)
+            oder, wenn es das .deb-Paket war:  sudo apt remove oida
+
+Was derzeit nur unter Windows geht: Fenster und Ton (BRAUCH fensta, BRAUCH ton).

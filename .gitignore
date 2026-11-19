@@ -14,3 +14,6 @@
 # Was die Beispielspiele beim Spielen anlegen
 roguewave_bestenlistn_*.txt
 sternfanga_bestes.txt
+
+# Die fertigen Installer (entstehen mit installer/bauen.ps1 und installer/linux/bauen.sh)
+/installer/aus/

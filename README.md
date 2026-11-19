@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.14.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.15.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -43,10 +43,72 @@ mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 Dateien Zeile für Zeile, Bytes, und [das Programm selbst](#das-programm-und-seine-umgebung):
 Argumente von der Kommandozeile, Umgebungsvariablen, andere Programme starten. Neu: [JSON](#json),
 direkt aus einer `STRUKTUR` und zurück, ohne dass man dafür etwas schreiben muss. Und OIDA läuft
-jetzt auch unter [Linux](#windows-und-linux).
+jetzt auch unter [Linux](#windows-und-linux), und für beide Systeme gibt es [Installer](#installieren).
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Für Windows und Linux (64 Bit). Fenster und Ton gibt es derzeit nur unter Windows.
+
+
+## Installieren
+
+Am einfachsten kommt OIDA mit einem Installer auf den Rechner. Es gibt drei; sie entstehen aus
+diesem Projekt (siehe [Installer bauen](#installer-bauen)) und landen in `installer/aus/`.
+Wer OIDA lieber selbst baut, liest bei [Was man braucht](#was-man-braucht) weiter.
+
+### Windows
+
+`oida-<version>-windows-x86_64-setup.exe` starten (Doppelklick oder im Terminal). Der Installer
+
+1. legt OIDA nach `%LOCALAPPDATA%\Programs\oida`: nur für dich, ohne Admin-Rechte,
+2. trägt diesen Ordner in deinen PATH ein, damit man überall einfach `oida` tippen kann,
+3. schaut, ob `clang` aus llvm-mingw da ist. Fehlt es, fragt er und holt es dann von
+   [GitHub](https://github.com/mstorsjo/llvm-mingw/releases): rund 190 MB, ausgepackt 720 MB.
+   Die geholte Datei wird mit ihrer Prüfsumme (SHA-256) verglichen, bevor etwas ausgepackt wird,
+4. baut, wenn VS Code da ist und du ja sagst, die OIDA-Erweiterung ein.
+
+Danach in einem neuen Terminal: `oida --version`.
+
+| Option | |
+|---|---|
+| `--jo` | nichts fragen, überall "ja" |
+| `--ordner <pfad>` | dorthin statt nach `%LOCALAPPDATA%\Programs\oida` |
+| `--ohne-pfad`, `--ohne-llvm`, `--ohne-vscode` | diesen Schritt auslassen |
+| `--weg` | OIDA wieder entfernen |
+
+Entfernen geht auch in den Einstellungen von Windows unter "Installierte Apps" (Eintrag OIDA).
+Weg kommt genau das, was der Installer hingelegt hat; eigene Dateien im Ordner, llvm-mingw und
+die VS-Code-Erweiterung bleiben.
+
+Der Installer ist nicht signiert. Kommt er aus dem Internet, warnt Windows beim ersten Start
+("Der Computer wurde durch Windows geschützt"); weiter geht es mit "Weitere Informationen" und
+"Trotzdem ausführen".
+
+### Linux
+
+Eine Datei, die sich selbst auspackt und auf jeder Distribution geht:
+
+```
+sh oida-<version>-linux-x86_64.sh                 # nur für dich, nach ~/.local
+sudo sh oida-<version>-linux-x86_64.sh --system   # für alle, nach /usr/local
+```
+
+Sie legt den Compiler nach `bin/oida` und Beispiele samt Anleitung nach `share/oida/`, fragt, ob
+sie `~/.local/bin` in dein `~/.profile` eintragen soll (wenn es noch nicht im PATH ist), und
+schaut nach `clang`. Fehlt es, zeigt sie den Befehl für deine Paketverwaltung und führt ihn auf
+Wunsch aus. Dieselben Optionen wie unter Windows gibt es hier auch (`--jo`, `--ordner`,
+`--ohne-pfad`, `--ohne-clang`, `--ohne-vscode`, `--weg`).
+
+Unter Ubuntu und Debian geht es auch als Paket, das `clang` gleich mitholt:
+
+```
+sudo apt install ./oida_<version>_amd64.deb
+```
+
+Entfernen: `sh ~/.local/share/oida/deinstalliern.sh --weg` beziehungsweise `sudo apt remove oida`.
+
+Der Compiler in beiden hängt von keiner Bibliothek des Systems ab und läuft darum auf alten wie
+auf neuen Distributionen. Die Programme, die er baut, sind gewöhnliche Linux-Programme und
+brauchen die übliche C-Bibliothek (glibc); auf Alpine geht es darum nicht.
 
 
 ## Was man braucht
@@ -117,6 +179,25 @@ Die Tests:
 cargo test
 ```
 
+### Installer bauen
+
+```
+installer\bauen.ps1 -Linux       # unter Windows: alle drei (die für Linux baut es im WSL)
+installer\testen.ps1             # probiert den Windows-Installer aus
+bash installer/linux/bauen.sh    # unter Linux: die beiden für Linux
+bash installer/linux/testen.sh   # probiert die selbstauspackende Datei aus
+sudo bash installer/linux/testen.sh --deb
+```
+
+Die Tests installieren in einen Probe-Ordner: Unter Windows landen PATH und App-Eintrag unter
+einem eigenen Schlüssel in der Registry, unter Linux gibt es einen nachgemachten Home-Ordner.
+Nur der Test für das `.deb` installiert das Paket wirklich (und entfernt es wieder). Mit
+`installer\testen.ps1 -Laden` holt der Installer llvm-mingw einmal echt von GitHub.
+
+Welche Ausgabe von llvm-mingw der Windows-Installer holt, steht samt Prüfsumme oben in
+[`installer/windows/src/ablauf.rs`](installer/windows/src/ablauf.rs). Die VS-Code-Erweiterung baut
+derzeit nur `vscode\bauen.ps1`; die Linux-Installer nehmen sie mit, wenn sie in `installer/aus/` liegt.
+
 
 ## Ein Programm übersetzen
 
@@ -167,7 +248,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.13)
+## Die Sprache (v0.15)
 
 ### Typen
 
@@ -1641,6 +1722,8 @@ laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt
   src/ton.rs             Töne errechnen, mischen und an Windows geben; nur unter Windows
   src/ton/               Musik aus Dateien: MP3 entpacken, abspielen, wiederholen, überblenden
 vscode/                Erweiterung für VS Code
+installer/             die Installer: windows/ (oida-setup.exe, Rust), linux/ (install.sh, .deb),
+                       bauen und testen für beide; was herauskommt, liegt in aus/
 leistung/              Leistungsvergleich mit anderen Sprachen
 ```
 
@@ -1711,7 +1794,7 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 10 | Ordner, Pfade, große Dateien Zeile für Zeile, Bytes; Argumente, Umgebung, andere Programme starten | fertig |
 | 11 | [JSON](#json) lesen und schreiben, direkt aus einer `STRUKTUR` und zurück, und frei mit dem Typ `Json` | fertig |
 | 11a | Unabhängig von Windows: Compiler und alle Programme ohne Fenster und Ton laufen auch unter [Linux](#windows-und-linux) | fertig |
-| 11b | Installer für Windows und Linux | offen |
+| 11b | [Installer](#installieren): eine `setup.exe` für Windows, für Linux eine Datei, die sich selbst auspackt, und ein `.deb` | fertig |
 | 11c | Fenster und Ton unter Linux | offen |
 | 12 | Netzwerk: HTTP und HTTPS als Client, dazu rohe TCP-Verbindungen | offen |
 | 13 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |

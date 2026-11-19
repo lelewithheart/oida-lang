@@ -4,3 +4,7 @@ linker = "clang"
 
 [target.aarch64-unknown-linux-gnu]
 linker = "clang"
+
+# Der Compiler für die Linux-Installer: ganz ohne C-Bibliothek des Systems, läuft auf jeder Distribution.
+[target.x86_64-unknown-linux-musl]
+linker = "clang"

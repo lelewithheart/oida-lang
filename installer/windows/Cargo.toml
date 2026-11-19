@@ -1,0 +1,10 @@
+[package]
+name = "oida-setup"
+description = "Installiert OIDA unter Windows (oida-setup.exe)"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "oida-setup"
+path = "src/main.rs"

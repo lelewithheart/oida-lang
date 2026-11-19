@@ -2,6 +2,9 @@
 #
 #   bauen.ps1                 bauen  ->  vscode\oida-vscode.vsix
 #   bauen.ps1 -Installieren   bauen und gleich in VS Code installieren
+#   bauen.ps1 -OhneOrt -Ziel <datei.vsix>
+#                             fuer die Installer: woanders hinlegen und den Ort der oida.exe
+#                             auf diesem Rechner nicht hineinschreiben (dann sucht sie im PATH)
 #
 # Was passiert:
 #   1. Der Compiler wird gebaut (cargo build --release).
@@ -10,7 +13,7 @@
 #      Erweiterung den Compiler auch findet, wenn ein anderer Ordner offen ist.
 #
 # Diese Datei absichtlich ohne Umlaute (Windows PowerShell liest sie sonst falsch).
-param([switch]$Installieren)
+param([switch]$Installieren, [switch]$OhneOrt, [string]$Ziel)
 
 $ErrorActionPreference = 'Stop'
 $hier   = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -40,7 +43,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Die Dateien fuer den Editor lassen sich nicht 
 # --- 3. .vsix zusammenpacken (eine Zip-Datei mit festem Aufbau) -------------
 $paket   = Get-Content (Join-Path $hier 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $version = $paket.version
-$vsix    = Join-Path $hier 'oida-vscode.vsix'
+$vsix    = if ($Ziel) { $Ziel } else { Join-Path $hier 'oida-vscode.vsix' }
 $utf8    = New-Object System.Text.UTF8Encoding $false
 
 $manifest = @"
@@ -105,7 +108,7 @@ try {
         if (-not (Test-Path $pfad)) { throw "Datei fehlt: $pfad" }
         Lege-Ab "extension/$datei" ([System.IO.File]::ReadAllBytes($pfad))
     }
-    Lege-Ab 'extension/compiler-ort.txt' $utf8.GetBytes($oida)
+    if (-not $OhneOrt) { Lege-Ab 'extension/compiler-ort.txt' $utf8.GetBytes($oida) }
 } finally {
     $zip.Dispose()
 }

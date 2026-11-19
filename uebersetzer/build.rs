@@ -7,11 +7,19 @@ use std::path::PathBuf;
 use std::process::Command;
 
 /// Für welches Ziel OIDA Programme erzeugt: (wie Rust es nennt, wie clang es nennt).
-/// Unter Windows passt das zu llvm-mingw; sonst ist es das System, für das der
-/// Compiler selbst gebaut wird (unter Linux heißt es bei beiden gleich).
+/// Unter Windows passt das zu llvm-mingw. Unter Linux ist es das gewöhnliche Linux
+/// (mit der C-Bibliothek des Systems) für denselben Prozessor, und zwar auch dann,
+/// wenn der Compiler selbst für musl gebaut wird: So ein Compiler läuft auf jeder
+/// Distribution (das nehmen die Installer), seine Programme sind trotzdem gewöhnliche.
+/// Sonst ist es das System, für das der Compiler gebaut wird.
 fn ziel() -> (String, String) {
-    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+    let system = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if system == "windows" {
         ("x86_64-pc-windows-gnullvm".to_string(), "x86_64-w64-windows-gnu".to_string())
+    } else if system == "linux" {
+        let prozessor = env::var("CARGO_CFG_TARGET_ARCH").expect("cargo sagt, für welchen Prozessor gebaut wird");
+        let ziel = format!("{prozessor}-unknown-linux-gnu");
+        (ziel.clone(), ziel)
     } else {
         let ziel = env::var("TARGET").expect("cargo sagt, wofür gebaut wird");
         (ziel.clone(), ziel)
