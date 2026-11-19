@@ -1,0 +1,205 @@
+# JSON: aus einer STRUKTUR und zurück (OIS JSON, OIS SCHEES JSON, AUS JSON VON Typ),
+# und mit der Bibliothek json auch dann, wenn man den Aufbau nicht kennt.
+BRAUCH json OIDA
+BRAUCH listen OIDA
+
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+
+STRUKTUR Spiela
+    nam KETTN
+    punkte ZOI
+    do JONA
+    wo Punkt
+    sochn LISTN VON KETTN
+    weg LISTN VON Punkt
+    oita VIELLEICHT ZOI
+    spitznam VIELLEICHT KETTN
+    daham VIELLEICHT Punkt
+    zöhla VAZEICHNIS VON KETTN UND ZOI
+PASST SCHO
+
+# Eine Struktur, die sich selbst enthält.
+STRUKTUR Ast
+    nam KETTN
+    äste LISTN VON Ast
+PASST SCHO
+
+# Ein Teil mit festem Aufbau, ein Teil ohne.
+STRUKTUR Nochricht
+    oat KETTN
+    vo VIELLEICHT KETTN
+    drin Json
+PASST SCHO
+
+FUNKTIAUN zag(wos KETTN, ergebnis KETTN ODA FEHLA)
+    PROBIER inhalt = ergebnis
+        SCHREIB(wos + ":", inhalt) OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB(wos + " geht ned:", f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Lesen und gleich wieder schreiben: So sieht man, was angekommen ist.
+FUNKTIAUN punkt_hin_und_zruck(inhalt KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU p = PROBIER AUS JSON VON Punkt(inhalt) OIDA
+    GIB ZRUCK OIS JSON(p) OIDA
+PASST SCHO
+
+FUNKTIAUN spiela_hin_und_zruck(inhalt KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU s = PROBIER AUS JSON VON Spiela(inhalt) OIDA
+    GIB ZRUCK OIS JSON(s) OIDA
+PASST SCHO
+
+FUNKTIAUN zoi_hin_und_zruck(inhalt KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU z = PROBIER AUS JSON VON ZOI(inhalt) OIDA
+    GIB ZRUCK KETTN(z) OIDA
+PASST SCHO
+
+FUNKTIAUN kommazoi_hin_und_zruck(inhalt KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU z = PROBIER AUS JSON VON KOMMAZOI(inhalt) OIDA
+    GIB ZRUCK KETTN(z) OIDA
+PASST SCHO
+
+FUNKTIAUN text_hin_und_zruck(inhalt KETTN) GIBT ZRUCK KETTN ODA FEHLA
+    SOG AU t = PROBIER AUS JSON VON KETTN(inhalt) OIDA
+    GIB ZRUCK KETTN(LÄNGN(t)) + " Zeichn, wieda ois JSON: " + OIS JSON(t) OIDA
+PASST SCHO
+
+# Geht für jeden Typ, der als JSON geht: Die Vorlage wird für jeden eigens übersetzt.
+FUNKTIAUN doppet VON T(wert T) GIBT ZRUCK KETTN
+    GIB ZRUCK OIS JSON([wert, wert]) OIDA
+PASST SCHO
+
+SCHREIB("--- hin und zruck") OIDA
+SOG AU zöhla = VAZEICHNIS VON KETTN UND ZOI() OIDA
+zöhla["schodn"] = 3 OIDA
+zöhla["lebn \"groß\""] = 1 OIDA
+SOG AU hansi = Spiela("Hansi", 1200, WOAHR, Punkt(1.5, -2), ["Schwert", "Schüd"], [Punkt(0, 0), Punkt(1, 1)], 17, NIX, Punkt(9, 9), zöhla) OIDA
+SOG AU kurz = OIS JSON(hansi) OIDA
+SCHREIB(kurz) OIDA
+SCHREIB(OIS SCHEES JSON(hansi)) OIDA
+PROBIER zruck = AUS JSON VON Spiela(OIS SCHEES JSON(hansi))
+    SCHREIB(zruck) OIDA
+    SCHREIB(zruck.nam, zruck.weg[1].x, zruck.zöhla["schodn"] ODA HOID -1, zruck.oita ODA HOID -1, zruck.spitznam ODA HOID "kana") OIDA
+    SCHREIB(OIS JSON(zruck) == kurz) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+
+SCHREIB("--- anfoche Werte") OIDA
+SCHREIB(OIS JSON(5), OIS JSON(-2.5), OIS JSON(3.0), OIS JSON(WOAHR), OIS JSON(FOISCH), OIS JSON("servas")) OIDA
+SOG AU riesig = 10.0 OIDA           # wächst über alles hinaus: Unendlich gibt es in JSON nicht
+FIA i VON 1 BIS 400 TUA
+    riesig *= 10.0 OIDA
+PASST SCHO
+SCHREIB(OIS JSON("a\nb\t\"c\" \\ ä€ /"), OIS JSON(""), OIS JSON(1.0 / 3.0), OIS JSON(riesig)) OIDA
+SCHREIB(OIS JSON([1, 2, 3]), OIS JSON(["a", "b"]), OIS JSON([[1], [], [2, 3]]), OIS JSON(Punkt(1, 2))) OIDA
+SOG AU kana VIELLEICHT ZOI = NIX OIDA
+SOG AU ana VIELLEICHT ZOI = 7 OIDA
+SOG AU laar LISTN VON Punkt = [] OIDA
+SCHREIB(OIS JSON(kana), OIS JSON(ana), OIS JSON(laar), OIS SCHEES JSON(laar), OIS JSON(VAZEICHNIS VON KETTN UND Punkt())) OIDA
+SCHREIB(OIS SCHEES JSON([Punkt(1, 2)])) OIDA
+SCHREIB(doppet(5), doppet("zwa"), doppet(Punkt(0, 1)), doppet(kana)) OIDA
+SCHREIB(mach(["a", "b"], FUNKTIAUN(t KETTN) => OIS JSON(t + "!"))) OIDA
+
+SCHREIB("--- lesn") OIDA
+SCHREIB(AUS JSON VON Punkt("  {\n  \"y\" : 2e1,\n  \"x\" : 1\n}\n")) OIDA
+SCHREIB(AUS JSON VON LISTN VON ZOI("[1, 2, 3]"), AUS JSON VON LISTN VON ZOI("[]")) OIDA
+SCHREIB(AUS JSON VON LISTN VON Punkt("[{\"x\":1,\"y\":2}]") ODA HOID []) OIDA
+SCHREIB(AUS JSON VON VIELLEICHT ZOI("null"), AUS JSON VON VIELLEICHT ZOI("5"), AUS JSON VON JONA("true")) OIDA
+SCHREIB(AUS JSON VON VAZEICHNIS VON KETTN UND LISTN VON ZOI("{\"a\": [1], \"b\": []}")) OIDA
+zag("ZOI aus 3.0", zoi_hin_und_zruck("3.0")) OIDA
+zag("ZOI aus 3.5", zoi_hin_und_zruck("3.5")) OIDA
+zag("größte ZOI", zoi_hin_und_zruck("9223372036854775807")) OIDA
+zag("z'große ZOI", zoi_hin_und_zruck("9223372036854775808")) OIDA
+zag("KOMMAZOI aus ana gaunzn", kommazoi_hin_und_zruck("7")) OIDA
+zag("KOMMAZOI aus ana riesign", kommazoi_hin_und_zruck("123456789012345678901234567890")) OIDA
+zag("Text mit Sondazeichn", text_hin_und_zruck("\"a\\n\\u00e4\\ud83d\\ude00\\/\\\"\"")) OIDA
+zag("wos z'vü is, wird übalesn", punkt_hin_und_zruck("{\"x\": 1, \"z\": [1, {\"a\": null}], \"y\": 2}")) OIDA
+zag("doppet: des spätare güt", punkt_hin_und_zruck("{\"x\": 1, \"y\": 2, \"x\": 3}")) OIDA
+zag("VIELLEICHT derf fehln", spiela_hin_und_zruck("{\"nam\": \"A\", \"punkte\": 0, \"do\": false, \"wo\": {\"x\": 0, \"y\": 0}, \"sochn\": [], \"weg\": [], \"zöhla\": {}}")) OIDA
+
+SCHREIB("--- wos ned passt") OIDA
+zag("foischa Typ", punkt_hin_und_zruck("{\"x\": 1, \"y\": \"zwa\"}")) OIDA
+zag("fehlt", punkt_hin_und_zruck("{\"x\": 1}")) OIDA
+zag("null", punkt_hin_und_zruck("{\"x\": 1, \"y\": null}")) OIDA
+zag("ka Objekt", punkt_hin_und_zruck("[1, 2]")) OIDA
+zag("tiaf drin", spiela_hin_und_zruck("{\"nam\": \"A\", \"punkte\": 0, \"do\": false, \"wo\": {\"x\": 0, \"y\": 0}, \"sochn\": [], \"weg\": [{\"x\": 0, \"y\": 0}, {\"x\": 0, \"y\": true}], \"zöhla\": {}}")) OIDA
+zag("im Vazeichnis", spiela_hin_und_zruck("{\"nam\": \"A\", \"punkte\": 0, \"do\": false, \"wo\": {\"x\": 0, \"y\": 0}, \"sochn\": [\"a\", 2], \"weg\": [], \"zöhla\": {\"a\": 1, \"b\": 1.5}}")) OIDA
+zag("z'fria aus", punkt_hin_und_zruck("{\"x\": 1")) OIDA
+zag("Beistrich z'vü", punkt_hin_und_zruck("{\n  \"x\": 1,\n  \"y\": 2,\n}")) OIDA
+zag("no wos dahinta", punkt_hin_und_zruck("{\"x\": 1, \"y\": 2} servas")) OIDA
+zag("laar", punkt_hin_und_zruck("")) OIDA
+SCHREIB(AUS JSON VON Punkt("{\"x\": 1") ODA HOID Punkt(-1, -1)) OIDA
+
+SCHREIB("--- a Struktur, de si söwa enthoit") OIDA
+SOG AU baam = Ast("Stamm", [Ast("links", [Ast("Blattl", [])]), Ast("rechts", [])]) OIDA
+SOG AU baam_json = OIS JSON(baam) OIDA
+SCHREIB(baam_json) OIDA
+PROBIER nochamoi = AUS JSON VON Ast(baam_json)
+    SCHREIB(nochamoi.äste[0].äste[0].nam, LÄNGN(nochamoi.äste[1].äste), OIS JSON(nochamoi) == baam_json) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+
+SCHREIB("--- JSON, des ma ned kennt") OIDA
+SOG AU inhalt = "{\"nam\": \"Hansi\", \"punkte\": 1200, \"do\": true, \"nix\": null, \"spiela\": [{\"nam\": \"A\", \"wo\": {\"x\": 1.5, \"y\": -2}}, {\"nam\": \"B\", \"wo\": {\"x\": 3, \"y\": 4}}], \"zoin\": [1, 2.5, 3.0, 1e3], \"nam\": \"Franzi\"}" OIDA
+PROBIER daten = json_lesn(inhalt)
+    SCHREIB(j_als_text(j_feld(daten, "nam")) ODA HOID "?", j_als_zoi(j_feld(daten, "punkte")) ODA HOID -1, j_als_jona(j_feld(daten, "do")) ODA HOID FOISCH) OIDA
+    SCHREIB(j_is_nix(j_feld(daten, "nix")), j_hot(daten, "nix"), j_hot(daten, "gibtsned"), j_is_nix(j_feld(daten, "gibtsned"))) OIDA
+    SCHREIB(j_läng(daten), j_nama(daten)) OIDA
+    SCHREIB(j_als_kommazoi(j_pfad(daten, "spiela[0].wo.x")) ODA HOID -1.0, j_als_zoi(j_pfad(daten, "spiela[1].wo.y")) ODA HOID -1) OIDA
+    SCHREIB(j_als_text(j_pfad(daten, "spiela[1].nam")) ODA HOID "?", j_is_nix(j_pfad(daten, "spiela[2].nam")), j_is_nix(j_pfad(daten, "spiela[x].nam")), j_is_nix(j_pfad(daten, "spiela[0"))) OIDA
+    FIA JEDE z IN j_teile(j_feld(daten, "zoin")) TUA
+        SCHREIB(z.oat == JSON_ZOI, j_als_zoi(z) ODA HOID -1, j_als_kommazoi(z) ODA HOID -1.0) OIDA
+    PASST SCHO
+    SCHREIB(j_läng(j_feld(daten, "zoin")), j_läng(j_feld(daten, "nam")), j_als_text(j_feld(daten, "punkte")) ODA HOID "ka Text", j_als_zoi(j_stö(daten, 0)) ODA HOID -1) OIDA
+    SCHREIB(OIS JSON(daten)) OIDA
+    SCHREIB(OIS JSON(j_pfad(daten, "spiela[0]"))) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+SCHREIB(json_lesn("[1, 2,")) OIDA
+SCHREIB(json_lesn("{\"a\": tru}")) OIDA
+SCHREIB(AUS JSON VON LISTN VON Json("[1, \"zwa\", [true]]")) OIDA
+
+SCHREIB("--- söwa baun") OIDA
+SOG AU neich = j_objekt() OIDA
+j_setz(neich, "nam", j_text("Susi")) OIDA
+j_setz(neich, "oita", j_zoi(17)) OIDA
+j_setz(neich, "größe", j_kommazoi(1.65)) OIDA
+j_setz(neich, "do", j_jona(WOAHR)) OIDA
+j_setz(neich, "nix", j_nix()) OIDA
+SOG AU sochn = j_listn([j_text("Schwert"), j_zoi(3)]) OIDA
+j_dazua(sochn, j_listn([])) OIDA
+j_setz(neich, "sochn", sochn) OIDA
+j_setz(neich, "oita", j_zoi(18)) OIDA
+j_dazua(neich, j_zoi(1)) OIDA
+j_setz(sochn, "a", j_zoi(1)) OIDA
+SCHREIB(OIS JSON(neich)) OIDA
+SCHREIB(OIS SCHEES JSON(neich)) OIDA
+SCHREIB(j_läng(sochn), j_läng(j_feld(neich, "sochn")), j_läng(neich)) OIDA
+
+SCHREIB("--- hoib fest, hoib offn") OIDA
+PROBIER n = AUS JSON VON Nochricht("{\"oat\": \"treffa\", \"drin\": {\"schodn\": 12, \"wen\": [1, 2]}}")
+    SCHREIB(n.oat, n.vo ODA HOID "kana", j_als_zoi(j_feld(n.drin, "schodn")) ODA HOID 0, OIS JSON(n)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+PROBIER n = AUS JSON VON Nochricht("{\"oat\": \"laar\"}")
+    SCHREIB(n.oat, j_is_nix(n.drin), OIS JSON(n)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("geht ned:", f.meldung) OIDA
+PASST SCHO
+SCHREIB(OIS JSON(Nochricht("söwa", "mia", neich)) == "{\"oat\":\"söwa\",\"vo\":\"mia\",\"drin\":" + OIS JSON(neich) + "}") OIDA
+
+SCHREIB("--- oft hintaranaund") OIDA
+SOG AU gsaumt = 0.0 OIDA
+FIA i VON 1 BIS 200 TUA
+    SOG AU p = AUS JSON VON Punkt(OIS JSON(Punkt(i, i * 0.5))) ODA HOID Punkt(0, 0) OIDA
+    gsaumt += p.x + p.y OIDA
+PASST SCHO
+SCHREIB(gsaumt) OIDA

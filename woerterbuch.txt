@@ -125,6 +125,12 @@ REPLACE   = ERSETZ, AUSTAUSCH
 # --- Text in eine Zahl verwandeln; geht das nicht, kommt ein FEHLA zurück ----
 PARSEINT   = ZOI AUS
 PARSEFLOAT = KOMMAZOI AUS
+# --- JSON:  OIS JSON(wert) macht aus einem Wert JSON-Text (OIS SCHEES JSON: mit
+#     Zeilen und Einrückung), AUS JSON VON Punkt(text) macht aus dem Text
+#     wieder einen Wert oder einen FEHLA.
+TOJSON       = OIS JSON
+TOJSONPRETTY = OIS SCHEES JSON
+FROMJSON     = AUS JSON
 
 # --- Eingebaute Funktionen zum Rechnen --------------------------------------
 SQRT      = WURZL

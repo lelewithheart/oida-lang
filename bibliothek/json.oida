@@ -1,0 +1,251 @@
+# OIDA-Bibliothek: JSON, von dem man den Aufbau nicht vorher kennt.     Dazuholen mit:  BRAUCH json OIDA
+#
+# Kennt man den Aufbau, braucht man diese Bibliothek nicht: Dann macht man
+# sich eine STRUKTUR mit denselben Feldern und nimmt, was in die Sprache
+# eingebaut ist:
+#
+#     SOG AU p = PROBIER AUS JSON VON Punkt(inhalt) OIDA     # Punkt ODA FEHLA
+#     SOG AU inhalt = OIS JSON(p) OIDA                       # KETTN
+#
+# Für alles andere gibt es hier den Typ `Json`: ein Wert, der alles sein
+# kann, was in JSON vorkommt. Auch er geht durch AUS JSON und OIS JSON,
+# und er kann ein Feld in einer eigenen STRUKTUR sein (für den Teil, dessen
+# Aufbau offen ist).
+#
+#     SOG AU daten = PROBIER json_lesn(inhalt) OIDA
+#     SCHREIB(j_als_text(j_feld(daten, "nam")) ODA HOID "?") OIDA
+#     SCHREIB(j_als_zoi(j_pfad(daten, "spiela[0].punkte")) ODA HOID 0) OIDA
+
+BRAUCH texte OIDA
+
+# Was ein Json sein kann (sein Feld `oat`).
+FIX JSON_NIX = 0 OIDA
+FIX JSON_JONA = 1 OIDA
+FIX JSON_ZOI = 2 OIDA               # eine ganze Zahl
+FIX JSON_KOMMAZOI = 3 OIDA
+FIX JSON_TEXT = 4 OIDA
+FIX JSON_LISTN = 5 OIDA
+FIX JSON_OBJEKT = 6 OIDA
+
+# Ein Wert aus JSON. Welches Feld gilt, sagt `oat`. Im eigenen Programm nimmt
+# man statt der Felder besser die Funktionen weiter unten.
+# (Die Laufzeit füllt diese Struktur selbst: An den Feldern darf sich nichts ändern.)
+STRUKTUR Json
+    oat ZOI
+    is_woahr JONA                   # bei JSON_JONA
+    gaunze ZOI                      # bei JSON_ZOI
+    komma KOMMAZOI                  # bei JSON_KOMMAZOI, und bei JSON_ZOI dieselbe Zahl noch einmal
+    inhalt VIELLEICHT KETTN         # bei JSON_TEXT
+    teile VIELLEICHT LISTN VON Json # die Elemente einer Liste, oder die Werte eines Objekts
+    nama VIELLEICHT LISTN VON KETTN # bei JSON_OBJEKT: die Namen, in derselben Reihenfolge wie `teile`
+PASST SCHO
+
+# Liest JSON, wie es dasteht. Bei kaputtem JSON sagt der FEHLA, in welcher Zeile und Spalte.
+FUNKTIAUN json_lesn(inhalt KETTN) GIBT ZRUCK Json ODA FEHLA
+    GIB ZRUCK PROBIER AUS JSON VON Json(inhalt) OIDA
+PASST SCHO
+
+# --- Werte bauen
+
+FUNKTIAUN j_nix() GIBT ZRUCK Json
+    GIB ZRUCK Json(JSON_NIX, FOISCH, 0, 0.0, NIX, NIX, NIX) OIDA
+PASST SCHO
+
+FUNKTIAUN j_jona(wert JONA) GIBT ZRUCK Json
+    GIB ZRUCK Json(JSON_JONA, wert, 0, 0.0, NIX, NIX, NIX) OIDA
+PASST SCHO
+
+FUNKTIAUN j_zoi(wert ZOI) GIBT ZRUCK Json
+    GIB ZRUCK Json(JSON_ZOI, FOISCH, wert, KOMMAZOI(wert), NIX, NIX, NIX) OIDA
+PASST SCHO
+
+FUNKTIAUN j_kommazoi(wert KOMMAZOI) GIBT ZRUCK Json
+    GIB ZRUCK Json(JSON_KOMMAZOI, FOISCH, 0, wert, NIX, NIX, NIX) OIDA
+PASST SCHO
+
+FUNKTIAUN j_text(wert KETTN) GIBT ZRUCK Json
+    GIB ZRUCK Json(JSON_TEXT, FOISCH, 0, 0.0, wert, NIX, NIX) OIDA
+PASST SCHO
+
+# Eine Liste mit diesen Elementen (j_listn([]) ist eine leere). Mehr kommt mit j_dazua dazu.
+FUNKTIAUN j_listn(elemente LISTN VON Json) GIBT ZRUCK Json
+    GIB ZRUCK Json(JSON_LISTN, FOISCH, 0, 0.0, NIX, elemente, NIX) OIDA
+PASST SCHO
+
+# Ein leeres Objekt. Die Einträge kommen mit j_setz dazu.
+FUNKTIAUN j_objekt() GIBT ZRUCK Json
+    SOG AU werte LISTN VON Json = [] OIDA
+    SOG AU nama LISTN VON KETTN = [] OIDA
+    GIB ZRUCK Json(JSON_OBJEKT, FOISCH, 0, 0.0, NIX, werte, nama) OIDA
+PASST SCHO
+
+# Hängt ein Element hinten an eine Liste an. (Bei etwas, das keine Liste ist, passiert nichts.)
+FUNKTIAUN j_dazua(wohi Json, wert Json)
+    SOG AU elemente = wohi.teile OIDA
+    WENN wohi.oat == JSON_LISTN DAUN
+        WENN elemente != NIX DAUN
+            HAU EINE(elemente, wert) OIDA
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# Setzt einen Eintrag in einem Objekt; gibt es den Namen schon, wird sein Wert ersetzt.
+FUNKTIAUN j_setz(objekt Json, nam KETTN, wert Json)
+    SOG AU werte = objekt.teile OIDA
+    SOG AU nama = objekt.nama OIDA
+    WENN objekt.oat == JSON_OBJEKT DAUN
+        WENN werte != NIX DAUN
+            WENN nama != NIX DAUN
+                FIA i VON 0 BIS KLANSTA(LÄNGN(nama), LÄNGN(werte)) - 1 TUA
+                    WENN nama[i] == nam DAUN
+                        werte[i] = wert OIDA
+                        GIB ZRUCK OIDA
+                    PASST SCHO
+                PASST SCHO
+                HAU EINE(nama, nam) OIDA
+                HAU EINE(werte, wert) OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+PASST SCHO
+
+# --- Hineinschauen
+
+FUNKTIAUN j_is_nix(j Json) GIBT ZRUCK JONA
+    GIB ZRUCK j.oat == JSON_NIX OIDA
+PASST SCHO
+
+# Wie viele Elemente die Liste oder Einträge das Objekt hat (bei allem anderen 0).
+FUNKTIAUN j_läng(j Json) GIBT ZRUCK ZOI
+    SOG AU elemente = j.teile OIDA
+    WENN elemente != NIX DAUN
+        GIB ZRUCK LÄNGN(elemente) OIDA
+    PASST SCHO
+    GIB ZRUCK 0 OIDA
+PASST SCHO
+
+# Die Elemente einer Liste oder die Werte eines Objekts (bei allem anderen eine leere Liste).
+FUNKTIAUN j_teile(j Json) GIBT ZRUCK LISTN VON Json
+    SOG AU elemente = j.teile OIDA
+    WENN elemente != NIX DAUN
+        GIB ZRUCK elemente OIDA
+    PASST SCHO
+    SOG AU laar LISTN VON Json = [] OIDA
+    GIB ZRUCK laar OIDA
+PASST SCHO
+
+# Die Namen der Einträge eines Objekts, in der Reihenfolge, in der sie dastehen.
+FUNKTIAUN j_nama(j Json) GIBT ZRUCK LISTN VON KETTN
+    SOG AU nama = j.nama OIDA
+    WENN nama != NIX DAUN
+        GIB ZRUCK nama OIDA
+    PASST SCHO
+    SOG AU laar LISTN VON KETTN = [] OIDA
+    GIB ZRUCK laar OIDA
+PASST SCHO
+
+# Der Eintrag mit diesem Namen. Gibt es ihn nicht (oder ist j kein Objekt), kommt
+# ein Json zurück, das nix ist: So kann man ohne Nachschauen weiter hineingreifen.
+# Steht ein Name doppelt im JSON, gilt der spätere.
+FUNKTIAUN j_feld(j Json, nam KETTN) GIBT ZRUCK Json
+    SOG AU werte = j.teile OIDA
+    SOG AU nama = j.nama OIDA
+    WENN werte != NIX DAUN
+        WENN nama != NIX DAUN
+            SOG AU i = KLANSTA(LÄNGN(nama), LÄNGN(werte)) - 1 OIDA
+            SOLONG i >= 0 TUA
+                WENN nama[i] == nam DAUN
+                    GIB ZRUCK werte[i] OIDA
+                PASST SCHO
+                i -= 1 OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK j_nix() OIDA
+PASST SCHO
+
+# Gibt es im Objekt einen Eintrag mit diesem Namen (auch wenn sein Wert null ist)?
+FUNKTIAUN j_hot(j Json, nam KETTN) GIBT ZRUCK JONA
+    FIA JEDE n IN j_nama(j) TUA
+        WENN n == nam DAUN
+            GIB ZRUCK WOAHR OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK FOISCH OIDA
+PASST SCHO
+
+# Das Element an dieser Stelle einer Liste, gezählt ab 0. Gibt es die Stelle
+# nicht (oder ist j keine Liste), kommt ein Json zurück, das nix ist.
+FUNKTIAUN j_stö(j Json, stö ZOI) GIBT ZRUCK Json
+    SOG AU elemente = j.teile OIDA
+    WENN j.oat == JSON_LISTN DAUN
+        WENN elemente != NIX DAUN
+            WENN stö >= 0 UND stö < LÄNGN(elemente) DAUN
+                GIB ZRUCK elemente[stö] OIDA
+            PASST SCHO
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK j_nix() OIDA
+PASST SCHO
+
+# Greift gleich mehrere Stufen tief hinein: j_pfad(daten, "spiela[0].wo.x").
+# Namen stehen mit Punkt dazwischen, Stellen einer Liste in eckigen Klammern.
+# Gibt es den Weg nicht, kommt ein Json zurück, das nix ist.
+FUNKTIAUN j_pfad(j Json, weg KETTN) GIBT ZRUCK Json
+    SOG AU wo = j OIDA
+    FIA JEDE glied IN teil(weg, ".") TUA
+        SOG AU nam = glied OIDA
+        SOG AU rest = "" OIDA
+        SOG AU klamma = SUACH(glied, "[") OIDA
+        WENN klamma >= 0 DAUN
+            nam = STICKL(glied, 0, klamma) OIDA
+            rest = STICKL(glied, klamma) OIDA
+        PASST SCHO
+        WENN nam != "" DAUN
+            wo = j_feld(wo, nam) OIDA
+        PASST SCHO
+        SOLONG rest != "" TUA
+            SOG AU zua = SUACH(rest, "]") OIDA
+            WENN zua < 0 ODA STICKL(rest, 0, 1) != "[" DAUN
+                GIB ZRUCK j_nix() OIDA
+            PASST SCHO
+            wo = j_stö(wo, ZOI AUS(STICKL(rest, 1, zua - 1)) ODA HOID -1) OIDA
+            rest = STICKL(rest, zua + 1) OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK wo OIDA
+PASST SCHO
+
+# --- Herausholen: der Wert, wenn es einer von dieser Art ist, sonst NIX
+
+FUNKTIAUN j_als_text(j Json) GIBT ZRUCK VIELLEICHT KETTN
+    WENN j.oat == JSON_TEXT DAUN
+        GIB ZRUCK j.inhalt OIDA
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+# Eine ganze Zahl; auch 3.0 zählt, 3.5 nicht.
+FUNKTIAUN j_als_zoi(j Json) GIBT ZRUCK VIELLEICHT ZOI
+    WENN j.oat == JSON_ZOI DAUN
+        GIB ZRUCK j.gaunze OIDA
+    PASST SCHO
+    WENN j.oat == JSON_KOMMAZOI UND j.komma == OBRUNDN(j.komma) UND BETROG(j.komma) < 9000000000000000000.0 DAUN
+        GIB ZRUCK ZOI(j.komma) OIDA
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+FUNKTIAUN j_als_kommazoi(j Json) GIBT ZRUCK VIELLEICHT KOMMAZOI
+    WENN j.oat == JSON_ZOI ODA j.oat == JSON_KOMMAZOI DAUN
+        GIB ZRUCK j.komma OIDA
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+FUNKTIAUN j_als_jona(j Json) GIBT ZRUCK VIELLEICHT JONA
+    WENN j.oat == JSON_JONA DAUN
+        GIB ZRUCK j.is_woahr OIDA
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO

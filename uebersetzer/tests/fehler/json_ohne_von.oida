@@ -1,0 +1,5 @@
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+SOG AU f = AUS JSON Punkt("{}") OIDA

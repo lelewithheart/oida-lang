@@ -1,0 +1,7 @@
+BRAUCH json OIDA
+SOG AU listn_im_kreis = j_listn([j_zoi(1)]) OIDA
+SCHREIB(OIS JSON(listn_im_kreis)) OIDA
+# Die Liste enthält jetzt sich selbst: Als JSON hätte das kein Ende.
+j_dazua(listn_im_kreis, listn_im_kreis) OIDA
+SCHREIB(j_läng(listn_im_kreis)) OIDA
+SCHREIB(OIS JSON(listn_im_kreis)) OIDA

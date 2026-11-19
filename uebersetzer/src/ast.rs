@@ -407,6 +407,10 @@ pub enum Eingebaut {
     ZoiAus,
     /// `KOMMAZOI AUS(text)`: die Kommazahl, die im Text steht, oder ein Fehler
     KommazoiAus,
+    /// `OIS JSON(wert)`: der Wert als JSON-Text in einer Zeile
+    AlsJson,
+    /// `OIS SCHEES JSON(wert)`: ... mit Zeilen und Einrückung
+    AlsJsonSchoen,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -487,6 +491,9 @@ pub enum AusdruckArt {
     WertAufruf { funktion: Box<Ausdruck>, argumente: Vec<Ausdruck> },
     /// Ein neuer Wert, dessen Typ dabeisteht: `Stapel VON ZOI()`, `VAZEICHNIS VON KETTN UND ZOI()`.
     Erzeug { angabe: TypAngabe, argumente: Vec<Ausdruck> },
+    /// `AUS JSON VON Punkt(text)`: der Wert, der im JSON-Text steht, oder ein Fehler.
+    /// Der Typ des Ausdrucks ist `<angabe> ODA FEHLA`.
+    AusJson { angabe: TypAngabe, text: Box<Ausdruck> },
 }
 
 /// Ein Wert von außen, den eine Funktion ohne Namen mitnimmt. Er wird

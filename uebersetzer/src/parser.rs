@@ -1091,6 +1091,16 @@ impl Parser<'_> {
                 let argumente = self.argumente()?;
                 return Ok(Ausdruck::neu(AusdruckArt::ElternAufruf { name, argumente, klasse: 0 }, name_pos));
             }
+            // AUS JSON VON Punkt(text): der Typ steht dabei, in der Klammer der Text.
+            TokenArt::Schluessel(Schluessel::FromJson) => {
+                self.weiter();
+                self.erwarte_schluessel(Schluessel::From)?;
+                let angabe = self.typ_kern()?;
+                self.erwarte(TokenArt::KlammerAuf, "a '('")?;
+                let text = self.ausdruck()?;
+                self.erwarte(TokenArt::KlammerZu, "a ')'")?;
+                AusdruckArt::AusJson { angabe, text: Box::new(text) }
+            }
             TokenArt::Schluessel(s) if eingebaut(s).is_some() => {
                 // Der Lexer lässt so ein Wort nur durch, wenn die Klammer folgt.
                 self.weiter();
@@ -1226,6 +1236,8 @@ fn eingebaut(schluessel: Schluessel) -> Option<Eingebaut> {
         Schluessel::Remove => Eingebaut::Raus,
         Schluessel::ParseInt => Eingebaut::ZoiAus,
         Schluessel::ParseFloat => Eingebaut::KommazoiAus,
+        Schluessel::ToJson => Eingebaut::AlsJson,
+        Schluessel::ToJsonPretty => Eingebaut::AlsJsonSchoen,
         _ => return None,
     })
 }
@@ -1298,6 +1310,7 @@ mod tests {
                 let argumente: Vec<String> = argumente.iter().map(klammern).collect();
                 format!("{}({})", klammern(funktion), argumente.join(", "))
             }
+            AusdruckArt::AusJson { angabe, text } => format!("AUS JSON VON {angabe:?}({})", klammern(text)),
             AusdruckArt::Erzeug { argumente, .. } => {
                 let argumente: Vec<String> = argumente.iter().map(klammern).collect();
                 format!("NEU({})", argumente.join(", "))
@@ -1728,5 +1741,21 @@ PASST SCHO");
     fn fehlender_wert() {
         let f = fehler("SOG AU x = OIDA");
         assert_eq!(f.meldung, "Do ghört a Wert her, ned OIDA.");
+    }
+
+    #[test]
+    fn json_schreiben_und_lesen() {
+        assert_eq!(ausdruck("OIS JSON(a + 1)"), "AlsJson((a + 1))");
+        assert_eq!(ausdruck("OIS SCHEES JSON(a)"), "AlsJsonSchoen(a)");
+        // Der Typ steht zwischen VON und der Klammer; er darf aus mehreren Wörtern bestehen.
+        let lesen = ausdruck("AUS JSON VON Punkt(t) ODA HOID p");
+        assert!(lesen.starts_with("(AUS JSON VON ") && lesen.ends_with("(t) ODA HOID p)"), "{lesen}");
+        let lesen = ausdruck("AUS JSON VON VAZEICHNIS VON KETTN UND LISTN VON ZOI(a + b)");
+        assert!(lesen.ends_with("((a + b))"), "{lesen}");
+        assert_eq!(fehler("x = AUS JSON Punkt(t) OIDA").meldung, "Do ghört VON her, ned 'Punkt'.");
+        assert_eq!(fehler("x = AUS JSON VON Punkt OIDA").meldung, "Do ghört a '(' her, ned OIDA.");
+        assert_eq!(fehler("x = AUS JSON VON Punkt(t OIDA").meldung, "Do ghört a ')' her, ned OIDA.");
+        // Ohne Klammer dahinter sind OIS und JSON ganz normale Namen.
+        assert_eq!(ausdruck("OIS + JSON"), "(OIS + JSON)");
     }
 }

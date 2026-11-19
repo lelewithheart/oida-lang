@@ -1,0 +1,33 @@
+{
+  "spiela": "Hansi",
+  "level": 3,
+  "lebn": 87.5,
+  "hoat": false,
+  "rucksack": [
+    {
+      "nam": "Schwert",
+      "stück": 1
+    },
+    {
+      "nam": "Öpfe",
+      "stück": 4
+    }
+  ],
+  "bestzeit": null,
+  "gschofft": {
+    "Woid": true,
+    "Höhle": false
+  }
+}
+{"spiela":"Hansi","level":4,"lebn":87.5,"hoat":false,"rucksack":[{"nam":"Schwert","stück":1},{"nam":"Öpfe","stück":4},{"nam":"Schlissl","stück":1}],"bestzeit":42.5,"gschofft":{"Woid":true,"Höhle":true}}
+Hansi, Level 3, 2 Sochn im Rucksack
+Den Spüstaund kaun i ned lodn. JSON: Bei 'level': Do ghört a gaunze Zoi her, im JSON steht oba a Text.
+Den Spüstaund kaun i ned lodn. JSON: Im JSON fehlt 'rucksack[1].stück'.
+Den Spüstaund kaun i ned lodn. JSON: Zeile 3, Spoitn 13: Do ghört a Nom in Anführungszeichn her.
+Den Spüstaund kaun i ned lodn. JSON: Zeile 1, Spoitn 1: Des JSON hört z'fria auf.
+In Krems hot's heit 21.5 Grad.
+Mo 19.0
+Di 23.5
+Mi waaß ma no ned
+Am Dienstog: 23.5
+{"ort":"Krems","wärmsta":23.5,"tog":["Mo","Di"]}

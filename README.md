@@ -34,14 +34,15 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine 
 (rund 340 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.12.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.13.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
 [Töne](#töne) und [Dateien](#dateien) sind da, und damit ist ein ganzes Spiel geschrieben,
 [RogueWave](#ein-ganzes-spiel-roguewave), rund 7500 Zeilen OIDA. Neu: Ordner, Pfade, große
 Dateien Zeile für Zeile, Bytes, und [das Programm selbst](#das-programm-und-seine-umgebung):
-Argumente von der Kommandozeile, Umgebungsvariablen, andere Programme starten.
+Argumente von der Kommandozeile, Umgebungsvariablen, andere Programme starten. Neu: [JSON](#json),
+direkt aus einer `STRUKTUR` und zurück, ohne dass man dafür etwas schreiben muss.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Derzeit nur für Windows (64 Bit).
@@ -137,7 +138,7 @@ Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem W�
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.12)
+## Die Sprache (v0.13)
 
 ### Typen
 
@@ -705,6 +706,8 @@ Die Namen dieser Funktionen gelten nur mit Klammer. Eine Variable darf also `win
 
 Greift man bei `STICKL` über den Text hinaus, bricht das Programm mit einer Meldung ab.
 
+Dazu kommen `OIS JSON(wert)`, `OIS SCHEES JSON(wert)` und `AUS JSON VON Typ(text)`: siehe [JSON](#json).
+
 ### Mehrere Dateien: BRAUCH
 
 Ein größeres Programm verteilt man auf mehrere Dateien. `BRAUCH` holt Funktionen, Klassen und
@@ -788,6 +791,7 @@ SCHREIB(sortiert(nur(zahlen, FUNKTIAUN(z ZOI) => z > 2), FUNKTIAUN(a ZOI, b ZOI)
 
 Dazu kommen vier Teile, die mit Windows reden; sie haben unten eigene Abschnitte:
 **`BRAUCH dateien OIDA`**, **`BRAUCH programm OIDA`**, **`BRAUCH fensta OIDA`** und **`BRAUCH ton OIDA`**.
+Und **`BRAUCH json OIDA`** für [JSON](#json), dessen Aufbau man nicht vorher kennt.
 
 Weil alles im ganzen Programm gilt, kann eine eigene Funktion nicht so heißen wie eine aus einem
 Teil der Bibliothek, den man dazuholt. Eine Variable schon (`SOG AU summe = 0 OIDA` geht).
@@ -973,6 +977,153 @@ ein Programm seine Ausgabe in der alten Zeichentabelle der Konsole aus, wird sie
 
 Ein kleines Werkzeug mit alledem: [`beispiele/baam.oida`](beispiele/baam.oida) zeigt einen Ordner
 als Baum.
+
+### JSON
+
+JSON ist in die Sprache eingebaut. Aus einem Wert wird mit `OIS JSON(...)` ein Text, aus einem
+Text mit `AUS JSON VON Typ(...)` wieder ein Wert. Dafür schreibt man keine Umwandlung von Hand
+und hängt nichts an die `STRUKTUR` an: Der Compiler kennt ihren Aufbau ja schon.
+
+```
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+
+STRUKTUR Spiela
+    nam KETTN
+    punkte ZOI
+    wo Punkt
+    sochn LISTN VON KETTN
+    spitznam VIELLEICHT KETTN
+PASST SCHO
+
+SOG AU hansi = Spiela("Hansi", 1200, Punkt(1.5, -2), ["Schwert", "Schüd"], NIX) OIDA
+
+SOG AU inhalt = OIS JSON(hansi) OIDA
+SCHREIB(inhalt) OIDA
+# {"nam":"Hansi","punkte":1200,"wo":{"x":1.5,"y":-2},"sochn":["Schwert","Schüd"],"spitznam":null}
+
+PROBIER zruck = AUS JSON VON Spiela(inhalt)
+    SCHREIB(zruck.nam, zruck.wo.x, zruck.sochn[1]) OIDA      # Hansi 1.5 Schüd
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+```
+
+| Form | Ergebnis |
+|---|---|
+| `OIS JSON(wert)` | der Wert als JSON in einer Zeile, eine `KETTN` |
+| `OIS SCHEES JSON(wert)` | dasselbe mit Zeilen und Einrückung, für Dateien, die auch Menschen lesen |
+| `AUS JSON VON Typ(text)` | der Wert, der im Text steht, als `Typ ODA FEHLA` |
+
+Der Typ nach `VON` kann alles sein, was als JSON geht, nicht nur eine `STRUKTUR`:
+`AUS JSON VON LISTN VON Punkt(text)`, `AUS JSON VON VAZEICHNIS VON KETTN UND ZOI(text)`,
+`AUS JSON VON ZOI("5")`.
+
+| In OIDA | In JSON |
+|---|---|
+| `ZOI`, `KOMMAZOI` | eine Zahl (für eine `ZOI` geht auch `3.0`, aber nicht `3.5`) |
+| `JONA` | `true` oder `false` |
+| `KETTN` | ein Text |
+| eine `STRUKTUR` | ein Objekt; die Felder heißen wie in der `STRUKTUR` |
+| `LISTN VON T` | eine Liste |
+| `VIELLEICHT T` | der Wert oder `null` |
+| `VAZEICHNIS VON KETTN UND T` | ein Objekt mit beliebigen Namen |
+
+Lesen kann schiefgehen, darum kommt `ODA FEHLA` heraus (siehe [Fehler](#fehler-fehla-und-probier)).
+Die Meldung sagt, was wo nicht passt:
+
+| Was los ist | `f.meldung` |
+|---|---|
+| ein Wert hat die falsche Art | `JSON: Bei 'punkte': Do ghört a gaunze Zoi her, im JSON steht oba a Text.` |
+| ... auch tief drin | `JSON: Bei 'sochn[1]': Do ghört a Text her, im JSON steht oba a gaunze Zoi.` |
+| ein Feld fehlt | `JSON: Im JSON fehlt 'wo.y'.` |
+| das JSON selbst ist kaputt | `JSON: Zeile 3, Spoitn 13: Do ghört a Nom in Anführungszeichn her.` |
+
+Dabei gilt:
+
+- Jedes Feld der `STRUKTUR` muss im JSON stehen. Nur ein Feld mit `VIELLEICHT` darf fehlen; es ist dann `NIX`.
+- Was im JSON zusätzlich steht, wird überlesen. Steht ein Name doppelt da, gilt der spätere.
+- Es entsteht entweder der ganze Wert oder gar keiner: Nach einem `FEHLA` bleibt nichts Halbes zurück.
+- Unendlich und "keine Zahl" gibt es in JSON nicht; sie werden als `null` geschrieben.
+- Gelesen wird strenges JSON: keine Kommentare, kein Beistrich nach dem letzten Element.
+
+Was nicht als JSON geht, sagt schon der Compiler: Klassen (ein Objekt kann erben und im Kreis auf
+sich selbst zeigen; man schreibt sich eine `STRUKTUR` mit dem, was ins JSON soll), Funktionen und
+ein `VAZEICHNIS` mit `ZOI` als Schlüssel.
+
+```
+A Stoi geht ned ois JSON, weu do a Viech drinsteckt. Es gehn ZOI, KOMMAZOI, JONA, KETTN, ...
+```
+
+#### JSON, dessen Aufbau man nicht kennt
+
+Für JSON von woanders, für das man keine `STRUKTUR` hinschreiben will, gibt es
+`BRAUCH json OIDA` mit dem Typ `Json`: ein Wert, der alles sein kann, was in JSON vorkommt.
+
+```
+BRAUCH json OIDA
+
+SOG AU wetta = "{\"ort\": \"Krems\", \"woch\": [{\"tog\": \"Mo\", \"temp\": 19}, {\"tog\": \"Di\", \"temp\": 23.5}]}" OIDA
+
+PROBIER daten = json_lesn(wetta)
+    SCHREIB(j_als_text(j_feld(daten, "ort")) ODA HOID "?") OIDA                  # Krems
+    SCHREIB(j_als_kommazoi(j_pfad(daten, "woch[1].temp")) ODA HOID 0.0) OIDA     # 23.5
+    FIA JEDE tog IN j_teile(j_feld(daten, "woch")) TUA
+        SCHREIB(j_als_text(j_feld(tog, "tog")) ODA HOID "?") OIDA                # Mo, dann Di
+    PASST SCHO
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+
+SOG AU antwort = j_objekt() OIDA
+j_setz(antwort, "ort", j_text("Krems")) OIDA
+j_setz(antwort, "tog", j_listn([j_text("Mo"), j_text("Di")])) OIDA
+SCHREIB(OIS JSON(antwort)) OIDA                    # {"ort":"Krems","tog":["Mo","Di"]}
+```
+
+| Funktion | Ergebnis |
+|---|---|
+| `json_lesn(text)` | `Json ODA FEHLA`; dasselbe wie `AUS JSON VON Json(text)` |
+| `j_feld(j, nam)` | der Eintrag eines Objekts mit diesem Namen |
+| `j_stö(j, stö)` | das Element einer Liste an dieser Stelle |
+| `j_pfad(j, weg)` | mehrere Stufen auf einmal: `"spiela[0].wo.x"` |
+| `j_als_text(j)`, `j_als_zoi(j)`, `j_als_kommazoi(j)`, `j_als_jona(j)` | der Wert, wenn es einer von dieser Art ist, sonst `NIX` |
+| `j_is_nix(j)` | steht da `null`, oder gibt es das gar nicht? |
+| `j_hot(j, nam)` | gibt es im Objekt einen Eintrag mit diesem Namen? |
+| `j_läng(j)` | Anzahl der Elemente einer Liste oder der Einträge eines Objekts |
+| `j_teile(j)` | die Elemente einer Liste (oder die Werte eines Objekts) als `LISTN VON Json` |
+| `j_nama(j)` | die Namen der Einträge eines Objekts als `LISTN VON KETTN` |
+| `j_nix()`, `j_jona(w)`, `j_zoi(w)`, `j_kommazoi(w)`, `j_text(w)` | ein neues `Json` aus einem Wert |
+| `j_listn(elemente)`, `j_dazua(liste, wert)` | eine Liste bauen und verlängern |
+| `j_objekt()`, `j_setz(objekt, nam, wert)` | ein Objekt bauen: Eintrag anlegen oder ersetzen |
+
+Gibt es einen Eintrag oder eine Stelle nicht, kommt ein `Json` zurück, das nix ist. So kann man
+ohne Nachschauen weiter hineingreifen, und erst ganz am Schluss sagt `ODA HOID`, was dann gilt.
+Welche Art ein `Json` hat, steht in seinem Feld `oat`: `JSON_NIX`, `JSON_JONA`, `JSON_ZOI`,
+`JSON_KOMMAZOI`, `JSON_TEXT`, `JSON_LISTN` oder `JSON_OBJEKT`.
+
+Beides lässt sich mischen: Ein Feld vom Typ `Json` in einer eigenen `STRUKTUR` nimmt, was auch
+immer an dieser Stelle steht (und darf fehlen).
+
+```
+STRUKTUR Nochricht
+    oat KETTN            # steht immer da
+    drin Json            # je nach Art etwas anderes
+PASST SCHO
+```
+
+Ein Beispiel mit alledem: [`beispiele/spüstaund.oida`](beispiele/spüstaund.oida) speichert einen
+Spielstand als Datei, lädt ihn wieder und zeigt, was bei einer kaputten Datei passiert.
+
+Was noch fehlt: Die Namen im JSON sind immer die Namen der Felder (ein anderer Name für ein
+Feld geht nicht). Ein JSON wird immer als Ganzes gelesen, nicht Stück für Stück aus einer
+riesigen Datei. Tiefer als 400 Stufen verschachtelt geht nicht.
+
+Wie schnell das ist, gemessen mit 200 000 Strukturen (26 MB JSON): schreiben 0,25 s, in
+Strukturen lesen rund 0,7 s, als `Json` lesen rund 0,9 s. Python braucht für dasselbe 0,45 s
+zum Schreiben und 0,5 bis 0,8 s zum Lesen. Beim Lesen ist also noch Luft nach oben.
 
 ### Ein Fenster: zeichnen, Tasten und Maus
 
@@ -1424,6 +1575,7 @@ laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt
                        Fehler beim Laufen
   src/dateien.rs         Dateien, Ordner und Pfade
   src/programm.rs        Argumente, Umgebung, aufhören, andere Programme starten
+  src/json.rs            JSON lesen und schreiben, nach der Beschreibung des Typs vom Compiler
   src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus
   src/fenster/           Farbverläufe, Leuchten, Mischen; freie Formen, Ausschnitte; Bilder
   src/ton.rs             Töne errechnen, mischen und an Windows geben
@@ -1456,7 +1608,8 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 - Tasten heißen nach dem, was auf ihnen steht, nicht nach ihrem Platz: Auf einer französischen
   Tastatur liegt `"W"` woanders.
 - Musik aus Dateien geht nur als MP3 (kein WAV, kein OGG).
-- Dateien gehen nur als ganzer Text (UTF-8); Ordner auflisten oder anlegen geht nicht.
+- Texte in Dateien müssen UTF-8 sein. Datum und Uhrzeit gibt es noch nicht.
+- Als JSON gehen Strukturen, aber keine Klassen; die Felder heißen im JSON immer wie in der `STRUKTUR`.
 - Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
 - Bei einem Verzeichnis geht als Schlüssel nur `ZOI` oder `KETTN`.
 - Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0 und `ZOI("abc")` brechen das
@@ -1494,7 +1647,7 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 8c | Alles rundherum: Beute, Truhen, Locker, Prestige, Skins, die neuen Menüs | zurückgestellt |
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
 | 10 | Ordner, Pfade, große Dateien Zeile für Zeile, Bytes; Argumente, Umgebung, andere Programme starten | fertig |
-| 11 | JSON lesen und schreiben, auch direkt aus einer `STRUKTUR` und zurück | offen |
+| 11 | [JSON](#json) lesen und schreiben, direkt aus einer `STRUKTUR` und zurück, und frei mit dem Typ `Json` | fertig |
 | 12 | Netzwerk: HTTP und HTTPS als Client, dazu rohe TCP-Verbindungen | offen |
 | 13 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
 | 14 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |

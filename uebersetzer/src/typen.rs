@@ -144,6 +144,8 @@ fn wort_von(funktion: Eingebaut) -> Schluessel {
         Eingebaut::Raus => Schluessel::Remove,
         Eingebaut::ZoiAus => Schluessel::ParseInt,
         Eingebaut::KommazoiAus => Schluessel::ParseFloat,
+        Eingebaut::AlsJson => Schluessel::ToJson,
+        Eingebaut::AlsJsonSchoen => Schluessel::ToJsonPretty,
     }
 }
 
@@ -172,7 +174,12 @@ fn fassungen(funktion: Eingebaut) -> &'static [(&'static [Typ], Typ)] {
         Eingebaut::Min | Eingebaut::Max => &[(&[Z, Z], Z), (&[K, K], K)],
         Eingebaut::Zufall => &[(&[], K), (&[Z, Z], Z)],
         Eingebaut::Samen => &[(&[Z], Nix)],
-        Eingebaut::Dazu | Eingebaut::Raus | Eingebaut::ZoiAus | Eingebaut::KommazoiAus => {
+        Eingebaut::Dazu
+        | Eingebaut::Raus
+        | Eingebaut::ZoiAus
+        | Eingebaut::KommazoiAus
+        | Eingebaut::AlsJson
+        | Eingebaut::AlsJsonSchoen => {
             unreachable!("werden eigens geprüft, weil ihr Typ nicht in dieser Tabelle stehen kann")
         }
     }
@@ -654,6 +661,65 @@ impl Pruefer<'_> {
                 _ => Typ::Fehler,
             }
         }
+    }
+
+    /// Der erste Typ in `typ`, der sich nicht als JSON schreiben und lesen lässt,
+    /// oder `None`, wenn alles geht. `gesehen` verhindert, dass eine Struktur,
+    /// die sich über eine Liste selbst enthält, ohne Ende geprüft wird.
+    fn json_hindernis(&self, typ: Typ, gesehen: &mut Vec<Typ>) -> Option<Typ> {
+        if gesehen.contains(&typ) {
+            return None;
+        }
+        gesehen.push(typ);
+        match typ {
+            Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn | Typ::Fehler => None,
+            Typ::Struktur(_) => {
+                let felder: Vec<Typ> = self.typen.struktur(typ).map(|s| s.felder.iter().map(|(_, t)| *t).collect())?;
+                felder.into_iter().find_map(|feld| self.json_hindernis(feld, gesehen))
+            }
+            Typ::Liste(_) => self.json_hindernis(self.typen.element(typ)?, gesehen),
+            Typ::Vielleicht { .. } => self.json_hindernis(self.typen.innen(typ)?, gesehen),
+            Typ::Verzeichnis(_) => {
+                let (schluessel, wert) = self.typen.verzeichnis(typ)?;
+                // Die Namen in einem JSON-Objekt sind immer Texte.
+                if schluessel == Typ::Kettn { self.json_hindernis(wert, gesehen) } else { Some(typ) }
+            }
+            _ => Some(typ),
+        }
+    }
+
+    /// Meldet einen Fehler, wenn sich ein Wert dieses Typs nicht als JSON schreiben und lesen lässt.
+    fn json_verlangt(&mut self, typ: Typ, pos: Position) {
+        let Some(hindernis) = self.json_hindernis(typ, &mut Vec::new()) else { return };
+        // Steckt das Hindernis weiter innen (in einem Feld, in einer Liste), steht dabei, wo.
+        let wer = self.typ_name(typ).replacen("a ", "A ", 1);
+        let anfang = if hindernis == typ {
+            format!("{wer} geht ned ois JSON.")
+        } else {
+            format!("{wer} geht ned ois JSON, weu do {} drinsteckt.", self.typ_name(hindernis))
+        };
+        let rat = if matches!(hindernis, Typ::Klasse(_)) {
+            format!(
+                " Fia a {} schreibst da a {} mit dem, wos ins JSON soll.",
+                self.wort(Schluessel::Class),
+                self.wort(Schluessel::Struct)
+            )
+        } else {
+            String::new()
+        };
+        let meldung = format!(
+            "{anfang} Es gehn {}, {}, {}, {}, wos mit {} augsogt is, {}, {} und {} mit {} ois Schlüssl.{rat}",
+            self.wort(Schluessel::Int),
+            self.wort(Schluessel::Float),
+            self.wort(Schluessel::Boolean),
+            self.wort(Schluessel::Text),
+            self.wort(Schluessel::Struct),
+            self.wort(Schluessel::List),
+            self.wort(Schluessel::Maybe),
+            self.wort(Schluessel::Map),
+            self.wort(Schluessel::Text)
+        );
+        self.melde(pos, meldung);
     }
 
     /// `Stapel VON ZOI(...)`: ein neuer Wert, dessen Typ dabeisteht.
@@ -2693,6 +2759,26 @@ impl Pruefer<'_> {
                     ziel
                 }
             }
+            AusdruckArt::AusJson { angabe, text } => {
+                let angabe = angabe.clone();
+                let (text_typ, text_pos) = (self.ausdruck(text), text.pos);
+                let ziel = self.typ_aus(&angabe);
+                if text_typ != Typ::Kettn && text_typ != Typ::Fehler {
+                    let meldung = format!(
+                        "'{}' wü in da Klammer {}, du gibst eam {}.",
+                        self.wort(Schluessel::FromJson),
+                        self.typ_name(Typ::Kettn),
+                        self.typ_name(text_typ)
+                    );
+                    self.melde(text_pos, meldung);
+                }
+                if ziel == Typ::Fehler {
+                    Typ::Fehler
+                } else {
+                    self.json_verlangt(ziel, pos);
+                    self.typen.ergebnis_von(ziel)
+                }
+            }
             AusdruckArt::Probier { innen } => {
                 let typ = self.ausdruck(innen);
                 let probier = self.wort(Schluessel::Try).to_string();
@@ -2957,6 +3043,16 @@ impl Pruefer<'_> {
                 }
                 let wert = if funktion == Eingebaut::ZoiAus { Typ::Zoi } else { Typ::Kommazoi };
                 return self.typen.ergebnis_von(wert);
+            }
+            // OIS JSON(wert), OIS SCHEES JSON(wert): geht mit allem, was sich als JSON schreiben lässt.
+            Eingebaut::AlsJson | Eingebaut::AlsJsonSchoen => {
+                if typen.len() != 1 {
+                    let meldung = format!("'{name}' wü an Wert hom, du gibst eam {}.", anzahl(typen.len()));
+                    self.melde(pos, meldung);
+                } else if self.fertig_verlangt(&argumente[0]) {
+                    self.json_verlangt(typen[0], argumente[0].pos);
+                }
+                return Typ::Kettn;
             }
             _ => {}
         }
@@ -4051,5 +4147,46 @@ mod tests {
         // Der Wert, mit dem ein Feld beginnt, wird ausgerechnet, bevor es das Objekt gibt.
         let f = fehler("KLASSE A\n x ZOI\n y ZOI = SÖWA.x\nPASST SCHO");
         assert_eq!(f.meldung, "SÖWA gibt's nur in ana Methode.");
+    }
+
+    #[test]
+    fn json() {
+        const P: &str = "STRUKTUR P\n x ZOI\n nam VIELLEICHT KETTN\nPASST SCHO\nKLASSE K\n x ZOI\nPASST SCHO\n";
+        assert_eq!(typ_von("OIS JSON(5)"), Typ::Kettn);
+        assert_eq!(typ_von("OIS SCHEES JSON([1, 2])"), Typ::Kettn);
+        // Lesen kann schiefgehen: Heraus kommt der Typ ODA FEHLA.
+        let programm =
+            ok(&format!("{P}SOG AU p = AUS JSON VON P(\"\") OIDA\nSOG AU l = AUS JSON VON LISTN VON P(\"\") ODA HOID [] OIDA"));
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[0].art else { panic!() };
+        assert_eq!(programm.typen.wert_von(wert.typ), Some(Typ::Struktur(0)));
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[1].art else { panic!() };
+        assert_eq!(programm.typen.element(wert.typ), Some(Typ::Struktur(0)));
+        let f = fehler("SOG AU x ZOI = AUS JSON VON ZOI(\"5\") OIDA");
+        assert_eq!(f.meldung, "'x' soll a ZOI sei, oba des do is a ZOI ODA FEHLA.");
+        let f = fehler("SOG AU x = AUS JSON VON ZOI(5) OIDA");
+        assert_eq!(f.meldung, "'AUS JSON' wü in da Klammer a KETTN, du gibst eam a ZOI.");
+        // Eine Struktur darf sich selbst enthalten.
+        ok("STRUKTUR A\n n LISTN VON A\nPASST SCHO\nSOG AU a = AUS JSON VON A(\"\") OIDA");
+
+        // Was nicht geht: Klassen, Funktionen und Verzeichnisse mit Zahlen als Schlüssel.
+        let f = fehler(&format!("{P}SCHREIB(OIS JSON(K(1))) OIDA"));
+        assert!(f.meldung.starts_with("A K geht ned ois JSON. Es gehn ZOI, KOMMAZOI, JONA, KETTN,"), "{}", f.meldung);
+        assert!(f.meldung.ends_with("Fia a KLASSE schreibst da a STRUKTUR mit dem, wos ins JSON soll."), "{}", f.meldung);
+        // Steckt es weiter innen, steht dabei, wo.
+        let f = fehler(&format!("{P}SOG AU x = AUS JSON VON LISTN VON K(\"\") OIDA"));
+        assert!(f.meldung.starts_with("A LISTN VON K geht ned ois JSON, weu do a K drinsteckt."), "{}", f.meldung);
+        let f = fehler("STRUKTUR S\n f FUNKTIAUN() GIBT ZRUCK ZOI\nPASST SCHO\nSOG AU x = AUS JSON VON S(\"\") OIDA");
+        assert!(f.meldung.starts_with("A S geht ned ois JSON, weu do a FUNKTIAUN() GIBT ZRUCK ZOI drinsteckt."), "{}", f.meldung);
+        assert!(f.meldung.ends_with("mit KETTN ois Schlüssl."), "{}", f.meldung);
+        let f = fehler("SOG AU x = AUS JSON VON VAZEICHNIS VON ZOI UND ZOI(\"\") OIDA");
+        assert!(f.meldung.starts_with("A VAZEICHNIS VON ZOI UND ZOI geht ned ois JSON."), "{}", f.meldung);
+        assert_eq!(fehler("SCHREIB(OIS JSON(1, 2)) OIDA").meldung, "'OIS JSON' wü an Wert hom, du gibst eam 2 Werte.");
+        assert!(fehler("SCHREIB(OIS JSON([])) OIDA").meldung.starts_with("Bei [] waaß i ned"));
+
+        // In einer Vorlage wird für jede Fassung geprüft.
+        const J: &str = "FUNKTIAUN j VON T(w T) GIBT ZRUCK KETTN\n GIB ZRUCK OIS JSON(w) OIDA\nPASST SCHO\n";
+        ok(&format!("{J}SCHREIB(j(1), j(\"a\")) OIDA"));
+        let f = fehler(&format!("{P}{J}SCHREIB(j(K(1))) OIDA"));
+        assert!(f.meldung.starts_with("A K geht ned ois JSON.") && f.meldung.ends_with("(bei 'j VON K')"), "{}", f.meldung);
     }
 }

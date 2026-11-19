@@ -1,0 +1,17 @@
+:15:18: A Viech geht ned ois JSON. Es gehn ZOI, KOMMAZOI, JONA, KETTN, wos mit STRUKTUR augsogt is, LISTN, VIELLEICHT und VAZEICHNIS mit KETTN ois Schlüssl. Fia a KLASSE schreibst da a STRUKTUR mit dem, wos ins JSON soll.
+:16:18: A Stoi geht ned ois JSON, weu do a Viech drinsteckt. Es gehn ZOI, KOMMAZOI, JONA, KETTN, wos mit STRUKTUR augsogt is, LISTN, VIELLEICHT und VAZEICHNIS mit KETTN ois Schlüssl. Fia a KLASSE schreibst da a STRUKTUR mit dem, wos ins JSON soll.
+:17:18: A VAZEICHNIS VON ZOI UND KETTN geht ned ois JSON. Es gehn ZOI, KOMMAZOI, JONA, KETTN, wos mit STRUKTUR augsogt is, LISTN, VIELLEICHT und VAZEICHNIS mit KETTN ois Schlüssl.
+:18:18: A FUNKTIAUN(ZOI) GIBT ZRUCK ZOI geht ned ois JSON. Es gehn ZOI, KOMMAZOI, JONA, KETTN, wos mit STRUKTUR augsogt is, LISTN, VIELLEICHT und VAZEICHNIS mit KETTN ois Schlüssl.
+:19:9: 'OIS JSON' wü an Wert hom, du gibst eam kan Wert.
+:20:9: 'OIS JSON' wü an Wert hom, du gibst eam 2 Werte.
+:21:18: Bei [] waaß i ned, wos fia a LISTN des sei soll. Sog's dazua, zum Beispü: SOG AU x LISTN VON ZOI = [] OIDA
+:22:18: Bei NIX waaß i ned, wos do fehln soll. Sog's dazua, zum Beispü: SOG AU x VIELLEICHT ZOI = NIX OIDA
+:23:25: A Viech geht ned ois JSON. Es gehn ZOI, KOMMAZOI, JONA, KETTN, wos mit STRUKTUR augsogt is, LISTN, VIELLEICHT und VAZEICHNIS mit KETTN ois Schlüssl. Fia a KLASSE schreibst da a STRUKTUR mit dem, wos ins JSON soll.
+:24:12: A Viech geht ned ois JSON. Es gehn ZOI, KOMMAZOI, JONA, KETTN, wos mit STRUKTUR augsogt is, LISTN, VIELLEICHT und VAZEICHNIS mit KETTN ois Schlüssl. Fia a KLASSE schreibst da a STRUKTUR mit dem, wos ins JSON soll.
+:25:31: 'AUS JSON' wü in da Klammer a KETTN, du gibst eam a ZOI.
+:26:25: An Typ 'Gibtsned' kenn i ned. Gibt's a STRUKTUR oda a KLASSE mit dem Nom?
+:27:12: A Knopf geht ned ois JSON, weu do a FUNKTIAUN(ZOI) GIBT ZRUCK ZOI drinsteckt. Es gehn ZOI, KOMMAZOI, JONA, KETTN, wos mit STRUKTUR augsogt is, LISTN, VIELLEICHT und VAZEICHNIS mit KETTN ois Schlüssl.
+:28:18: 'e' soll a Punkt sei, oba des do is a Punkt ODA FEHLA.
+:29:34: Do kunnt a FEHLA drin sei. Nimm z'erst PROBIER oda ODA HOID.
+:30:16: 'h' soll a ZOI sei, oba des do is a KETTN.
+Na, des wird nix: 16 Fehler.

@@ -99,6 +99,8 @@ declare i64 @oida_text_zu_zoi(ptr, i64)
 declare double @oida_text_zu_kommazoi(ptr, i64)
 declare ptr @oida_text_als_zoi(ptr, ptr)
 declare ptr @oida_text_als_kommazoi(ptr, ptr)
+declare ptr @oida_json_lesen(ptr, ptr, ptr)
+declare ptr @oida_json_schreiben(ptr, ptr, i1 zeroext, i64)
 declare void @oida_fehler_durch_null(i64) noreturn
 declare void @oida_fehler_schritt_null(i64) noreturn
 declare void @oida_fehler_stelle(i64, i64, i64) noreturn
@@ -450,6 +452,27 @@ struct Modul<'t> {
     typen: &'t Typen,
     /// Die Klassen, wie sie im Programm stehen (für die Werte, mit denen Felder beginnen).
     klassen: &'t [KlassenDef],
+    /// Die Typen, für die es schon eine Beschreibung für JSON gibt; die Stelle ist ihre Nummer.
+    json_typen: Vec<Typ>,
+}
+
+/// Ist das die Struktur `Json` aus der Bibliothek (JSON ohne festen Aufbau)?
+/// Die Laufzeit kennt ihre sieben Felder und füllt sie selbst (siehe laufzeit/src/json.rs).
+fn ist_json_struktur(typen: &Typen, typ: Typ) -> bool {
+    let Some(info) = typen.struktur(typ) else { return false };
+    let namen: Vec<&str> = info.felder.iter().map(|(name, _)| name.as_str()).collect();
+    if info.name != "Json" || namen != ["oat", "is_woahr", "gaunze", "komma", "inhalt", "teile", "nama"] {
+        return false;
+    }
+    let liste_von = |feld: Typ| typen.innen(feld).and_then(|liste| typen.element(liste));
+    let f: Vec<Typ> = info.felder.iter().map(|(_, t)| *t).collect();
+    f[0] == Typ::Zoi
+        && f[1] == Typ::Jona
+        && f[2] == Typ::Zoi
+        && f[3] == Typ::Kommazoi
+        && typen.innen(f[4]) == Some(Typ::Kettn)
+        && liste_von(f[5]) == Some(typ)
+        && liste_von(f[6]) == Some(Typ::Kettn)
 }
 
 impl Modul<'_> {
@@ -465,6 +488,75 @@ impl Modul<'_> {
             }
         };
         format!("@.text.{nummer}")
+    }
+
+    /// Die Beschreibung eines Typs für JSON, als IR-Name. Die Laufzeit geht
+    /// damit durch den Speicher (der Aufbau steht in laufzeit/src/json.rs):
+    /// Art, Größe, Anzahl, was drin ist, die Felder. Jede gibt es nur einmal.
+    fn json_typ(&mut self, typ: Typ) -> String {
+        if let Some(n) = self.json_typen.iter().position(|t| *t == typ) {
+            return format!("@oida.json.t{n}");
+        }
+        // Die Nummer steht fest, bevor es an die Felder geht: Eine Struktur kann sich über eine Liste selbst enthalten.
+        let n = self.json_typen.len();
+        self.json_typen.push(typ);
+        let typen = self.typen;
+        let nix = || "null".to_string();
+        let (art, anzahl, innen, felder) = match typ {
+            Typ::Zoi => (0, "0".to_string(), nix(), nix()),
+            Typ::Kommazoi => (1, "0".to_string(), nix(), nix()),
+            Typ::Jona => (2, "0".to_string(), nix(), nix()),
+            Typ::Kettn => (3, "0".to_string(), nix(), nix()),
+            Typ::Liste(_) => {
+                let element = typen.element(typ).expect("eine Liste hat Elemente");
+                (5, "0".to_string(), self.json_typ(element), nix())
+            }
+            Typ::Vielleicht { nummer, zeiger } => {
+                let innen = self.json_typ(typen.innen(typ).expect("VIELLEICHT hat einen Typ darin"));
+                if zeiger {
+                    (6, "0".to_string(), innen, nix())
+                } else {
+                    // Wo der Wert hinter dem Merker "ist da" liegt.
+                    (7, format!("ptrtoint (ptr getelementptr (%v{nummer}, ptr null, i32 0, i32 1) to i64)"), innen, nix())
+                }
+            }
+            Typ::Verzeichnis(_) => {
+                let (_, wert) = typen.verzeichnis(typ).expect("ein Verzeichnis hat Werte");
+                (8, "0".to_string(), self.json_typ(wert), nix())
+            }
+            Typ::Struktur(s) => {
+                let info = typen.struktur(typ).expect("die Struktur gibt es");
+                let beliebig = ist_json_struktur(typen, typ);
+                let mut eintraege = Vec::new();
+                for (i, (name, feld_typ)) in info.felder.iter().enumerate() {
+                    let name = self.text(name);
+                    // Bei `Json` selbst braucht die Laufzeit von den Feldern nur, wo sie liegen.
+                    let feld = if beliebig { nix() } else { self.json_typ(*feld_typ) };
+                    eintraege.push(format!(
+                        "{{ ptr, i64, ptr }} {{ ptr {name}, i64 ptrtoint (ptr getelementptr (%s{s}, ptr null, i32 0, i32 {i}) to i64), ptr {feld} }}"
+                    ));
+                }
+                let felder = if eintraege.is_empty() {
+                    nix()
+                } else {
+                    let _ = writeln!(
+                        self.zusatz,
+                        "@oida.json.f{n} = private unnamed_addr constant [{} x {{ ptr, i64, ptr }}] [{}]",
+                        eintraege.len(),
+                        eintraege.join(", ")
+                    );
+                    format!("@oida.json.f{n}")
+                };
+                (if beliebig { 9 } else { 4 }, eintraege.len().to_string(), nix(), felder)
+            }
+            _ => unreachable!("von der Typprüfung abgelehnt"),
+        };
+        let _ = writeln!(
+            self.zusatz,
+            "@oida.json.t{n} = private unnamed_addr constant {{ i64, i64, i64, ptr, ptr }} {{ i64 {art}, i64 {}, i64 {anzahl}, ptr {innen}, ptr {felder} }}\n",
+            groesse(typ)
+        );
+        format!("@oida.json.t{n}")
     }
 
     /// Die Befehle, die einen Wert ausgeben. `innen` heißt: Der Wert steht in
@@ -1768,6 +1860,23 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             }
             AusdruckArt::OdaHoid { links, rechts } => self.oda_hoid(links, rechts, ausdruck.typ),
             AusdruckArt::Probier { innen } => self.probier(innen),
+            AusdruckArt::AusJson { text, .. } => {
+                // Die Laufzeit baut den Wert in den Platz und gibt den Fehler zurück (null: keiner).
+                let ziel = self.modul.typen.wert_von(ausdruck.typ).expect("die Typprüfung macht daraus ... ODA FEHLA");
+                let (t, eigen) = self.geliehen(text);
+                let zt = ir_typ(ziel);
+                let platz = self.versteckter_platz(&zt);
+                let beschreibung = self.modul.json_typ(ziel);
+                let (f, w, a, b) = (self.temp(), self.temp(), self.temp(), self.temp());
+                let et = ir_typ(ausdruck.typ);
+                self.zeile(&format!("store {zt} zeroinitializer, ptr {platz}"));
+                self.zeile(&format!("{f} = call ptr @oida_json_lesen(ptr {t}, ptr {beschreibung}, ptr {platz})"));
+                self.zeile(&format!("{w} = load {zt}, ptr {platz}"));
+                self.zeile(&format!("{a} = insertvalue {et} zeroinitializer, ptr {f}, 0"));
+                self.zeile(&format!("{b} = insertvalue {et} {a}, {zt} {w}, 1"));
+                self.lass_wenn_eigen(&t, Typ::Kettn, eigen);
+                b
+            }
             AusdruckArt::ElternAufruf { name, argumente, klasse } => {
                 let typen = self.modul.typen;
                 let selbst = self.selbst.expect("die Typprüfung lässt das nur in Methoden zu");
@@ -2049,6 +2158,22 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_wenn_eigen(&l, argumente[0].typ, l_eigen);
                 return String::new();
             }
+            Eingebaut::AlsJson | Eingebaut::AlsJsonSchoen => {
+                // Der Wert kommt in einen Platz am Stack; die Laufzeit liest ihn dort nach der Beschreibung seines Typs.
+                let typ = argumente[0].typ;
+                let (wert, eigen) = self.geliehen(&argumente[0]);
+                let it = ir_typ(typ);
+                let platz = self.versteckter_platz(&it);
+                let beschreibung = self.modul.json_typ(typ);
+                let t = self.temp();
+                self.zeile(&format!("store {it} {wert}, ptr {platz}"));
+                self.zeile(&format!(
+                    "{t} = call ptr @oida_json_schreiben(ptr {platz}, ptr {beschreibung}, i1 zeroext {}, i64 {zeile})",
+                    funktion == Eingebaut::AlsJsonSchoen
+                ));
+                self.lass_wenn_eigen(&wert, typ, eigen);
+                return t;
+            }
             Eingebaut::ZoiAus | Eingebaut::KommazoiAus => {
                 // Die Laufzeit schreibt die Zahl in den Platz und gibt den Fehler zurück (null: keiner).
                 let (zahl, funktion) = if funktion == Eingebaut::ZoiAus {
@@ -2120,7 +2245,12 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             Eingebaut::Zufall if werte.is_empty() => "call double @oida_zufall()".to_string(),
             Eingebaut::Zufall => format!("call i64 @oida_zufall_zoi(i64 {}, i64 {}, i64 {zeile})", w(0), w(1)),
             Eingebaut::Samen => format!("call void @oida_zufall_samen(i64 {})", w(0)),
-            Eingebaut::Dazu | Eingebaut::Raus | Eingebaut::ZoiAus | Eingebaut::KommazoiAus => {
+            Eingebaut::Dazu
+            | Eingebaut::Raus
+            | Eingebaut::ZoiAus
+            | Eingebaut::KommazoiAus
+            | Eingebaut::AlsJson
+            | Eingebaut::AlsJsonSchoen => {
                 unreachable!("oben erledigt")
             }
         };
@@ -2430,6 +2560,7 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         werte_gebaut: std::collections::HashSet::new(),
         typen: &programm.typen,
         klassen: &programm.klassen,
+        json_typen: Vec::new(),
     };
     let mut funktionen = String::new();
 
@@ -2639,5 +2770,48 @@ mod tests {
     fn namen_mit_umlauten() {
         let ir = ir("KLASSE Bär\n FUNKTIAUN grüß()\n PASST SCHO\nPASST SCHO\nBär().grüß() OIDA");
         assert!(ir.contains("define internal void @\"oida.m.B\\C3\\A4r.gr\\C3\\BC\\C3\\9F\"(ptr %selbst)"), "{ir}");
+    }
+
+    #[test]
+    fn json_bekommt_eine_beschreibung_vom_typ() {
+        let ir = ir("STRUKTUR Punkt\n x KOMMAZOI\n nam VIELLEICHT KETTN\n oita VIELLEICHT ZOI\nPASST SCHO\n\
+             SOG AU t = OIS JSON(Punkt(1, NIX, 3)) OIDA\nSOG AU s = OIS SCHEES JSON([1]) OIDA\n\
+             SOG AU p = AUS JSON VON Punkt(t) OIDA\nSOG AU q = AUS JSON VON Punkt(s) OIDA");
+        // Die Struktur (Art 4) hat drei Felder: jedes mit Namen, Stelle im Speicher und eigener Beschreibung.
+        assert!(ir.contains("@oida.json.f0 = private unnamed_addr constant [3 x { ptr, i64, ptr }]"), "{ir}");
+        assert!(ir.contains("i64 ptrtoint (ptr getelementptr (%s0, ptr null, i32 0, i32 2) to i64)"), "{ir}");
+        assert!(ir.contains("i64 3, ptr null, ptr @oida.json.f0 }"), "{ir}");
+        // Jeder Typ wird nur einmal beschrieben, auch wenn er öfter gebraucht wird.
+        assert_eq!(ir.matches("constant { i64, i64, i64, ptr, ptr } { i64 4, ").count(), 1, "{ir}");
+        // VIELLEICHT KETTN ist ein Zeiger (6), VIELLEICHT ZOI ein Wert mit einem Merker davor (7).
+        assert_eq!(ir.matches("{ i64, i64, i64, ptr, ptr } { i64 6, ").count(), 1, "{ir}");
+        assert!(ir.contains("{ i64 7, i64 ptrtoint (ptr getelementptr (%v1, ptr null, i32 1) to i64), i64 ptrtoint (ptr getelementptr (%v1, ptr null, i32 0, i32 1) to i64)"), "{ir}");
+        let haupt = haupt(&ir);
+        // Schreiben: Wert, Beschreibung, schön oder nicht, und die Zeile (falls es abbrechen muss).
+        assert!(haupt.contains("ptr @oida.json.t0, i1 zeroext false, i64 6)"), "{haupt}");
+        assert!(haupt.contains("i1 zeroext true, i64 7)"), "{haupt}");
+        // Lesen schreibt in einen Platz, der vorher genullt ist, und gibt den Fehler zurück (oder null).
+        assert_eq!(haupt.matches("call ptr @oida_json_lesen(").count(), 2, "{haupt}");
+        assert_eq!(haupt.matches("store %s0 zeroinitializer, ptr").count(), 2, "{haupt}");
+        // Ein Programm ohne JSON bekommt keine Beschreibungen.
+        assert!(!self::ir("SCHREIB(1) OIDA").contains("@oida.json."));
+    }
+
+    #[test]
+    fn json_ohne_festen_aufbau_erkennt_die_struktur_aus_der_bibliothek() {
+        const FELDER: &str = "oat ZOI\n is_woahr JONA\n gaunze ZOI\n komma KOMMAZOI\n inhalt VIELLEICHT KETTN\n";
+        let lesen = "SOG AU j = AUS JSON VON Json(\"1\") OIDA";
+        let ir = ir(&format!(
+            "STRUKTUR Json\n {FELDER} teile VIELLEICHT LISTN VON Json\n nama VIELLEICHT LISTN VON KETTN\nPASST SCHO\n{lesen}"
+        ));
+        // Art 9: Die Laufzeit weiß selbst, was in den sieben Feldern steht; sie braucht nur, wo sie liegen.
+        assert!(ir.contains("{ i64 9, i64 ptrtoint (ptr getelementptr (%s0, ptr null, i32 1) to i64), i64 7, ptr null, ptr @oida.json.f0 }"), "{ir}");
+        assert_eq!(ir.matches("to i64), ptr null }").count(), 7, "{ir}");
+        assert_eq!(ir.matches("@oida.json.t").count(), 2, "{ir}");
+        // Heißt sie nur so, ist aber anders gebaut, ist sie eine Struktur wie jede andere.
+        let ir = self::ir(&format!(
+            "STRUKTUR Json\n {FELDER} nama VIELLEICHT LISTN VON KETTN\n teile VIELLEICHT LISTN VON Json\nPASST SCHO\n{lesen}"
+        ));
+        assert!(!ir.contains("{ i64 9, ") && ir.contains("{ i64 4, "), "{ir}");
     }
 }

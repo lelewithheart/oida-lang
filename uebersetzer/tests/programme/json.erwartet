@@ -1,0 +1,119 @@
+--- hin und zruck
+{"nam":"Hansi","punkte":1200,"do":true,"wo":{"x":1.5,"y":-2},"sochn":["Schwert","Schüd"],"weg":[{"x":0,"y":0},{"x":1,"y":1}],"oita":17,"spitznam":null,"daham":{"x":9,"y":9},"zöhla":{"schodn":3,"lebn \"groß\"":1}}
+{
+  "nam": "Hansi",
+  "punkte": 1200,
+  "do": true,
+  "wo": {
+    "x": 1.5,
+    "y": -2
+  },
+  "sochn": [
+    "Schwert",
+    "Schüd"
+  ],
+  "weg": [
+    {
+      "x": 0,
+      "y": 0
+    },
+    {
+      "x": 1,
+      "y": 1
+    }
+  ],
+  "oita": 17,
+  "spitznam": null,
+  "daham": {
+    "x": 9,
+    "y": 9
+  },
+  "zöhla": {
+    "schodn": 3,
+    "lebn \"groß\"": 1
+  }
+}
+Spiela("Hansi", 1200, WOAHR, Punkt(1.5, -2.0), ["Schwert", "Schüd"], [Punkt(0.0, 0.0), Punkt(1.0, 1.0)], 17, NIX, Punkt(9.0, 9.0), {"schodn": 3, "lebn "groß"": 1})
+Hansi 1.0 3 17 kana
+WOAHR
+--- anfoche Werte
+5 -2.5 3 true false "servas"
+"a\nb\t\"c\" \\ ä€ /" "" 0.3333333333333333 null
+[1,2,3] ["a","b"] [[1],[],[2,3]] {"x":1,"y":2}
+null 7 [] [] {}
+[
+  {
+    "x": 1,
+    "y": 2
+  }
+]
+[5,5] ["zwa","zwa"] [{"x":0,"y":1},{"x":0,"y":1}] [null,null]
+[""a!"", ""b!""]
+--- lesn
+Punkt(1.0, 20.0)
+[1, 2, 3] []
+[Punkt(1.0, 2.0)]
+NIX 5 WOAHR
+{"a": [1], "b": []}
+ZOI aus 3.0: 3
+ZOI aus 3.5 geht ned: JSON: Do ghört a gaunze Zoi her, im JSON steht oba a Kommazoi.
+größte ZOI: 9223372036854775807
+z'große ZOI geht ned: JSON: Do ghört a gaunze Zoi her, im JSON steht oba a Kommazoi.
+KOMMAZOI aus ana gaunzn: 7.0
+KOMMAZOI aus ana riesign: 1.2345678901234568e29
+Text mit Sondazeichn: 6 Zeichn, wieda ois JSON: "a\nä😀/\""
+wos z'vü is, wird übalesn: {"x":1,"y":2}
+doppet: des spätare güt: {"x":3,"y":2}
+VIELLEICHT derf fehln: {"nam":"A","punkte":0,"do":false,"wo":{"x":0,"y":0},"sochn":[],"weg":[],"oita":null,"spitznam":null,"daham":null,"zöhla":{}}
+--- wos ned passt
+foischa Typ geht ned: JSON: Bei 'y': Do ghört a Zoi her, im JSON steht oba a Text.
+fehlt geht ned: JSON: Im JSON fehlt 'y'.
+null geht ned: JSON: Bei 'y': Do ghört a Zoi her, im JSON steht oba null.
+ka Objekt geht ned: JSON: Do ghört a Objekt ({...}) her, im JSON steht oba a Listn.
+tiaf drin geht ned: JSON: Bei 'weg[1].y': Do ghört a Zoi her, im JSON steht oba true.
+im Vazeichnis geht ned: JSON: Bei 'sochn[1]': Do ghört a Text her, im JSON steht oba a gaunze Zoi.
+z'fria aus geht ned: JSON: Zeile 1, Spoitn 8: Des JSON hört z'fria auf.
+Beistrich z'vü geht ned: JSON: Zeile 4, Spoitn 1: Do ghört a Nom in Anführungszeichn her.
+no wos dahinta geht ned: JSON: Zeile 1, Spoitn 18: Do is des JSON scho aus, oba es kummt no wos.
+laar geht ned: JSON: Zeile 1, Spoitn 1: Des JSON hört z'fria auf.
+Punkt(-1.0, -1.0)
+--- a Struktur, de si söwa enthoit
+{"nam":"Stamm","äste":[{"nam":"links","äste":[{"nam":"Blattl","äste":[]}]},{"nam":"rechts","äste":[]}]}
+Blattl 0 WOAHR
+--- JSON, des ma ned kennt
+Franzi 1200 WOAHR
+WOAHR WOAHR FOISCH WOAHR
+7 ["nam", "punkte", "do", "nix", "spiela", "zoin", "nam"]
+1.5 4
+B WOAHR WOAHR WOAHR
+WOAHR 1 1.0
+FOISCH -1 2.5
+FOISCH 3 3.0
+FOISCH 1000 1000.0
+4 0 ka Text -1
+{"nam":"Hansi","punkte":1200,"do":true,"nix":null,"spiela":[{"nam":"A","wo":{"x":1.5,"y":-2}},{"nam":"B","wo":{"x":3,"y":4}}],"zoin":[1,2.5,3,1000],"nam":"Franzi"}
+{"nam":"A","wo":{"x":1.5,"y":-2}}
+FEHLA("JSON: Zeile 1, Spoitn 7: Des JSON hört z'fria auf.")
+FEHLA("JSON: Zeile 1, Spoitn 7: Mit 't' kaun i do nix aufaunga.")
+[Json(2, FOISCH, 1, 1.0, NIX, NIX, NIX), Json(4, FOISCH, 0, 0.0, "zwa", NIX, NIX), Json(5, FOISCH, 0, 0.0, NIX, [Json(1, WOAHR, 0, 0.0, NIX, NIX, NIX)], NIX)]
+--- söwa baun
+{"nam":"Susi","oita":18,"größe":1.65,"do":true,"nix":null,"sochn":["Schwert",3,[]]}
+{
+  "nam": "Susi",
+  "oita": 18,
+  "größe": 1.65,
+  "do": true,
+  "nix": null,
+  "sochn": [
+    "Schwert",
+    3,
+    []
+  ]
+}
+3 3 6
+--- hoib fest, hoib offn
+treffa kana 12 {"oat":"treffa","vo":null,"drin":{"schodn":12,"wen":[1,2]}}
+laar WOAHR {"oat":"laar","vo":null,"drin":null}
+WOAHR
+--- oft hintaranaund
+30150.0

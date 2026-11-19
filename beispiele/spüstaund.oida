@@ -1,0 +1,109 @@
+# Ein Spielstand als JSON-Datei: speichern, wieder laden, und was passiert,
+# wenn in der Datei etwas nicht stimmt. Am Schluss JSON, das von woanders
+# kommt und dessen Aufbau man nicht als STRUKTUR hinschreiben will.
+
+BRAUCH dateien OIDA
+BRAUCH programm OIDA
+BRAUCH json OIDA
+
+STRUKTUR Sochn
+    nam KETTN
+    stück ZOI
+PASST SCHO
+
+STRUKTUR Spüstaund
+    spiela KETTN
+    level ZOI
+    lebn KOMMAZOI
+    hoat JONA
+    rucksack LISTN VON Sochn
+    bestzeit VIELLEICHT KOMMAZOI              # darf in der Datei fehlen
+    gschofft VAZEICHNIS VON KETTN UND JONA
+PASST SCHO
+
+FUNKTIAUN speichan(pfad KETTN, staund Spüstaund) GIBT ZRUCK NIX ODA FEHLA
+    PROBIER schreib_datei(pfad, OIS SCHEES JSON(staund)) OIDA
+PASST SCHO
+
+FUNKTIAUN lodn(pfad KETTN) GIBT ZRUCK Spüstaund ODA FEHLA
+    SOG AU inhalt = PROBIER lies_datei(pfad) OIDA
+    GIB ZRUCK PROBIER AUS JSON VON Spüstaund(inhalt) OIDA
+PASST SCHO
+
+FUNKTIAUN zag_lodn(pfad KETTN)
+    PROBIER staund = lodn(pfad)
+        SCHREIB(staund.spiela + ", Level " + KETTN(staund.level) + ", " + KETTN(LÄNGN(staund.rucksack)) + " Sochn im Rucksack") OIDA
+    WONNS SCHIEFGEHT f
+        SCHREIB("Den Spüstaund kaun i ned lodn. " + f.meldung) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Schreibt der Reihe nach kaputte Spielstände in die Datei und versucht, sie zu laden.
+FUNKTIAUN bastl_umadum(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
+    SOG AU kaputt = [
+        "{\"spiela\": \"Hansi\", \"level\": \"drei\"}",
+        "{\"spiela\": \"Hansi\", \"level\": 3, \"lebn\": 87.5, \"hoat\": false, \"rucksack\": [{\"nam\": \"Schwert\", \"stück\": 1}, {\"nam\": \"Öpfe\"}], \"gschofft\": {}}",
+        "{\"spiela\": \"Hansi\",\n \"level\": 3,\n \"lebn\": 87,5}",
+        ""
+    ] OIDA
+    FIA JEDE inhalt IN kaputt TUA
+        PROBIER schreib_datei(pfad, inhalt) OIDA
+        zag_lodn(pfad) OIDA
+    PASST SCHO
+    PROBIER lösch_datei(pfad) OIDA
+PASST SCHO
+
+SOG AU gschofft = VAZEICHNIS VON KETTN UND JONA() OIDA
+gschofft["Woid"] = WOAHR OIDA
+gschofft["Höhle"] = FOISCH OIDA
+SOG AU staund = Spüstaund("Hansi", 3, 87.5, FOISCH, [Sochn("Schwert", 1), Sochn("Öpfe", 4)], NIX, gschofft) OIDA
+
+SOG AU pfad = pfad_zamm(temp_ordna(), "oida_spüstaund.json") OIDA
+
+# 1. Speichern: So steht es dann in der Datei.
+PROBIER speichan(pfad, staund)
+    SCHREIB(lies_datei(pfad) ODA HOID "?") OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Speichan geht ned:", f.meldung) OIDA
+PASST SCHO
+
+# 2. Laden und weiterspielen: Was geladen ist, ist eine ganz normale STRUKTUR.
+PROBIER glodn = lodn(pfad)
+    glodn.level += 1 OIDA
+    glodn.bestzeit = 42.5 OIDA
+    glodn.gschofft["Höhle"] = WOAHR OIDA
+    HAU EINE(glodn.rucksack, Sochn("Schlissl", 1)) OIDA
+    SCHREIB(OIS JSON(glodn)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Lodn geht ned:", f.meldung) OIDA
+PASST SCHO
+
+# 3. Wenn jemand an der Datei herumgebastelt hat, sagt die Meldung, was wo nicht passt.
+zag_lodn(pfad) OIDA
+PROBIER bastl_umadum(pfad)
+WONNS SCHIEFGEHT f
+    SCHREIB("Schreibn geht ned:", f.meldung) OIDA
+PASST SCHO
+
+# 4. JSON von woanders: einfach hineingreifen.
+SOG AU wetta = "{\"ort\": \"Krems\", \"heit\": {\"temp\": 21.5, \"regn\": false}, \"woch\": [{\"tog\": \"Mo\", \"temp\": 19}, {\"tog\": \"Di\", \"temp\": 23.5}, {\"tog\": \"Mi\"}]}" OIDA
+PROBIER daten = json_lesn(wetta)
+    SCHREIB("In " + (j_als_text(j_feld(daten, "ort")) ODA HOID "?") + " hot's heit " + KETTN(j_als_kommazoi(j_pfad(daten, "heit.temp")) ODA HOID 0.0) + " Grad.") OIDA
+    FIA JEDE tog IN j_teile(j_feld(daten, "woch")) TUA
+        SOG AU temp = j_als_kommazoi(j_feld(tog, "temp")) OIDA
+        WENN temp != NIX DAUN
+            SCHREIB(j_als_text(j_feld(tog, "tog")) ODA HOID "?", temp) OIDA
+        SUNST
+            SCHREIB(j_als_text(j_feld(tog, "tog")) ODA HOID "?", "waaß ma no ned") OIDA
+        PASST SCHO
+    PASST SCHO
+    SCHREIB("Am Dienstog:", j_als_kommazoi(j_pfad(daten, "woch[1].temp")) ODA HOID 0.0) OIDA
+    # ... und selbst welches bauen
+    SOG AU antwort = j_objekt() OIDA
+    j_setz(antwort, "ort", j_feld(daten, "ort")) OIDA
+    j_setz(antwort, "wärmsta", j_kommazoi(23.5)) OIDA
+    j_setz(antwort, "tog", j_listn([j_text("Mo"), j_text("Di")])) OIDA
+    SCHREIB(OIS JSON(antwort)) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Des Wetta kaun i ned lesn:", f.meldung) OIDA
+PASST SCHO
