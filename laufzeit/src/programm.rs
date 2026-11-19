@@ -93,7 +93,7 @@ pub unsafe extern "C" fn oida_programm_arbeitsordner_wechseln(pfad: *const TextK
     }
 }
 
-/// `temp_ordna()`: der Ordner von Windows für Dateien, die man nur kurz braucht.
+/// `temp_ordna()`: der Ordner des Systems für Dateien, die man nur kurz braucht.
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_programm_temp_ordner() -> *mut TextKopf {
     ordner_text(&std::env::temp_dir())
@@ -121,6 +121,13 @@ pub unsafe extern "C" fn oida_programm_fehler_schreiben(text: *const TextKopf) {
     let _ = aus.write_all(b"\n");
 }
 
+/// `betriebssystem()`: worauf das Programm läuft, "windows" oder "linux".
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_programm_system() -> *mut TextKopf {
+    neuer_text(std::env::consts::OS.as_bytes())
+}
+
+#[cfg(windows)]
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn GetOEMCP() -> u32;
@@ -129,6 +136,7 @@ unsafe extern "system" {
 
 /// Was ein Programm ausgegeben hat, als UTF-8. Viele Programme unter Windows
 /// schreiben noch in der alten Zeichentabelle der Konsole; das wird umgewandelt.
+#[cfg(windows)]
 fn als_utf8(roh: Vec<u8>) -> Vec<u8> {
     if std::str::from_utf8(&roh).is_ok() || roh.len() > i32::MAX as usize {
         return roh;
@@ -142,6 +150,15 @@ fn als_utf8(roh: Vec<u8>) -> Vec<u8> {
         let mut breit = vec![0u16; laenge as usize];
         MultiByteToWideChar(seite, 0, roh.as_ptr(), roh.len() as i32, breit.as_mut_ptr(), laenge);
         String::from_utf16_lossy(&breit).into_bytes()
+    }
+}
+
+/// Außerhalb von Windows ist die Ausgabe von Programmen UTF-8; was es nicht ist, wird ersetzt.
+#[cfg(not(windows))]
+fn als_utf8(roh: Vec<u8>) -> Vec<u8> {
+    match String::from_utf8(roh) {
+        Ok(text) => text.into_bytes(),
+        Err(fehler) => String::from_utf8_lossy(fehler.as_bytes()).into_owned().into_bytes(),
     }
 }
 
@@ -255,9 +272,11 @@ mod tests {
 
     #[test]
     fn ein_programm_starten_und_seine_ausgabe_lesen() {
-        let argumente = liste_aus_texten(&["/c".to_string(), "echo Servas& echo Na 1>&2& exit 3".to_string()]);
+        // Die Befehlszeile des Systems: unter Windows cmd, sonst sh.
+        let (schale, schalter) = if cfg!(windows) { ("cmd", "/c") } else { ("sh", "-c") };
+        let argumente = liste_aus_texten(&[schalter.to_string(), "echo Servas&& echo Na 1>&2&& exit 3".to_string()]);
         unsafe {
-            assert!(oida_programm_starten(neuer_text(b"cmd"), argumente, neuer_text(b"")));
+            assert!(oida_programm_starten(neuer_text(schale.as_bytes()), argumente, neuer_text(b"")));
         }
         assert_eq!(oida_programm_lauf_code(), 3);
         assert_eq!(inhalt(oida_programm_lauf_ausgabe()).trim(), "Servas");
@@ -274,6 +293,12 @@ mod tests {
     }
 
     #[test]
+    fn das_system_hat_einen_namen() {
+        assert_eq!(inhalt(oida_programm_system()), if cfg!(windows) { "windows" } else { "linux" });
+    }
+
+    #[test]
+    #[cfg(windows)]
     fn alte_zeichentabelle_wird_umgewandelt() {
         // 0x84 ist in den Tabellen 437 und 850 das "ä"; als UTF-8 wäre das Byte allein ungültig.
         let aus = String::from_utf8(als_utf8(vec![b'K', 0x84, b's'])).unwrap();

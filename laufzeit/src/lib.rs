@@ -26,9 +26,13 @@
 //! Elemente macht der erzeugte Code selbst.
 
 mod dateien;
+// Fenster und Ton reden direkt mit Windows (Direct2D, DirectWrite, waveOut);
+// für andere Systeme gibt es sie noch nicht.
+#[cfg(windows)]
 mod fenster;
 mod json;
 mod programm;
+#[cfg(windows)]
 mod ton;
 
 use std::alloc::{Layout, alloc, dealloc, handle_alloc_error};
@@ -954,6 +958,13 @@ pub extern "C" fn oida_ende() {
     if zustand().pruefen {
         eprintln!("OIDA: {} Texte, Listen und Objekte übrig", zustand().lebende_texte);
     }
+    #[cfg(windows)]
+    fenster_und_ton_berichten();
+}
+
+/// Was die Tests über Fenster und Ton wissen wollen (`OIDA_FENSTER_PRUEFEN`, `OIDA_TON_PRUEFEN`).
+#[cfg(windows)]
+fn fenster_und_ton_berichten() {
     if std::env::var_os("OIDA_FENSTER_PRUEFEN").is_some_and(|w| !w.is_empty()) {
         use std::sync::atomic::Ordering;
         let bilder = fenster::GEZAEHLTE_BILDER.load(Ordering::Relaxed);

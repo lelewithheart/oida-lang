@@ -1,4 +1,5 @@
-//! Der Befehl `oida`: übersetzt eine `.oida`-Datei in eine `.exe`.
+//! Der Befehl `oida`: übersetzt eine `.oida`-Datei in ein fertiges Programm
+//! (unter Windows eine `.exe`).
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,8 @@ Aufruf:
   oida <datei.oida> [Optionen]
 
 Optionen:
-  -o <datei.exe>          so soll des Programm haaßn (sunst wia de .oida-Datei)
+  -o <datei>              so soll des Programm haaßn (sunst wia de .oida-Datei,
+                          unta Windows mit .exe hintn)
   --renn                  des Programm noch'm Übersetzn glei startn
   --ir                    des LLVM-IR ois .ll-Datei danebn speichern
   --ohne-optimierung      schnölla übersetzn, dafia a langsamers Programm
@@ -153,7 +155,11 @@ fn hauptprogramm() -> Result<ExitCode, String> {
         let ir_datei = datei.with_extension("ll");
         std::fs::write(&ir_datei, &ir).map_err(|e| format!("I kaun {} ned schreibn: {e}", ir_datei.display()))?;
     }
-    let ausgabe = optionen.ausgabe.unwrap_or_else(|| datei.with_extension("exe"));
+    // Ohne -o heißt das Programm wie die Datei: unter Windows mit .exe, sonst ohne Endung.
+    let ausgabe = optionen.ausgabe.unwrap_or_else(|| datei.with_extension(std::env::consts::EXE_EXTENSION));
+    if ausgabe == datei {
+        return Err(format!("Des Programm tät genauso haaßn wia de Datei {name}. Gib mit -o an aundan Nom au."));
+    }
     treiber::baue_exe(&ir, &ausgabe, optionen.optimieren)?;
 
     if optionen.renn {
@@ -172,8 +178,22 @@ fn starten(programm: &Path) -> Result<ExitCode, String> {
         Some(code) if (0..=255).contains(&code) => Ok(ExitCode::from(code as u8)),
         // Windows meldet einen Absturz (etwa einen Zugriff auf falschen Speicher) mit einer riesigen Zahl.
         Some(code) => Err(format!("Des Programm is ogstürzt (Windows sogt: 0x{:08X}).", code as u32)),
-        None => Err("Des Programm is ogstürzt.".to_string()),
+        // Linux beendet es mit einem Signal (11: Zugriff auf falschen Speicher).
+        None => Err(match signal(&status) {
+            Some(nummer) => format!("Des Programm is ogstürzt (Signal {nummer})."),
+            None => "Des Programm is ogstürzt.".to_string(),
+        }),
     }
+}
+
+#[cfg(unix)]
+fn signal(status: &std::process::ExitStatus) -> Option<i32> {
+    std::os::unix::process::ExitStatusExt::signal(status)
+}
+
+#[cfg(not(unix))]
+fn signal(_: &std::process::ExitStatus) -> Option<i32> {
+    None
 }
 
 fn main() -> ExitCode {

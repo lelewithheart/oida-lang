@@ -9,8 +9,11 @@ BRAUCH dateien OIDA
 #     werkzeug.exe eingabe.txt --laut      ->  ["eingabe.txt", "--laut"]
 FUNKTIAUN argumente() GIBT ZRUCK LISTN VON KETTN VON DRAUSSN "oida_programm_argumente" OIDA
 
+# Worauf das Programm gerade läuft: "windows" oder "linux".
+FUNKTIAUN betriebssystem() GIBT ZRUCK KETTN VON DRAUSSN "oida_programm_system" OIDA
+
 # Der Wert einer Umgebungsvariable, oder NIX, wenn es sie nicht gibt:
-#     SOG AU daham = umgebung("USERPROFILE") ODA HOID "C:/" OIDA
+#     SOG AU daham = umgebung("USERPROFILE") ODA HOID (umgebung("HOME") ODA HOID ".") OIDA
 FUNKTIAUN umgebung(nam KETTN) GIBT ZRUCK VIELLEICHT KETTN VON DRAUSSN "oida_programm_umgebung" OIDA
 FUNKTIAUN umgebung_roh_setzn(nam KETTN, wert KETTN) GIBT ZRUCK JONA VON DRAUSSN "oida_programm_umgebung_setzen" OIDA
 
@@ -33,7 +36,7 @@ FUNKTIAUN wechsl_ordna(pfad KETTN) GIBT ZRUCK NIX ODA FEHLA
     PASST SCHO
 PASST SCHO
 
-# Der Ordner von Windows für Dateien, die man nur kurz braucht, mit "/" am Ende.
+# Der Ordner des Systems für Dateien, die man nur kurz braucht, mit "/" am Ende.
 FUNKTIAUN temp_ordna() GIBT ZRUCK KETTN VON DRAUSSN "oida_programm_temp_ordner" OIDA
 
 # Das Programm endet sofort, mit diesem Code (0 heißt: alles gut). Wer das
@@ -75,7 +78,19 @@ PASST SCHO
 #     WONNS SCHIEFGEHT f
 #         SCHREIB(f.meldung) OIDA             # git: De gibt's ned.
 #     PASST SCHO
-# Befehle der Eingabeaufforderung (dir, copy ...) gehen über "cmd": fiahr_aus("cmd", ["/c", "dir"])
+# Für Befehle der Befehlszeile (dir, ls, mit | und >) gibt es fiahr_befehl.
 FUNKTIAUN fiahr_aus(wos KETTN, angaben LISTN VON KETTN) GIBT ZRUCK Lauf ODA FEHLA
     GIB ZRUCK PROBIER fiahr_aus_mit(wos, angaben, "") OIDA
+PASST SCHO
+
+# Führt eine Zeile so aus, wie man sie in die Befehlszeile tippen würde: unter
+# Windows mit cmd, unter Linux mit sh. Damit gehen auch eingebaute Befehle und
+# Umleitungen:  fiahr_befehl("git log --oneline | sort")
+# Achtung: Die beiden Befehlszeilen verstehen nicht dasselbe (dir oder ls,
+# %NAM% oder $NAM). Was überall gleich gehen soll, startet man besser mit fiahr_aus.
+FUNKTIAUN fiahr_befehl(befehl KETTN) GIBT ZRUCK Lauf ODA FEHLA
+    WENN betriebssystem() == "windows" DAUN
+        GIB ZRUCK PROBIER fiahr_aus("cmd", ["/c", befehl]) OIDA
+    PASST SCHO
+    GIB ZRUCK PROBIER fiahr_aus("sh", ["-c", befehl]) OIDA
 PASST SCHO

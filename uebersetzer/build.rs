@@ -6,10 +6,22 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
-/// Für dieses Ziel erzeugt OIDA Programme (passt zu llvm-mingw).
-const ZIEL: &str = "x86_64-pc-windows-gnullvm";
+/// Für welches Ziel OIDA Programme erzeugt: (wie Rust es nennt, wie clang es nennt).
+/// Unter Windows passt das zu llvm-mingw; sonst ist es das System, für das der
+/// Compiler selbst gebaut wird (unter Linux heißt es bei beiden gleich).
+fn ziel() -> (String, String) {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        ("x86_64-pc-windows-gnullvm".to_string(), "x86_64-w64-windows-gnu".to_string())
+    } else {
+        let ziel = env::var("TARGET").expect("cargo sagt, wofür gebaut wird");
+        (ziel.clone(), ziel)
+    }
+}
 
 fn main() {
+    let (ziel, ir_ziel) = ziel();
+    let ziel = ziel.as_str();
+    println!("cargo:rustc-env=OIDA_IR_ZIEL={ir_ziel}");
     let hier = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let wurzel = hier.parent().unwrap().to_path_buf();
     let laufzeit = wurzel.join("laufzeit");
@@ -25,7 +37,7 @@ fn main() {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
 
     let status = Command::new(cargo)
-        .args(["build", "--profile", "laufzeit", "--target", ZIEL, "--manifest-path"])
+        .args(["build", "--profile", "laufzeit", "--target", ziel, "--manifest-path"])
         .arg(laufzeit.join("Cargo.toml"))
         .arg("--target-dir")
         .arg(&bauordner)
@@ -35,11 +47,11 @@ fn main() {
         .expect("cargo für die Laufzeitbibliothek lässt sich nicht starten");
     if !status.success() {
         panic!(
-            "Die Laufzeitbibliothek lässt sich nicht bauen. Ist das Ziel da? rustup target add {ZIEL}"
+            "Die Laufzeitbibliothek lässt sich nicht bauen. Ist das Ziel da? rustup target add {ziel}"
         );
     }
 
-    let bibliothek = bauordner.join(ZIEL).join("laufzeit").join("liboida_laufzeit.a");
+    let bibliothek = bauordner.join(ziel).join("laufzeit").join("liboida_laufzeit.a");
     if !bibliothek.exists() {
         panic!("Laufzeitbibliothek nicht gefunden: {}", bibliothek.display());
     }

@@ -1,5 +1,5 @@
 //! Treiber: führt die Phasen hintereinander aus und macht mit `clang`
-//! aus dem LLVM-IR eine `.exe`.
+//! aus dem LLVM-IR ein fertiges Programm (unter Windows eine `.exe`).
 
 use std::env;
 use std::fs;
@@ -17,10 +17,16 @@ use crate::{irgen, lexer, parser, typen};
 static LAUFZEIT: &[u8] = include_bytes!(env!("OIDA_LAUFZEIT_BIBLIOTHEK"));
 const LAUFZEIT_KENNUNG: &str = env!("OIDA_LAUFZEIT_KENNUNG");
 
-/// Das braucht die Laufzeitbibliothek (Rust-Standardbibliothek) von Windows.
+/// Das braucht die Laufzeitbibliothek (Rust-Standardbibliothek) vom System.
 /// Stammt aus `cargo rustc -- --print native-static-libs`.
-const SYSTEM_BIBLIOTHEKEN: [&str; 6] =
-    ["-lkernel32", "-lntdll", "-luserenv", "-lws2_32", "-ldbghelp", "-lsynchronization"];
+#[cfg(windows)]
+const SYSTEM_BIBLIOTHEKEN: &[&str] =
+    &["-lkernel32", "-lntdll", "-luserenv", "-lws2_32", "-ldbghelp", "-lsynchronization"];
+#[cfg(not(windows))]
+const SYSTEM_BIBLIOTHEKEN: &[&str] = &["-lgcc_s", "-lutil", "-lrt", "-lpthread", "-lm", "-ldl", "-lc"];
+
+/// Teile der Bibliothek, die direkt mit Windows reden und die es anderswo noch nicht gibt.
+const NUR_WINDOWS: [&str; 2] = ["fensta", "ton"];
 
 /// Die mitgelieferte Bibliothek: in OIDA geschrieben und in den Compiler
 /// eingebaut. `BRAUCH listen OIDA` holt den Teil mit diesem Namen dazu.
@@ -114,6 +120,11 @@ fn lade_alles(
                     namen.join(", ")
                 )));
             };
+            if !cfg!(windows) && NUR_WINDOWS.contains(teil) {
+                return Err(melde(format!(
+                    "De Bibliothek '{teil}' gibt's derweil nur unter Windows: Fensta und Ton san fia Linux no ned baut."
+                )));
+            }
             (format!("oida:{teil}"), format!("bibliothek/{teil}.oida"), text.to_string(), &eingebaut, PathBuf::new())
         } else {
             let mut datei = ordner.join(&import.ziel);
@@ -227,19 +238,15 @@ fn neben_dem_compiler() -> Option<PathBuf> {
     None
 }
 
-/// Sucht `clang` aus llvm-mingw:
+/// Sucht `clang`. Unter Windows das aus llvm-mingw:
 /// 1. Umgebungsvariable `OIDA_CLANG`,
 /// 2. `x86_64-w64-mingw32-clang` im PATH,
-/// 3. `%LOCALAPPDATA%\Programs\llvm-mingw\bin\clang.exe`,
+/// 3. `%LOCALAPPDATA%\Programs\llvm-mingw\bin\clang.exe` (dorthin legt es der Installer),
 /// 4. `clang` im PATH.
+#[cfg(windows)]
 pub fn finde_clang() -> Result<PathBuf, String> {
-    if let Some(pfad) = env::var_os("OIDA_CLANG").filter(|w| !w.is_empty()) {
-        let pfad = PathBuf::from(pfad);
-        return if pfad.is_file() {
-            Ok(pfad)
-        } else {
-            Err(format!("OIDA_CLANG zagt auf {}, oba do is nix.", pfad.display()))
-        };
+    if let Some(pfad) = clang_aus_umgebung() {
+        return pfad;
     }
     if let Some(pfad) = im_pfad("x86_64-w64-mingw32-clang.exe") {
         return Ok(pfad);
@@ -259,15 +266,67 @@ pub fn finde_clang() -> Result<PathBuf, String> {
         .to_string())
 }
 
+/// Sucht `clang`. Unter Linux das vom System:
+/// 1. Umgebungsvariable `OIDA_CLANG`,
+/// 2. `clang` im PATH,
+/// 3. das neueste `clang-<nummer>` im PATH (manche Systeme haben nur so eines).
+#[cfg(not(windows))]
+pub fn finde_clang() -> Result<PathBuf, String> {
+    if let Some(pfad) = clang_aus_umgebung() {
+        return pfad;
+    }
+    if let Some(pfad) = im_pfad("clang") {
+        return Ok(pfad);
+    }
+    let mut nummeriert: Vec<(u32, PathBuf)> = Vec::new();
+    for ordner in env::split_paths(&env::var_os("PATH").unwrap_or_default()) {
+        for eintrag in fs::read_dir(ordner).into_iter().flatten().flatten() {
+            let name = eintrag.file_name().to_string_lossy().into_owned();
+            if let Some(nummer) = name.strip_prefix("clang-").and_then(|n| n.parse::<u32>().ok()) {
+                nummeriert.push((nummer, eintrag.path()));
+            }
+        }
+    }
+    nummeriert.sort();
+    if let Some((_, pfad)) = nummeriert.pop() {
+        return Ok(pfad);
+    }
+    Err("I find ka clang. Installier's mit da Paketverwoitung, zum Beispü: sudo apt install clang \
+         (Ubuntu, Debian), sudo dnf install clang (Fedora), sudo pacman -S clang (Arch). \
+         Oda setz OIDA_CLANG auf des Programm."
+        .to_string())
+}
+
+/// `OIDA_CLANG` geht vor allem anderen; zeigt es ins Leere, ist das ein Fehler.
+fn clang_aus_umgebung() -> Option<Result<PathBuf, String>> {
+    let pfad = PathBuf::from(env::var_os("OIDA_CLANG").filter(|w| !w.is_empty())?);
+    Some(if pfad.is_file() { Ok(pfad) } else { Err(format!("OIDA_CLANG zagt auf {}, oba do is nix.", pfad.display())) })
+}
+
 fn im_pfad(name: &str) -> Option<PathBuf> {
     let pfad = env::var_os("PATH")?;
     env::split_paths(&pfad).map(|ordner| ordner.join(name)).find(|datei| datei.is_file())
 }
 
+/// Wo der Compiler seine eigenen Dateien ablegt (die Laufzeitbibliothek, das IR
+/// für clang). Unter Windows hat jeder seinen eigenen Temp-Ordner. Unter Linux
+/// teilen sich alle `/tmp`; dort nimmt jeder Benutzer seinen eigenen Ordner,
+/// damit keiner dem anderen im Weg steht.
+fn arbeits_ablage() -> PathBuf {
+    if cfg!(windows) {
+        return env::temp_dir().join("oida");
+    }
+    let gesetzt = |name: &str| env::var_os(name).filter(|w| !w.is_empty()).map(PathBuf::from);
+    match gesetzt("XDG_CACHE_HOME").or_else(|| gesetzt("HOME").map(|daheim| daheim.join(".cache"))) {
+        Some(ablage) => ablage.join("oida"),
+        None => env::temp_dir().join(format!("oida-{}", env::var("USER").unwrap_or_default())),
+    }
+}
+
 /// Legt die eingebaute Laufzeitbibliothek als Datei ab (einmal pro Version)
 /// und gibt zurück, wo sie liegt.
 fn laufzeit_datei() -> Result<PathBuf, String> {
-    let ordner = env::temp_dir().join("oida");
+    let ordner = arbeits_ablage();
     let ziel = ordner.join(format!("oida-laufzeit-{LAUFZEIT_KENNUNG}.a"));
     if ziel.metadata().map(|m| m.len() == LAUFZEIT.len() as u64).unwrap_or(false) {
         return Ok(ziel);
@@ -294,9 +353,13 @@ fn eindeutig() -> String {
 
 /// Übersetzt LLVM-IR mit `clang` und linkt die Laufzeitbibliothek dazu.
 pub fn baue_exe(ir: &str, ausgabe: &Path, optimieren: bool) -> Result<(), String> {
+    // Sonst scheitert erst der Linker, und das sähe aus wie ein Fehler im Compiler.
+    if let Some(ordner) = ausgabe.parent().filter(|o| !o.as_os_str().is_empty() && !o.is_dir()) {
+        return Err(format!("Den Ordner {} gibt's ned: Durt kaun i des Programm ned hinlegn.", ordner.display()));
+    }
     let clang = finde_clang()?;
     let laufzeit = laufzeit_datei()?;
-    let ir_datei = env::temp_dir().join("oida").join(format!("oida-{}.ll", eindeutig()));
+    let ir_datei = arbeits_ablage().join(format!("oida-{}.ll", eindeutig()));
     fs::write(&ir_datei, ir).map_err(|e| format!("I kaun {} ned schreibn: {e}", ir_datei.display()))?;
 
     let ergebnis = Command::new(&clang)
@@ -306,8 +369,9 @@ pub fn baue_exe(ir: &str, ausgabe: &Path, optimieren: bool) -> Result<(), String
         .arg(&laufzeit)
         .arg("-o")
         .arg(ausgabe)
-        // Alles in die .exe hinein, damit sie ohne zusätzliche DLLs läuft.
-        .arg("-static")
+        // Unter Windows alles in die .exe hinein, damit sie ohne zusätzliche DLLs läuft.
+        // Unter Linux bleibt die C-Bibliothek des Systems draußen, wie bei jedem anderen Programm.
+        .args(if cfg!(windows) { &["-static"][..] } else { &[][..] })
         // Was vom Programm nicht gebraucht wird, fliegt raus.
         .args(["-Wl,--gc-sections", "-Wl,-s"])
         .args(SYSTEM_BIBLIOTHEKEN)
@@ -334,6 +398,12 @@ mod tests {
         let wb = Woerterbuch::eingebaut();
         let mut alle = String::new();
         for (teil, _) in BIBLIOTHEK {
+            if !cfg!(windows) && NUR_WINDOWS.contains(&teil) {
+                // Fenster und Ton gibt es nur unter Windows; anderswo sagt das eine Meldung.
+                let fehler = zu_ir(&format!("BRAUCH {teil} OIDA\n"), &wb).expect_err("geht hier noch nicht");
+                assert!(fehler[0].meldung.contains("gibt's derweil nur unter Windows"), "{fehler:?}");
+                continue;
+            }
             let quelltext = format!("BRAUCH {teil} OIDA\n");
             zu_ir(&quelltext, &wb).unwrap_or_else(|f| panic!("{teil}: {f:?}"));
             alle.push_str(&quelltext);

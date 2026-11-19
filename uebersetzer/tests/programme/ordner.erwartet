@@ -28,7 +28,7 @@ vaschiabn -> geht ned: oida_test_ordna/drei.txt -> oida_test_ordna/zwa.txt: De g
 Ordna umbenenna -> passt
 inhalt -> 3 ["Ans.txt", "z", "zwa.txt"]
 --- Pfade
-daten/stand.txt daten/stand.txt stand.txt C:/x.txt
+daten/stand.txt daten/stand.txt stand.txt WOAHR
 stand.txt stand []
 daten/tiaf []
 PNG [] daten/stand
@@ -65,6 +65,7 @@ zruck -> passt
 FOISCH WOAHR
 wechsln -> geht ned: den_gibts_ned: De gibt's ned.
 --- aundare Programme startn
+WOAHR
 0 Servas []
 7 [] daneben
 1

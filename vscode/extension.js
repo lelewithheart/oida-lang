@@ -314,10 +314,10 @@ async function ausfuehren(nurUebersetzen) {
     const datei = dokument.uri.fsPath;
     const argumente = [datei, ...woerterbuchArgumente()];
     if (!nurUebersetzen) {
-        // Beim Starten kommt die .exe in den Temp-Ordner, damit der eigene Ordner sauber bleibt.
+        // Beim Starten kommt das Programm in den Temp-Ordner, damit der eigene Ordner sauber bleibt.
         const ordner = path.join(os.tmpdir(), 'oida-vscode');
         fs.mkdirSync(ordner, { recursive: true });
-        argumente.push('-o', path.join(ordner, path.basename(datei, path.extname(datei)) + '.exe'), '--renn');
+        argumente.push('-o', path.join(ordner, path.basename(datei, path.extname(datei)) + (process.platform === 'win32' ? '.exe' : '')), '--renn');
     }
     const aufgabe = new vscode.Task(
         { type: 'oida' },

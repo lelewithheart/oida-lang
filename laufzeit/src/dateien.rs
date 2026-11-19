@@ -46,9 +46,14 @@ fn geklappt(ergebnis: std::io::Result<()>) -> bool {
     }
 }
 
-/// Ein Pfad, wie OIDA ihn zurückgibt: mit "/" statt "\" (Windows versteht beides).
+/// Ein Pfad, wie OIDA ihn zurückgibt: unter Windows mit "/" statt "\" (Windows
+/// versteht beides). Anderswo ist "\" ein Zeichen wie jedes andere und bleibt stehen.
 pub(super) fn schraeg(pfad: &Path) -> String {
-    pfad.to_string_lossy().replace('\\', "/")
+    schraeg_text(&pfad.to_string_lossy())
+}
+
+fn schraeg_text(pfad: &str) -> String {
+    if cfg!(windows) { pfad.replace('\\', "/") } else { pfad.to_string() }
 }
 
 /// Der Pfad als Rust-Text.
@@ -132,7 +137,7 @@ pub extern "C" fn oida_datei_fehler() -> *mut TextKopf {
 pub extern "C" fn oida_programm_ordner() -> *mut TextKopf {
     let ordner = std::env::current_exe()
         .ok()
-        .and_then(|pfad| pfad.parent().map(|o| o.to_string_lossy().replace('\\', "/")))
+        .and_then(|pfad| pfad.parent().map(schraeg))
         .unwrap_or_else(|| ".".to_string());
     neuer_text(format!("{}/", ordner.trim_end_matches('/')).as_bytes())
 }
@@ -252,7 +257,7 @@ pub unsafe extern "C" fn oida_datei_verschieben(von: *const TextKopf, nach: *con
 // -------------------------------------------------------------------- Pfade
 
 /// `pfad_zamm(ordna, nam)`: hängt zwei Stücke mit genau einem "/" zusammen.
-/// Ist das zweite schon ein ganzer Pfad (`C:/...`), gilt es allein.
+/// Ist das zweite schon ein ganzer Pfad (`C:/...` oder `/...`), gilt es allein.
 ///
 /// # Safety
 /// `ordner` und `name` müssen gültige Texte sein.
@@ -260,7 +265,7 @@ pub unsafe extern "C" fn oida_datei_verschieben(von: *const TextKopf, nach: *con
 pub unsafe extern "C" fn oida_pfad_zusammen(ordner: *const TextKopf, name: *const TextKopf) -> *mut TextKopf {
     let (ordner, name) = unsafe { (pfad_von(ordner), pfad_von(name)) };
     let ganz = if ordner.is_empty() { name } else if name.is_empty() { ordner } else { schraeg(&Path::new(&ordner).join(&name)) };
-    neuer_text(ganz.replace('\\', "/").as_bytes())
+    neuer_text(schraeg_text(&ganz).as_bytes())
 }
 
 /// Der letzte Teil eines Pfads: der Name der Datei oder des Ordners.
@@ -513,20 +518,28 @@ mod tests {
         unsafe {
             assert_eq!(inhalt(oida_pfad_zusammen(text("a/b"), text("c.txt"))), "a/b/c.txt");
             assert_eq!(inhalt(oida_pfad_zusammen(text("a/b/"), text("c.txt"))), "a/b/c.txt");
-            assert_eq!(inhalt(oida_pfad_zusammen(text("a\\b"), text("c.txt"))), "a/b/c.txt");
             assert_eq!(inhalt(oida_pfad_zusammen(text(""), text("c.txt"))), "c.txt");
             assert_eq!(inhalt(oida_pfad_zusammen(text("a"), text(""))), "a");
-            assert_eq!(inhalt(oida_pfad_zusammen(text("a/b"), text("C:/x/y.txt"))), "C:/x/y.txt");
+            let ganzer = if cfg!(windows) { "C:/x/y.txt" } else { "/x/y.txt" };
+            assert_eq!(inhalt(oida_pfad_zusammen(text("a/b"), text(ganzer))), ganzer);
             assert_eq!(inhalt(oida_pfad_name(text("a/b/c.tar.gz"))), "c.tar.gz");
-            assert_eq!(inhalt(oida_pfad_name(text("a\\b\\"))), "b");
+            assert_eq!(inhalt(oida_pfad_name(text("a/b/"))), "b");
             assert_eq!(inhalt(oida_pfad_ordner(text("a/b/c.txt"))), "a/b");
             assert_eq!(inhalt(oida_pfad_ordner(text("c.txt"))), "");
             assert_eq!(inhalt(oida_pfad_endung(text("a/b/c.tar.gz"))), "gz");
             assert_eq!(inhalt(oida_pfad_endung(text("a.b/c"))), "");
             assert_eq!(inhalt(oida_pfad_endung(text(".gitignore"))), "");
-            assert_eq!(inhalt(oida_pfad_ohne_endung(text("a\\b.txt"))), "a/b");
+            assert_eq!(inhalt(oida_pfad_ohne_endung(text("a/b.txt"))), "a/b");
             let ganz = inhalt(oida_pfad_ganz(text("x/y.txt")));
-            assert!(ganz.ends_with("/x/y.txt") && ganz.chars().nth(1) == Some(':') && !ganz.contains('\\'), "{ganz}");
+            assert!(ganz.ends_with("/x/y.txt") && Path::new(&ganz).is_absolute(), "{ganz}");
+            // Unter Windows gilt auch "\" als Trenner; zurück kommt immer "/".
+            #[cfg(windows)]
+            {
+                assert_eq!(inhalt(oida_pfad_zusammen(text("a\\b"), text("c.txt"))), "a/b/c.txt");
+                assert_eq!(inhalt(oida_pfad_name(text("a\\b\\"))), "b");
+                assert_eq!(inhalt(oida_pfad_ohne_endung(text("a\\b.txt"))), "a/b");
+                assert!(ganz.chars().nth(1) == Some(':') && !ganz.contains('\\'), "{ganz}");
+            }
         }
     }
 

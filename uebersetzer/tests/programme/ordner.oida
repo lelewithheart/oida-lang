@@ -73,7 +73,7 @@ zeig("Ordna umbenenna", vaschiab(grund + "/a", grund + "/z")) OIDA
 zeig_listn("inhalt", ordna_inhalt(grund)) OIDA
 
 SCHREIB("--- Pfade") OIDA
-SCHREIB(pfad_zamm("daten", "stand.txt"), pfad_zamm("daten/", "stand.txt"), pfad_zamm("", "stand.txt"), pfad_zamm("a", "C:/x.txt")) OIDA
+SCHREIB(pfad_zamm("daten", "stand.txt"), pfad_zamm("daten/", "stand.txt"), pfad_zamm("", "stand.txt"), pfad_zamm("a", pfad_gaunz("x.txt")) == pfad_gaunz("x.txt")) OIDA
 SCHREIB(pfad_nam("daten/stand.txt"), pfad_nam("stand"), "[" + pfad_nam("") + "]") OIDA
 SCHREIB(pfad_ordna("daten/tiaf/stand.txt"), "[" + pfad_ordna("stand.txt") + "]") OIDA
 SCHREIB(pfad_endung("büd.groß.PNG"), "[" + pfad_endung("ohne") + "]", pfad_ohne_endung("daten/stand.txt")) OIDA
@@ -177,18 +177,24 @@ SCHREIB(gibts_datei("zwa.txt"), arbeits_ordna() == daham) OIDA
 zeig("wechsln", wechsl_ordna("den_gibts_ned")) OIDA
 
 SCHREIB("--- aundare Programme startn") OIDA
-PROBIER lauf = fiahr_aus("cmd", ["/c", "echo Servas"])
+SCHREIB(betriebssystem() == "windows" ODA betriebssystem() == "linux") OIDA
+PROBIER lauf = fiahr_befehl("echo Servas")
     SCHREIB(lauf.code, STUTZ(lauf.ausgabe), "[" + lauf.fehla_ausgabe + "]") OIDA
 WONNS SCHIEFGEHT f
     SCHREIB("des kummt ned:", f.meldung) OIDA
 PASST SCHO
-PROBIER lauf = fiahr_aus("cmd", ["/c", "echo daneben 1>&2 & exit 7"])
+PROBIER lauf = fiahr_befehl("echo daneben 1>&2 && exit 7")
     SCHREIB(lauf.code, "[" + lauf.ausgabe + "]", STUTZ(lauf.fehla_ausgabe)) OIDA
 WONNS SCHIEFGEHT f
     SCHREIB("des kummt ned:", f.meldung) OIDA
 PASST SCHO
 # Das gestartete Programm sieht, was setz_umgebung gesetzt hat, und bekommt die Eingabe zu lesen.
-PROBIER lauf = fiahr_aus("cmd", ["/c", "echo %OIDA_SOMEN%"])
+# Die Befehlszeilen von Windows und Linux schreiben eine Umgebungsvariable verschieden.
+SOG AU zag_somen = "echo $OIDA_SOMEN" OIDA
+WENN betriebssystem() == "windows" DAUN
+    zag_somen = "echo %OIDA_SOMEN%" OIDA
+PASST SCHO
+PROBIER lauf = fiahr_befehl(zag_somen)
     SCHREIB(STUTZ(lauf.ausgabe)) OIDA
 WONNS SCHIEFGEHT f
     SCHREIB("des kummt ned:", f.meldung) OIDA

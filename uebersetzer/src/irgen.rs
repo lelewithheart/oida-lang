@@ -72,12 +72,15 @@ use std::fmt::Write;
 use crate::ast::*;
 use crate::woerterbuch::{Schluessel, Woerterbuch};
 
-/// Für dieses Ziel wird Code erzeugt (Windows, 64 Bit, llvm-mingw).
-pub const ZIEL: &str = "x86_64-w64-windows-gnu";
+/// Für dieses Ziel wird Code erzeugt: unter Windows 64 Bit mit llvm-mingw,
+/// sonst das System, für das der Compiler gebaut wurde (siehe `build.rs`).
+pub const ZIEL: &str = env!("OIDA_IR_ZIEL");
 
-const KOPF: &str = r#"; Erzeugt vom OIDA-Compiler. Nicht von Hand ändern.
-target triple = "x86_64-w64-windows-gnu"
-
+const KOPF: &str = concat!(
+    "; Erzeugt vom OIDA-Compiler. Nicht von Hand ändern.\ntarget triple = \"",
+    env!("OIDA_IR_ZIEL"),
+    "\"\n",
+    r#"
 ; Eine Liste am Heap: Zähler, Länge, Platz (für wie viele Elemente Speicher da ist), Daten.
 %oida.Liste = type { i64, i64, i64, ptr }
 
@@ -288,7 +291,8 @@ gut:
   ret ptr %daten
 }
 
-"#;
+"#
+);
 
 /// Hinweise für LLVM, was sich im Speicher nicht überschneiden kann (TBAA):
 /// Der Kopf einer Liste (Länge, Platz, Zeiger auf die Daten) ist anderer

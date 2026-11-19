@@ -30,11 +30,11 @@ Passt! beispiele\fakultaet.exe is fertig.
 10! = 3628800
 ```
 
-Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM eine normale Windows-`.exe`
-(rund 340 KB, läuft ohne zusätzliche DLLs). OIDA ist die große Schwester von
+Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein normales Programm
+für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.13.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.14.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -42,13 +42,16 @@ mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [RogueWave](#ein-ganzes-spiel-roguewave), rund 7500 Zeilen OIDA. Neu: Ordner, Pfade, große
 Dateien Zeile für Zeile, Bytes, und [das Programm selbst](#das-programm-und-seine-umgebung):
 Argumente von der Kommandozeile, Umgebungsvariablen, andere Programme starten. Neu: [JSON](#json),
-direkt aus einer `STRUKTUR` und zurück, ohne dass man dafür etwas schreiben muss.
+direkt aus einer `STRUKTUR` und zurück, ohne dass man dafür etwas schreiben muss. Und OIDA läuft
+jetzt auch unter [Linux](#windows-und-linux).
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
-Derzeit nur für Windows (64 Bit).
+Für Windows und Linux (64 Bit). Fenster und Ton gibt es derzeit nur unter Windows.
 
 
 ## Was man braucht
+
+### Unter Windows
 
 Zwei Dinge, kein Visual Studio:
 
@@ -78,6 +81,23 @@ linker = "C:/Users/DEINNAME/AppData/Local/Programs/llvm-mingw/bin/x86_64-w64-min
 Liegt llvm-mingw woanders, entweder den `bin`-Ordner in den `PATH` geben oder die
 Umgebungsvariable `OIDA_CLANG` auf die `clang.exe` setzen.
 
+### Unter Linux
+
+Auch zwei Dinge: **Rust** und **clang** aus der Paketverwaltung.
+
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+sudo apt install clang          # Ubuntu, Debian
+```
+
+Unter Fedora heißt es `sudo dnf install clang`, unter Arch `sudo pacman -S clang`. Einen `gcc`
+braucht man nicht: In [`.cargo/config.toml`](.cargo/config.toml) steht, dass `clang` auch für Rust
+linkt. `oida` sucht `clang` im `PATH` (und nimmt sonst das neueste `clang-<nummer>`); mit
+`OIDA_CLANG` gibt man ein bestimmtes an.
+
+Gebaut und getestet ist das unter Ubuntu 26.04 auf x86_64 (in WSL). Andere Distributionen und
+ARM sollten gehen, sind aber nicht ausprobiert.
+
 
 ## Bauen
 
@@ -87,9 +107,9 @@ Im Projektordner:
 cargo build --release
 ```
 
-Danach liegt der Compiler in `target\release\oida.exe`. Die Laufzeitbibliothek wird dabei
-mitgebaut und steckt in der `oida.exe` drin; man braucht also nur diese eine Datei
-(plus llvm-mingw).
+Danach liegt der Compiler in `target\release\oida.exe` (unter Linux `target/release/oida`). Die
+Laufzeitbibliothek wird dabei mitgebaut und steckt im Compiler drin; man braucht also nur diese
+eine Datei (plus `clang`).
 
 Die Tests:
 
@@ -111,9 +131,17 @@ Oder in einem Schritt übersetzen und gleich starten:
 target\release\oida beispiele\fizzbuzz.oida --renn
 ```
 
+Unter Linux genauso, nur mit `/`. Ohne `-o` heißt das Programm wie die Datei: unter Windows mit
+`.exe`, unter Linux ohne Endung.
+
+```
+target/release/oida beispiele/fizzbuzz.oida -o fizzbuzz
+./fizzbuzz
+```
+
 | Option                  | Bedeutung                                                    |
 |-------------------------|--------------------------------------------------------------|
-| `-o <datei.exe>`        | so soll das Programm heißen (sonst wie die `.oida`-Datei)    |
+| `-o <datei>`            | so soll das Programm heißen (sonst wie die `.oida`-Datei)    |
 | `--renn`                | das Programm nach dem Übersetzen gleich starten              |
 | `--ir`                  | das LLVM-IR als `.ll`-Datei daneben speichern (zum Anschauen)|
 | `--ohne-optimierung`    | schneller übersetzen, dafür ein langsameres Programm         |
@@ -135,6 +163,7 @@ doppelklicken, das baut sie und installiert sie. Danach in VS Code eine `.oida`-
 - Beim Tippen kommen Vorschläge für die Wörter der Sprache, dazu Schnipsel wie `wenn` und `solong`.
 
 Die Erweiterung fragt für alles den Compiler, sie richtet sich also nach dem Wörterbuch.
+Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nicht ausprobiert.
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
@@ -948,7 +977,7 @@ WENN LÄNGN(angaben) == 0 DAUN
     hea_auf(2) OIDA
 PASST SCHO
 
-SOG AU daham = umgebung("USERPROFILE") ODA HOID "C:/" OIDA
+SOG AU daham = umgebung("USERPROFILE") ODA HOID (umgebung("HOME") ODA HOID ".") OIDA
 
 PROBIER lauf = fiahr_aus("git", ["status", "--short"])
     SCHREIB(lauf.code, lauf.ausgabe) OIDA
@@ -969,14 +998,45 @@ PASST SCHO
 | `schreib_fehla(text)` | eine Zeile auf die Fehlerausgabe statt auf die gewöhnliche |
 | `fiahr_aus(programm, angaben)` | startet ein Programm und wartet darauf: `Lauf ODA FEHLA` |
 | `fiahr_aus_mit(programm, angaben, eingabe)` | ... und gibt ihm `eingabe` zu lesen |
+| `fiahr_befehl(zeile)` | führt eine Zeile aus, wie man sie in die Befehlszeile tippt: `Lauf ODA FEHLA` |
+| `betriebssystem()` | worauf das Programm läuft: `"windows"` oder `"linux"` |
 
 Ein `Lauf` hat `code` (womit das Programm geendet hat), `ausgabe` und `fehla_ausgabe`. Ein `FEHLA`
 kommt nur, wenn sich das Programm gar nicht starten lässt; ob es selbst zufrieden war, sagt der
-Code. Befehle der Eingabeaufforderung gehen über `cmd`: `fiahr_aus("cmd", ["/c", "dir"])`. Gibt
-ein Programm seine Ausgabe in der alten Zeichentabelle der Konsole aus, wird sie umgewandelt.
+Code. `fiahr_befehl("git log --oneline | sort")` nimmt die Befehlszeile des Systems (unter
+Windows `cmd`, unter Linux `sh`); damit gehen auch eingebaute Befehle und Umleitungen. Gibt ein
+Programm unter Windows seine Ausgabe in der alten Zeichentabelle der Konsole aus, wird sie umgewandelt.
 
 Ein kleines Werkzeug mit alledem: [`beispiele/baam.oida`](beispiele/baam.oida) zeigt einen Ordner
 als Baum.
+
+### Windows und Linux
+
+Dasselbe OIDA-Programm lässt sich unter Windows und unter Linux übersetzen und tut auf beiden
+dasselbe. Übersetzt wird immer für das System, auf dem man gerade ist. Was man wissen muss:
+
+- **Fenster und Ton** (`BRAUCH fensta`, `BRAUCH ton`) gibt es derzeit nur unter Windows. Unter
+  Linux sagt das schon der Compiler: `De Bibliothek 'fensta' gibt's derweil nur unter Windows`.
+  Alles andere (die Sprache, Dateien, Ordner, das Programm und seine Umgebung, JSON) geht auf beiden.
+- **Pfade** schreibt man mit `/`; das versteht jedes System, und so kommen sie auch zurück.
+  Ein `\` trennt nur unter Windows.
+- **Zeilenenden**: Beim Lesen Zeile für Zeile verschwindet ein `\r\n` von Windows genauso wie ein `\n`.
+- **Die Befehlszeile** ist verschieden (`dir` oder `ls`, `%NAM%` oder `$NAM`). Wo es darauf
+  ankommt, fragt man `betriebssystem()`:
+
+```
+BRAUCH programm OIDA
+
+SOG AU zag = "ls" OIDA
+WENN betriebssystem() == "windows" DAUN
+    zag = "dir /b" OIDA
+PASST SCHO
+PROBIER lauf = fiahr_befehl(zag)
+    SCHREIB(lauf.ausgabe) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB(f.meldung) OIDA
+PASST SCHO
+```
 
 ### JSON
 
@@ -1558,7 +1618,7 @@ beispiele/             Beispielprogramme, jeweils mit der erwarteten Ausgabe (.e
   spui/                  ein kleines Spiel mit Fenster
   roguewave/             ein ganzes Spiel in elf Dateien, mit Musik und Bildern
 bibliothek/            die mitgelieferte Bibliothek, in OIDA geschrieben (wird in oida.exe eingebaut)
-uebersetzer/           der Compiler (Rust), ergibt oida.exe
+uebersetzer/           der Compiler (Rust), ergibt oida.exe (unter Linux: oida)
   src/woerterbuch.rs     Wörterbuch lesen, längster Treffer gewinnt
   src/lexer.rs           Quelltext -> Tokens
   src/parser.rs          Tokens -> Syntaxbaum (ast.rs)
@@ -1569,16 +1629,16 @@ uebersetzer/           der Compiler (Rust), ergibt oida.exe
   src/editor.rs          Schnittstelle für Editoren (oida --editor)
   src/main.rs            der Befehl oida
   build.rs               baut die Laufzeit und packt sie in die oida.exe
-  tests/                 Tests von Anfang bis Ende (.oida -> .exe -> Ausgabe)
+  tests/                 Tests von Anfang bis Ende (.oida -> Programm -> Ausgabe)
 laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt:
                        Ausgabe, Texte, Listen und Objekte samt Freigeben, Umwandlungen,
                        Fehler beim Laufen
   src/dateien.rs         Dateien, Ordner und Pfade
   src/programm.rs        Argumente, Umgebung, aufhören, andere Programme starten
   src/json.rs            JSON lesen und schreiben, nach der Beschreibung des Typs vom Compiler
-  src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus
+  src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus; nur unter Windows
   src/fenster/           Farbverläufe, Leuchten, Mischen; freie Formen, Ausschnitte; Bilder
-  src/ton.rs             Töne errechnen, mischen und an Windows geben
+  src/ton.rs             Töne errechnen, mischen und an Windows geben; nur unter Windows
   src/ton/               Musik aus Dateien: MP3 entpacken, abspielen, wiederholen, überblenden
 vscode/                Erweiterung für VS Code
 leistung/              Leistungsvergleich mit anderen Sprachen
@@ -1616,7 +1676,9 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
   Programm weiterhin mit einer Meldung ab (für Texte gibt es stattdessen `ZOI AUS`).
 - Ganze Zahlen laufen bei mehr als 64 Bit still über.
 - Die Meldungen beim Laufen (`Durch nix kaun ma ned teilen`) richten sich nicht nach dem Wörterbuch.
-- Nur Windows, 64 Bit.
+- Fenster und Ton gibt es nur unter Windows; unter Linux läuft alles andere. macOS ist nicht ausprobiert.
+- Ein Programm für das andere System übersetzen (unter Windows eines für Linux) geht nicht.
+- Nur 64 Bit.
 
 
 ## Fahrplan
@@ -1648,6 +1710,9 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 9 | Der `oidasql(...)`-Block: OIDA-SQL direkt in der Sprache, samt Anbindung an MySQL | offen |
 | 10 | Ordner, Pfade, große Dateien Zeile für Zeile, Bytes; Argumente, Umgebung, andere Programme starten | fertig |
 | 11 | [JSON](#json) lesen und schreiben, direkt aus einer `STRUKTUR` und zurück, und frei mit dem Typ `Json` | fertig |
+| 11a | Unabhängig von Windows: Compiler und alle Programme ohne Fenster und Ton laufen auch unter [Linux](#windows-und-linux) | fertig |
+| 11b | Installer für Windows und Linux | offen |
+| 11c | Fenster und Ton unter Linux | offen |
 | 12 | Netzwerk: HTTP und HTTPS als Client, dazu rohe TCP-Verbindungen | offen |
 | 13 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
 | 14 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |

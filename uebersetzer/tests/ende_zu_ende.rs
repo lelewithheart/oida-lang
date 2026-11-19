@@ -1,6 +1,8 @@
-//! Tests von Anfang bis Ende: `.oida`-Datei -> `oida` -> `.exe` -> Ausgabe.
+//! Tests von Anfang bis Ende: `.oida`-Datei -> `oida` -> Programm -> Ausgabe.
 //!
-//! Diese Tests brauchen `clang` aus llvm-mingw (siehe README).
+//! Diese Tests brauchen `clang` (unter Windows das aus llvm-mingw, siehe README).
+//! Sie laufen unter Windows und unter Linux; was Fenster oder Ton braucht, gibt
+//! es derzeit nur unter Windows und wird anderswo ausgelassen.
 //!
 //! - `beispiele/*.oida` und `tests/programme/*.oida`: müssen sich übersetzen
 //!   lassen und genau das ausgeben, was in der `.erwartet`-Datei daneben steht.
@@ -43,10 +45,17 @@ fn oida_dateien(ordner: &Path) -> Vec<PathBuf> {
         .unwrap_or_else(|e| panic!("{}: {e}", ordner.display()))
         .map(|eintrag| eintrag.unwrap().path())
         .filter(|pfad| pfad.extension().is_some_and(|e| e == "oida"))
+        .filter(|pfad| geht_hier(pfad))
         .collect();
     dateien.sort();
     assert!(!dateien.is_empty(), "keine .oida-Dateien in {}", ordner.display());
     dateien
+}
+
+/// Fenster und Ton gibt es derzeit nur unter Windows: Programme, die sie
+/// dazuholen, lassen die Tests anderswo aus.
+fn geht_hier(quelle: &Path) -> bool {
+    cfg!(windows) || !["BRAUCH fensta", "BRAUCH ton"].iter().any(|brauch| lies(quelle).contains(brauch))
 }
 
 fn name(datei: &Path) -> String {
@@ -262,7 +271,9 @@ fn ohne_o_heisst_die_exe_wie_die_quelle_und_ir_wird_gespeichert() {
     let ergebnis = oida().arg(&quelle).arg("--ir").output().unwrap();
     assert!(ergebnis.status.success(), "{}", text(&ergebnis.stderr));
     assert!(text(&ergebnis.stdout).starts_with("Passt! "), "{}", text(&ergebnis.stdout));
-    assert_eq!(text(&starte(&arbeit.join("servas.exe")).stdout), "Servas Wöd!\n");
+    // Unter Windows heißt das Programm servas.exe, sonst einfach servas.
+    let programm = arbeit.join(format!("servas{}", std::env::consts::EXE_SUFFIX));
+    assert_eq!(text(&starte(&programm).stdout), "Servas Wöd!\n");
     let ir = lies(&arbeit.join("servas.ll"));
     assert!(ir.contains("define i32 @main()"), "{ir}");
 }
@@ -283,10 +294,42 @@ fn renn_startet_das_programm_gleich() {
 }
 
 #[test]
+fn ordner_fuer_das_programm_fehlt() {
+    // Das soll der Compiler selbst sagen, nicht erst der Linker (das sähe aus wie ein Fehler im Compiler).
+    let arbeit = arbeitsordner("ordner-fehlt");
+    let ergebnis = oida()
+        .arg(wurzel().join("beispiele").join("hallo.oida"))
+        .arg("-o")
+        .arg(arbeit.join("den").join("gibts").join("ned"))
+        .output()
+        .unwrap();
+    assert_eq!(ergebnis.status.code(), Some(2));
+    let meldung = text(&ergebnis.stderr);
+    assert!(meldung.starts_with("Heast! Den Ordner ") && meldung.contains("gibt's ned"), "{meldung}");
+    assert!(!meldung.contains("clang"), "{meldung}");
+}
+
+#[test]
 fn datei_die_es_nicht_gibt() {
     let ergebnis = oida().arg("gibts_ned.oida").output().unwrap();
     assert_eq!(ergebnis.status.code(), Some(2));
     assert!(text(&ergebnis.stderr).starts_with("Heast! I kaun gibts_ned.oida ned lesn"), "{}", text(&ergebnis.stderr));
+}
+
+/// Außerhalb von Windows sagt schon der Compiler, dass es Fenster und Ton dort noch nicht gibt
+/// (statt eines Programms, das dann nicht läuft).
+#[test]
+#[cfg(not(windows))]
+fn fenster_und_ton_gibt_es_nur_unter_windows() {
+    let arbeit = arbeitsordner("nur-windows");
+    for (quelle, teil) in [("programme/toene.oida", "ton"), ("laufzeitfehler/zeichnen_ohne_fenster.oida", "fensta")] {
+        let exe = arbeit.join("x");
+        let ergebnis = oida().arg(tests().join(quelle)).arg("-o").arg(&exe).output().unwrap();
+        let meldung = text(&ergebnis.stderr);
+        assert_eq!(ergebnis.status.code(), Some(1), "{quelle}:\n{meldung}");
+        assert!(meldung.contains(&format!("De Bibliothek '{teil}' gibt's derweil nur unter Windows")), "{quelle}:\n{meldung}");
+        assert!(!exe.exists());
+    }
 }
 
 /// Ein Bild, wie es die Laufzeit beim Zeichnen ohne Fenster schreibt
@@ -328,6 +371,7 @@ impl Bild {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "Fenster und Ton gibt es derzeit nur unter Windows")]
 fn fenster_zeichnet_die_richtigen_formen() {
     // Das Programm zeichnet in Bilder statt in ein Fenster; hier werden einzelne Punkte nachgeschaut.
     let arbeit = arbeitsordner("fenster");
@@ -402,6 +446,7 @@ fn fenster_zeichnet_die_richtigen_formen() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "Fenster und Ton gibt es derzeit nur unter Windows")]
 fn echtes_fenster_geht_auf_und_zu() {
     // Hier geht für einen Augenblick wirklich ein Fenster auf. Geprüft wird,
     // dass Windows mitspielt und das Programm sauber aufhört; was im Fenster
@@ -419,6 +464,7 @@ fn echtes_fenster_geht_auf_und_zu() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "Fenster und Ton gibt es derzeit nur unter Windows")]
 fn spiel_laeuft_nach_drehbuch() {
     // Das Beispielspiel, ohne Fenster und mit Tasten nach Drehbuch: nach
     // rechts und dann hinauf zum Stern (der Zufall ist festgelegt).
@@ -458,6 +504,7 @@ fn zaehle(bild: &Bild, x: std::ops::Range<usize>, y: std::ops::Range<usize>, pas
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "Fenster und Ton gibt es derzeit nur unter Windows")]
 fn roguewave_geht_durch_alle_zustaende() {
     // Das große Beispiel: ein ganzes Spiel in OIDA. Ein Prüfprogramm holt sich
     // seine Teile dazu und führt es durch Anfangsbild, Waffenwahl, Spiel mit
@@ -561,6 +608,7 @@ fn roguewave_geht_durch_alle_zustaende() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "Fenster und Ton gibt es derzeit nur unter Windows")]
 fn roguewave_spielt_sich() {
     // Das Spiel selbst, wie es jemand startet: ENTER, die erste Waffe nehmen,
     // herumlaufen, ausweichen, bei jedem Aufstieg die erste Verbesserung nehmen.
@@ -600,6 +648,7 @@ fn roguewave_spielt_sich() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "Fenster und Ton gibt es derzeit nur unter Windows")]
 fn fenster_kann_verlaeufe_leuchten_formen_und_bilder() {
     // Farbverläufe, additives Mischen, Leuchten, freie Formen, Ausschnitte, Bilder
     // aus einer Datei und selbst gezeichnete, Textbreite: einzelne Punkte nachgeschaut.
@@ -704,6 +753,7 @@ fn fenster_kann_verlaeufe_leuchten_formen_und_bilder() {
 }
 
 #[test]
+#[cfg_attr(not(windows), ignore = "Fenster und Ton gibt es derzeit nur unter Windows")]
 fn musik_aus_einer_mp3_datei() {
     // Laden (nebenher), Länge, abspielen, wiederholen, ausblenden, und was schiefgehen kann.
     let arbeit = arbeitsordner("musik");
