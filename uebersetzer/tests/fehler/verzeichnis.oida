@@ -13,4 +13,3 @@ FIA JEDE name IN oida_von TUA
     SCHREIB(name + 1) OIDA
 PASST SCHO
 SOG AU d VAZEICHNIS VON ZOI UND ZOI = oida_von OIDA
-SCHREIB(oida_von == oida_von) OIDA

@@ -1,0 +1,15 @@
+:11:18: Aus ana LISTN VON ZOI kaun i ka KETTN mochn.
+:12:18: Aus ana Punkt kaun i ka KETTN mochn.
+:13:28: 'gibtsned' kenn i ned. Host des mit SOG AU augsogt?
+:14:35: 'AUF STÖN' wü ois 1. Wert a KOMMAZOI, du gibst eam a KETTN.
+:15:30: A ZOI + a KETTN? Des geht si ned aus. Nimm KETTN(...) zum Umwandln.
+:16:18: 'z' soll a ZOI sei, oba des do is a KETTN.
+:17:18: 'AUF STÖN' wü ois 1. Wert a KOMMAZOI, du gibst eam a KETTN.
+:17:30: 'AUF STÖN' wü 2 Werte hom, du gibst eam an Wert.
+:17:61: 'AUF STÖN' wü ois 2. Wert a ZOI, du gibst eam a KOMMAZOI.
+:19:11: A Knopf == a Knopf? Des geht ned, weu do a FUNKTIAUN(ZOI) GIBT ZRUCK ZOI drinsteckt, und des kaun ma ned vergleichn.
+:20:13: A LISTN VON Knopf != a LISTN VON Knopf? Des geht ned, weu do a FUNKTIAUN(ZOI) GIBT ZRUCK ZOI drinsteckt, und des kaun ma ned vergleichn.
+:21:21: A Punkt == a LISTN VON ZOI? Des geht si ned aus.
+:22:14: A LISTN VON ZOI == a LISTN VON KETTN? Des geht si ned aus.
+:23:21: A Punkt < a Punkt? Des geht si ned aus.
+Na, des wird nix: 14 Fehler.

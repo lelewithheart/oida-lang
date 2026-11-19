@@ -1,0 +1,43 @@
+# Eine kleine Kassa: Texte mit eingesetzten Werten ($"..."), Preise mit zwei
+# Kommastellen, Zahlen mit Unterstrich, und Strukturen und Listen vergleichen.
+
+STRUKTUR Woar
+    nam KETTN
+    preis KOMMAZOI
+    stück ZOI
+PASST SCHO
+
+FIX GUTSCHEIN_AB = 1_000 OIDA     # in Cent: ab 10 Euro gibt es einen Gutschein
+
+FUNKTIAUN summe_von(korb LISTN VON Woar) GIBT ZRUCK KOMMAZOI
+    SOG AU gsamt = 0.0 OIDA
+    FIA JEDE woar IN korb TUA
+        gsamt += woar.preis * woar.stück OIDA
+    PASST SCHO
+    GIB ZRUCK gsamt OIDA
+PASST SCHO
+
+FUNKTIAUN zettl(korb LISTN VON Woar)
+    WENN korb == [] DAUN
+        SCHREIB("Da Korb is laa.") OIDA
+        GIB ZRUCK OIDA
+    PASST SCHO
+    FIA JEDE woar IN korb TUA
+        SCHREIB($"{woar.stück} x {woar.nam} zu {woar.preis:2} = {woar.preis * woar.stück:2}") OIDA
+    PASST SCHO
+    SOG AU gsamt = summe_von(korb) OIDA
+    SCHREIB($"Mocht zaum {gsamt:2} Euro, des san {ZOI(RUNDN(gsamt * 100))} Cent.") OIDA
+    WENN gsamt * 100 >= GUTSCHEIN_AB DAUN
+        SCHREIB($"Ab {GUTSCHEIN_AB / 100} Euro gibt's an Gutschein: {gsamt * 0.05:2} Euro fia's nächste Moi.") OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU korb = [Woar("Semmal", 0.45, 6), Woar("Extrawurscht", 2.99, 1), Woar("Kracherl", 1.2, 4)] OIDA
+zettl(korb) OIDA
+zettl([]) OIDA
+
+# Zwei Strukturen sind gleich, wenn alles darin gleich ist.
+SOG AU nochamoi = [Woar("Semmal", 0.45, 6), Woar("Extrawurscht", 2.99, 1), Woar("Kracherl", 1.2, 4)] OIDA
+SCHREIB($"Dessöwe im Korb? {korb == nochamoi}") OIDA
+nochamoi[2].stück = 5 OIDA
+SCHREIB($"Und jetzt? {korb == nochamoi}, des Kracherl: {korb[2] == nochamoi[2]}, de Wurscht: {korb[1] == nochamoi[1]}") OIDA

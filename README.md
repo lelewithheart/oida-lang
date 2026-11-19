@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.15.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.16.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -44,6 +44,8 @@ Dateien Zeile für Zeile, Bytes, und [das Programm selbst](#das-programm-und-sei
 Argumente von der Kommandozeile, Umgebungsvariablen, andere Programme starten. Neu: [JSON](#json),
 direkt aus einer `STRUKTUR` und zurück, ohne dass man dafür etwas schreiben muss. Und OIDA läuft
 jetzt auch unter [Linux](#windows-und-linux), und für beide Systeme gibt es [Installer](#installieren).
+Zuletzt dazugekommen: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten)
+(`$"Servas {nam}"`) und `==` für Strukturen und Listen.
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Für Windows und Linux (64 Bit). Fenster und Ton gibt es derzeit nur unter Windows.
@@ -248,7 +250,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.15)
+## Die Sprache (v0.16)
 
 ### Typen
 
@@ -260,6 +262,14 @@ Mehr dazu in [`vscode/README.md`](vscode/README.md).
 | `KETTN`    | Text                  | `"Servas"`, `'Oida'` |
 
 Dazu kommen eigene [Strukturen](#strukturen) und [Listen](#listen) (`LISTN VON ZOI`).
+
+Zahlen kann man auch so schreiben:
+
+| Schreibweise | Bedeutung |
+|---|---|
+| `1_000_000` | Unterstriche zum Gliedern (zwischen zwei Ziffern); die Zahl ist dieselbe |
+| `0xFF`, `0b1010` | mit sechzehn Ziffern (0-9, A-F) oder mit zwei (0 und 1): `255` und `10` |
+| `1e9`, `2.5e-3` | mal zehn hoch so viel; das ist immer eine `KOMMAZOI` |
 
 Die Typen sind fest, aber man muss sie fast nie hinschreiben: Der Compiler erkennt sie am Wert.
 
@@ -307,6 +317,12 @@ SCHREIB(TITL, MITTE_X, TEMPO, is_drin(1000)) OIDA    # Mei Spü 480 200.0 FOISCH
   `7 / 2` ist `3` (ganze Zahlen), `7 / 2.0` ist `3.5`.
 - Texte zusammenhängen: `"Servas " + name`
 - Vergleichen: `=` oder `==`, `!=` oder `<>`, `<`, `<=`, `>`, `>=`
+- Gleich oder nicht (`==`, `!=`) geht auch mit ganzen Strukturen, Listen und Verzeichnissen: Zwei
+  sind gleich, wenn alles darin gleich ist. `Punkt(1, 2) == Punkt(1, 2)` und `[1, 2] == [1, 2]`
+  sind `WOAHR`, `liste == []` fragt, ob sie leer ist. Bei einem Verzeichnis zählt die Reihenfolge
+  der Einträge nicht. Objekte von Klassen sind nur gleich, wenn es dasselbe Objekt ist.
+  Was eine Funktion enthält, lässt sich nicht vergleichen; größer und kleiner gibt es nur für
+  Zahlen und Texte.
 - Verknüpfen: `UND`, `ODA`, `NED`. Die rechte Seite wird nur ausgerechnet, wenn sie gebraucht wird.
 - Umwandeln: `ZOI(...)`, `KOMMAZOI(...)`, `KETTN(...)`, zum Beispiel `"I bin " + KETTN(alter)`
   oder `ZOI("17") + 1`.
@@ -754,6 +770,35 @@ SCHREIB([1, 2], Punkt(1, 2)) OIDA           # [1, 2] Punkt(1.0, 2.0)
 `SCHREIB` nimmt beliebig viele Werte, schreibt sie mit Leerzeichen dazwischen und macht eine neue Zeile.
 Listen und Strukturen werden so ausgegeben, wie man sie hinschreibt.
 
+### Texte mit eingesetzten Werten
+
+Mit einem `$` vor dem Text setzt man Werte direkt hinein, statt sie mit `+` und `KETTN(...)`
+zusammenzuhängen:
+
+```
+SOG AU nam = "Hansi" OIDA
+SOG AU punkte = 1200 OIDA
+SOG AU preis = 3.14159 OIDA
+
+SCHREIB($"Servas {nam}, du host {punkte} Punkte!") OIDA     # Servas Hansi, du host 1200 Punkte!
+SCHREIB($"Des mocht {preis:2} Euro.") OIDA                  # Des mocht 3.14 Euro.
+SCHREIB($"Doppet: {punkte * 2}, vü? {punkte > 1000}") OIDA  # Doppet: 2400, vü? WOAHR
+```
+
+- In den geschweiften Klammern steht ein beliebiger Ausdruck: Rechnungen, Felder (`{p.x}`),
+  Listenstellen, Aufrufe (`{LÄNGN(sochn)}`), auch wieder ein Text mit `$`.
+- `{wert:2}` schreibt eine Zahl mit genau zwei Kommastellen (gerundet). Dasselbe als Funktion:
+  `AUF STÖN(preis, 2)` ist `"3.14"`.
+- Eine geschweifte Klammer selbst schreibt man doppelt: `$"{{so}}"` ist `{so}`.
+- Es gehen Zahlen, Texte und `JONA`. Eine Liste oder Struktur setzt man noch nicht direkt ein
+  (einzelne Felder schon).
+- Ein Text ohne `$` bleibt, wie er ist: `"{nix}"` ist genau das.
+
+Das Ergebnis ist ein gewöhnlicher Text (`KETTN`). Der Compiler macht daraus dasselbe, was man
+sonst von Hand schriebe: `"Servas " + KETTN(nam) + ...`.
+
+Ein Beispiel damit: [`beispiele/kassa.oida`](beispiele/kassa.oida).
+
 ### Eingabe
 
 ```
@@ -781,6 +826,7 @@ Für Texte (gezählt wird ab 0, in Zeichen):
 | `ERSETZ(text, alt, neu)`       | jedes `alt` durch `neu` ersetzt                       | `ERSETZ("aba", "a", "o")` ist `"obo"` |
 | `ZOI AUS(text)`                | die ganze Zahl im Text, als `ZOI ODA FEHLA`           | `ZOI AUS("17") ODA HOID 0` ist `17`   |
 | `KOMMAZOI AUS(text)`           | die Kommazahl im Text, als `KOMMAZOI ODA FEHLA`       | `KOMMAZOI AUS("x") ODA HOID 0.0` ist `0.0` |
+| `AUF STÖN(zahl, stön)`         | die Zahl als Text mit genau so vielen Kommastellen    | `AUF STÖN(2.5, 0)` ist `"3"`          |
 
 Für Listen:
 
@@ -1744,7 +1790,8 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
   man den Kreis nicht selbst auftrennt. Verweise, die nicht mitzählen, fehlen noch.
 - Ob etwas `NIX` ist, merkt sich der Compiler nur bei Variablen, nicht bei Feldern und Listenstellen.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
-- Strukturen und Listen kann man nicht mit `=` vergleichen.
+- In einen Text mit `$` lassen sich Listen und Strukturen noch nicht als Ganzes einsetzen.
+- Aufzählungen und eine Verzweigung nach Fällen (wie `switch`) fehlen noch.
 - Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
 - Im Fenster fehlen noch: getippter Text als Eingabe, Gamepad, Vollbild und mehr als ein Fenster.
   Leuchten gibt es nur beim Zeichnen ins Fenster, nicht in ein Bild.
@@ -1795,10 +1842,12 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 11 | [JSON](#json) lesen und schreiben, direkt aus einer `STRUKTUR` und zurück, und frei mit dem Typ `Json` | fertig |
 | 11a | Unabhängig von Windows: Compiler und alle Programme ohne Fenster und Ton laufen auch unter [Linux](#windows-und-linux) | fertig |
 | 11b | [Installer](#installieren): eine `setup.exe` für Windows, für Linux eine Datei, die sich selbst auspackt, und ein `.deb` | fertig |
-| 11c | Fenster und Ton unter Linux | offen |
-| 12 | Netzwerk: HTTP und HTTPS als Client, dazu rohe TCP-Verbindungen | offen |
-| 13 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
-| 14 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
+| 11c | Fenster und Ton unter Linux | später |
+| 12 | Die Sprache selbst, Teil 1: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten), Kommastellen, Zahlen wie `1_000`, `0xFF`, `1e9`; `==` für Strukturen, Listen und Verzeichnisse | fertig |
+| 13 | Die Sprache selbst, Teil 2: Aufzählungen, Verzweigung nach Fällen, fragen, was ein Objekt wirklich ist | offen |
+| 14 | Netzwerk: HTTP und HTTPS als Client, dazu rohe TCP-Verbindungen | offen |
+| 15 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
+| 16 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind
 dort Springen zur Definition, Umbenennen und ein Debugger.

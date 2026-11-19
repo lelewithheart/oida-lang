@@ -98,10 +98,29 @@ impl Leser<'_> {
 
     fn roh(&mut self) -> Vec<Roh> {
         let mut tokens = Vec::new();
+        self.roh_bis(false, &mut tokens);
+        let ende = self.pos();
+        tokens.push(Roh { token: Token { art: TokenArt::DateiEnde, pos: ende, ende }, klebt: false });
+        tokens
+    }
+
+    /// Liest Tokens bis zum Ende der Datei. Mit `im_text` steht der Leser in den
+    /// geschweiften Klammern eines Texts mit `$` davor (`$"Servas {nam}"`): Dann
+    /// ist an der schließenden Klammer, am Doppelpunkt vor den Kommastellen und
+    /// am Ende der Zeile Schluss.
+    fn roh_bis(&mut self, im_text: bool, tokens: &mut Vec<Roh>) {
         let mut klebt = false;
         while let Some(c) = self.schau(0) {
+            if im_text && matches!(c, '}' | ':' | '\n') {
+                return;
+            }
             if c.is_whitespace() {
                 self.nimm();
+                continue;
+            }
+            if c == '$' && matches!(self.schau(1), Some('"' | '\'')) {
+                self.bautext(tokens);
+                klebt = false;
                 continue;
             }
             if c == '#' {
@@ -162,25 +181,186 @@ impl Leser<'_> {
             tokens.push(Roh { token: Token { art, pos, ende: self.pos() }, klebt });
             klebt = true;
         }
+    }
+
+    /// Ein Text, in den Werte eingesetzt werden: `$"Servas {nam}, des mocht {preis:2} Euro"`.
+    ///
+    /// Daraus werden hier gleich die Tokens für das, was man sonst von Hand schriebe:
+    /// `("Servas " + KETTN((nam)) + ", des mocht " + AUF STÖN((preis), 2) + " Euro")`.
+    /// So brauchen Parser, Typprüfung und Code-Erzeugung dafür nichts Eigenes, und in
+    /// den Klammern geht jeder Ausdruck. Die eingefügten Tokens haben die Länge null.
+    fn bautext(&mut self, tokens: &mut Vec<Roh>) {
+        let anfang = self.pos();
+        self.nimm(); // das $
+        let anfuehrung = self.nimm().unwrap();
+        let leer = |art: TokenArt, wo: Position| Roh { token: Token { art, pos: wo, ende: wo }, klebt: false };
+        tokens.push(leer(TokenArt::KlammerAuf, anfang));
+        let mut stueck = String::new();
+        let mut stueck_anfang = self.pos();
+        let mut erstes = true;
+        // Legt das Stück Text ab, das sich angesammelt hat. Das erste auch dann, wenn es
+        // leer ist: So fängt die Kette sicher mit einem Text an.
+        let mut ablegen = |stueck: &mut String, von: Position, bis: Position, tokens: &mut Vec<Roh>| {
+            if !erstes && stueck.is_empty() {
+                return;
+            }
+            if !erstes {
+                tokens.push(leer(TokenArt::Plus, von));
+            }
+            erstes = false;
+            tokens.push(Roh { token: Token { art: TokenArt::Text(std::mem::take(stueck)), pos: von, ende: bis }, klebt: false });
+        };
+        loop {
+            match self.schau(0) {
+                None | Some('\n') => {
+                    self.fehler.push(Fehler::neu(
+                        anfang,
+                        format!("Der Text hört nimma auf. Do fehlt des {anfuehrung} am End."),
+                    ));
+                    break;
+                }
+                Some(c) if c == anfuehrung => {
+                    self.nimm();
+                    break;
+                }
+                // Doppelt geschrieben ist die Klammer selbst gemeint.
+                Some(c @ ('{' | '}')) if self.schau(1) == Some(c) => {
+                    self.nimm();
+                    self.nimm();
+                    stueck.push(c);
+                }
+                Some('}') => {
+                    self.fehler.push(Fehler::neu(
+                        self.pos(),
+                        "Zu dera } gibt's ka {. Wennst de Klammer söwa manst, schreib }}.",
+                    ));
+                    self.nimm();
+                }
+                Some('{') => {
+                    let auf = self.pos();
+                    ablegen(&mut stueck, stueck_anfang, auf, tokens);
+                    self.nimm();
+                    tokens.push(leer(TokenArt::Plus, auf));
+                    let kopf = tokens.len();
+                    tokens.push(leer(TokenArt::Schluessel(Schluessel::Text), auf));
+                    tokens.push(leer(TokenArt::KlammerAuf, auf));
+                    tokens.push(leer(TokenArt::KlammerAuf, auf));
+                    let vorher = tokens.len();
+                    self.roh_bis(true, tokens);
+                    if tokens.len() == vorher {
+                        self.fehler.push(Fehler::neu(auf, "Zwischen { und } ghört a Wert."));
+                        tokens.push(leer(TokenArt::Text(String::new()), auf));
+                    }
+                    tokens.push(leer(TokenArt::KlammerZu, self.pos()));
+                    if self.schau(0) == Some(':') {
+                        // {wert:2} heißt: mit zwei Kommastellen.
+                        let stelle = self.pos();
+                        self.nimm();
+                        let mut ziffern = String::new();
+                        while let Some(c) = self.schau(0).filter(char::is_ascii_digit) {
+                            ziffern.push(c);
+                            self.nimm();
+                        }
+                        match ziffern.parse::<i64>() {
+                            Ok(stellen) => {
+                                tokens[kopf].token.art = TokenArt::Schluessel(Schluessel::Fixed);
+                                tokens.push(leer(TokenArt::Komma, stelle));
+                                tokens.push(leer(TokenArt::Zoi(stellen), stelle));
+                            }
+                            Err(_) => self.fehler.push(Fehler::neu(
+                                stelle,
+                                "Noch'm : ghört a Zoi: wia vü Kommastön. Zum Beispü {preis:2}.",
+                            )),
+                        }
+                    }
+                    tokens.push(leer(TokenArt::KlammerZu, self.pos()));
+                    if self.schau(0) == Some('}') {
+                        self.nimm();
+                    } else {
+                        self.fehler.push(Fehler::neu(auf, "De { geht nimma zua. Do fehlt a }."));
+                    }
+                    stueck_anfang = self.pos();
+                }
+                Some('\\') => {
+                    let stelle = self.pos();
+                    self.nimm();
+                    match self.nimm() {
+                        Some('n') => stueck.push('\n'),
+                        Some('t') => stueck.push('\t'),
+                        Some('r') => stueck.push('\r'),
+                        Some('\\') => stueck.push('\\'),
+                        Some('"') => stueck.push('"'),
+                        Some('\'') => stueck.push('\''),
+                        Some(c) => self.fehler.push(Fehler::neu(
+                            stelle,
+                            format!("\\{c} kenn i ned. Es gibt nur \\n, \\t, \\r, \\\\, \\\" und \\'."),
+                        )),
+                        None => {}
+                    }
+                }
+                Some(c) => {
+                    stueck.push(c);
+                    self.nimm();
+                }
+            }
+        }
         let ende = self.pos();
-        tokens.push(Roh { token: Token { art: TokenArt::DateiEnde, pos: ende, ende }, klebt: false });
-        tokens
+        ablegen(&mut stueck, stueck_anfang, ende, tokens);
+        tokens.push(leer(TokenArt::KlammerZu, ende));
+    }
+
+    /// Ziffern, zwischen denen einzelne Unterstriche stehen dürfen (`1_000_000`).
+    fn ziffern(&mut self, ziffern: &mut String) {
+        while let Some(c) = self.schau(0) {
+            if c.is_ascii_digit() {
+                ziffern.push(c);
+            } else if !(c == '_' && ziffern.ends_with(|z: char| z.is_ascii_digit()) && self.schau(1).is_some_and(|d| d.is_ascii_digit())) {
+                break;
+            }
+            self.nimm();
+        }
     }
 
     fn zahl(&mut self, pos: Position) -> Result<TokenArt, Fehler> {
-        let mut ziffern = String::new();
-        while let Some(c) = self.schau(0).filter(char::is_ascii_digit) {
-            ziffern.push(c);
+        // 0xFF (sechzehn Ziffern: 0-9, A-F) und 0b1010 (zwei Ziffern: 0 und 1)
+        if self.schau(0) == Some('0') && matches!(self.schau(1), Some('x' | 'X' | 'b' | 'B')) {
             self.nimm();
+            let sechzehn = matches!(self.nimm(), Some('x' | 'X'));
+            let mut ziffern = String::new();
+            while let Some(c) = self.schau(0).filter(|c| wort_zeichen(*c)) {
+                if c != '_' {
+                    ziffern.push(c);
+                }
+                self.nimm();
+            }
+            let (basis, vorne, erlaubt) = if sechzehn { (16, "0x", "0 bis 9 und A bis F") } else { (2, "0b", "0 und 1") };
+            if ziffern.is_empty() || !ziffern.chars().all(|c| c.is_digit(basis)) {
+                return Err(Fehler::neu(pos, format!("Noch {vorne} ghörn Ziffan, und zwoa nur {erlaubt}.")));
+            }
+            return i64::from_str_radix(&ziffern, basis)
+                .map(TokenArt::Zoi)
+                .map_err(|_| Fehler::neu(pos, format!("De Zoi {vorne}{ziffern} is ma z'groß, de passt ned in 64 Bit.")));
         }
+        let mut ziffern = String::new();
+        self.ziffern(&mut ziffern);
         let mut komma = false;
         if self.schau(0) == Some('.') && self.schau(1).is_some_and(|c| c.is_ascii_digit()) {
             komma = true;
             ziffern.push('.');
             self.nimm();
-            while let Some(c) = self.schau(0).filter(char::is_ascii_digit) {
-                ziffern.push(c);
+            self.ziffern(&mut ziffern);
+        }
+        // 1e9, 2.5e-3: mal zehn hoch so viel. Das ist immer eine Kommazahl.
+        if matches!(self.schau(0), Some('e' | 'E')) {
+            let vorzeichen = usize::from(matches!(self.schau(1), Some('+' | '-')));
+            if self.schau(1 + vorzeichen).is_some_and(|c| c.is_ascii_digit()) {
+                komma = true;
+                ziffern.push('e');
                 self.nimm();
+                if vorzeichen == 1 {
+                    ziffern.push(self.nimm().unwrap());
+                }
+                self.ziffern(&mut ziffern);
             }
         }
         if self.schau(0).is_some_and(wort_anfang) {
@@ -190,7 +370,10 @@ impl Leser<'_> {
             ));
         }
         if komma {
-            Ok(TokenArt::Kommazoi(ziffern.parse().expect("Ziffern mit Punkt sind eine Kommazahl")))
+            match ziffern.parse::<f64>() {
+                Ok(wert) if wert.is_finite() => Ok(TokenArt::Kommazoi(wert)),
+                _ => Err(Fehler::neu(pos, format!("De Zoi {ziffern} is ma z'groß."))),
+            }
         } else {
             match ziffern.parse::<i64>() {
                 Ok(wert) => Ok(TokenArt::Zoi(wert)),
@@ -416,6 +599,67 @@ mod tests {
             arten(r#"3.14 42 "Servas\n" 'a"b'"#),
             vec![Kommazoi(3.14), Zoi(42), Text("Servas\n".into()), Text("a\"b".into()), DateiEnde]
         );
+    }
+
+    #[test]
+    fn zahlen_in_anderer_schreibweise() {
+        // Unterstriche zum Gliedern, sechzehn und zwei Ziffern, mal zehn hoch so viel.
+        assert_eq!(
+            arten("1_000_000 0xFF 0Xff 0x7fff_ffff 0b1010 1e3 2.5e-3 1E+2 1_0.5_0"),
+            vec![Zoi(1_000_000), Zoi(255), Zoi(255), Zoi(0x7fff_ffff), Zoi(10), Kommazoi(1000.0), Kommazoi(0.0025), Kommazoi(100.0), Kommazoi(10.5), DateiEnde]
+        );
+        // Eine Variable darf e heißen: 1 + e bleibt eine Rechnung.
+        assert_eq!(arten("1 + e"), vec![Zoi(1), Plus, name("e"), DateiEnde]);
+        // Ein Unterstrich steht nur zwischen zwei Ziffern.
+        assert!(fehler("1_").meldung.contains("kaun ned glei a Buchstob kumma"));
+        assert!(fehler("1__0").meldung.contains("kaun ned glei a Buchstob kumma"));
+        assert!(fehler("5elemente").meldung.contains("kaun ned glei a Buchstob kumma"));
+        assert_eq!(fehler("0x").meldung, "Noch 0x ghörn Ziffan, und zwoa nur 0 bis 9 und A bis F.");
+        assert_eq!(fehler("0xG1").meldung, "Noch 0x ghörn Ziffan, und zwoa nur 0 bis 9 und A bis F.");
+        assert_eq!(fehler("0b102").meldung, "Noch 0b ghörn Ziffan, und zwoa nur 0 und 1.");
+        assert!(fehler("0xFFFFFFFFFFFFFFFFF").meldung.contains("z'groß"));
+        assert!(fehler("1e999").meldung.contains("z'groß"));
+    }
+
+    #[test]
+    fn text_mit_eingesetzten_werten() {
+        let text = |t: &str| Text(t.to_string());
+        let kettn = Schluessel(crate::woerterbuch::Schluessel::Text);
+        // Aus $"a {x} b" werden die Tokens für ("a " + KETTN((x)) + " b").
+        assert_eq!(
+            arten(r#"$"a {x} b""#),
+            vec![KlammerAuf, text("a "), Plus, kettn.clone(), KlammerAuf, KlammerAuf, name("x"), KlammerZu, KlammerZu, Plus, text(" b"), KlammerZu, DateiEnde]
+        );
+        // Ohne Werte bleibt ein Text in Klammern; vorne steht immer ein Text, auch ein leerer.
+        assert_eq!(arten(r#"$"nur Text""#), vec![KlammerAuf, text("nur Text"), KlammerZu, DateiEnde]);
+        assert_eq!(
+            arten(r#"$"{x}""#),
+            vec![KlammerAuf, text(""), Plus, kettn, KlammerAuf, KlammerAuf, name("x"), KlammerZu, KlammerZu, KlammerZu, DateiEnde]
+        );
+        // {wert:2} wird zu AUF STÖN((wert), 2).
+        let stellen = Schluessel(crate::woerterbuch::Schluessel::Fixed);
+        assert_eq!(
+            arten(r#"$'{p:2}'"#),
+            vec![KlammerAuf, text(""), Plus, stellen, KlammerAuf, KlammerAuf, name("p"), KlammerZu, Komma, Zoi(2), KlammerZu, KlammerZu, DateiEnde]
+        );
+        // Doppelte Klammern sind die Klammern selbst; \n und \" gehen wie in jedem Text.
+        assert_eq!(arten(r#"$"{{a}}\n\"""#), vec![KlammerAuf, text("{a}\n\""), KlammerZu, DateiEnde]);
+        // In den Klammern gelten mehrteilige Wörter und Texte (auch mit } darin).
+        let innen = arten(r#"$"{ZOI AUS("}") ODA HOID 0}""#);
+        assert!(innen.contains(&Schluessel(crate::woerterbuch::Schluessel::ParseInt)) && innen.contains(&text("}")), "{innen:?}");
+        // Die Stellen: Der Wert in der Klammer steht dort, wo er im Quelltext steht.
+        let wb = Woerterbuch::eingebaut();
+        let tokens = zerlegen(r#"x = $"ab {wert}""#, &wb).unwrap();
+        let wert = tokens.iter().find(|t| t.art == name("wert")).unwrap();
+        assert_eq!((wert.pos, wert.ende), (Position::neu(1, 11), Position::neu(1, 15)));
+
+        assert_eq!(fehler("$\"a {x\n").meldung, "De { geht nimma zua. Do fehlt a }.");
+        assert_eq!(fehler(r#"$"a {} b""#).meldung, "Zwischen { und } ghört a Wert.");
+        assert_eq!(fehler(r#"$"a } b""#).meldung, "Zu dera } gibt's ka {. Wennst de Klammer söwa manst, schreib }}.");
+        assert_eq!(fehler(r#"$"{x:}""#).meldung, "Noch'm : ghört a Zoi: wia vü Kommastön. Zum Beispü {preis:2}.");
+        assert_eq!(fehler("$\"offn {x}\n").meldung, "Der Text hört nimma auf. Do fehlt des \" am End.");
+        // Ein $ allein ist weiterhin kein Zeichen der Sprache.
+        assert!(fehler("$ x").meldung.contains("'$'"));
     }
 
     #[test]

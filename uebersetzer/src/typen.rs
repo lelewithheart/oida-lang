@@ -144,6 +144,7 @@ fn wort_von(funktion: Eingebaut) -> Schluessel {
         Eingebaut::Raus => Schluessel::Remove,
         Eingebaut::ZoiAus => Schluessel::ParseInt,
         Eingebaut::KommazoiAus => Schluessel::ParseFloat,
+        Eingebaut::AufStellen => Schluessel::Fixed,
         Eingebaut::AlsJson => Schluessel::ToJson,
         Eingebaut::AlsJsonSchoen => Schluessel::ToJsonPretty,
     }
@@ -170,6 +171,7 @@ fn fassungen(funktion: Eingebaut) -> &'static [(&'static [Typ], Typ)] {
         | Eingebaut::Aufrunden
         | Eingebaut::Runden => &[(&[K], K)],
         Eingebaut::Hoch | Eingebaut::Winkel => &[(&[K, K], K)],
+        Eingebaut::AufStellen => &[(&[K, Z], T)],
         Eingebaut::Betrag => &[(&[Z], Z), (&[K], K)],
         Eingebaut::Min | Eingebaut::Max => &[(&[Z, Z], Z), (&[K, K], K)],
         Eingebaut::Zufall => &[(&[], K), (&[Z, Z], Z)],
@@ -660,6 +662,27 @@ impl Pruefer<'_> {
                 Typ::Struktur(nummer) => self.bau(ausdruck, nummer, Some(typen)),
                 _ => Typ::Fehler,
             }
+        }
+    }
+
+    /// Der erste Typ in `typ`, bei dem man nicht sagen kann, ob zwei Werte gleich sind
+    /// (Funktionen, ein Wert ODA FEHLA), oder `None`, wenn sich alles vergleichen lässt.
+    /// Objekte gehen: Sie sind gleich, wenn es dasselbe Objekt ist.
+    fn gleich_hindernis(&self, typ: Typ, gesehen: &mut Vec<Typ>) -> Option<Typ> {
+        if gesehen.contains(&typ) {
+            return None;
+        }
+        gesehen.push(typ);
+        match typ {
+            Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn | Typ::Klasse(_) | Typ::Fehler => None,
+            Typ::Struktur(_) => {
+                let felder: Vec<Typ> = self.typen.struktur(typ).map(|s| s.felder.iter().map(|(_, t)| *t).collect())?;
+                felder.into_iter().find_map(|feld| self.gleich_hindernis(feld, gesehen))
+            }
+            Typ::Liste(_) => self.gleich_hindernis(self.typen.element(typ)?, gesehen),
+            Typ::Vielleicht { .. } => self.gleich_hindernis(self.typen.innen(typ)?, gesehen),
+            Typ::Verzeichnis(_) => self.gleich_hindernis(self.typen.verzeichnis(typ)?.1, gesehen),
+            _ => Some(typ),
         }
     }
 
@@ -2959,6 +2982,16 @@ impl Pruefer<'_> {
         if l == Typ::Fehler || r == Typ::Fehler {
             return Typ::Fehler;
         }
+        // `liste == []`: Die leere Liste nimmt den Typ der Liste an, mit der sie verglichen wird.
+        let (l, r) = if !matches!(op, BinaerOp::Gleich | BinaerOp::Ungleich) {
+            (l, r)
+        } else if l == Typ::LeereListe && matches!(r, Typ::Liste(_)) && self.anpassen(links, r) {
+            (r, r)
+        } else if r == Typ::LeereListe && matches!(l, Typ::Liste(_)) && self.anpassen(rechts, l) {
+            (l, l)
+        } else {
+            (l, r)
+        };
         // Zwei Objekte vergleichen heißt fragen: Ist es dasselbe Objekt?
         // Das geht auch, wenn eines davon NIX sein kann.
         let kern = |t: Typ| self.typen.innen(t).unwrap_or(t);
@@ -2967,6 +3000,22 @@ impl Pruefer<'_> {
             && (self.typen.erbt_von(a, b) || self.typen.erbt_von(b, a))
         {
             return Typ::Jona;
+        }
+        // Zwei Strukturen, Listen oder Verzeichnisse sind gleich, wenn alles darin gleich ist.
+        if matches!(op, BinaerOp::Gleich | BinaerOp::Ungleich)
+            && l == r
+            && matches!(l, Typ::Struktur(_) | Typ::Liste(_) | Typ::Verzeichnis(_))
+        {
+            let Some(hindernis) = self.gleich_hindernis(l, &mut Vec::new()) else { return Typ::Jona };
+            let meldung = format!(
+                "{} {} {}? Des geht ned, weu do {} drinsteckt, und des kaun ma ned vergleichn.",
+                self.typ_name(l).replacen("a ", "A ", 1),
+                op.zeichen(),
+                self.typ_name(r),
+                self.typ_name(hindernis)
+            );
+            self.melde(pos, meldung);
+            return Typ::Fehler;
         }
         if let Some(typ) = binaer_ergebnis(op, l, r) {
             // Zwei Zahlen: trifft ZOI auf KOMMAZOI, wird mit KOMMAZOI gerechnet.
@@ -3796,11 +3845,38 @@ mod tests {
     }
 
     #[test]
-    fn strukturen_und_listen_kann_man_nicht_vergleichen() {
-        let f = fehler(&format!("{PUNKT}SOG AU a = Punkt(1, 2) = Punkt(1, 2) OIDA"));
-        assert_eq!(f.meldung, "A Punkt == a Punkt? Des geht si ned aus.");
-        let f = fehler("SOG AU a = [1] = [1] OIDA");
-        assert_eq!(f.meldung, "A LISTN VON ZOI == a LISTN VON ZOI? Des geht si ned aus.");
+    fn strukturen_listen_und_verzeichnisse_vergleichen() {
+        assert_eq!(typ_von("[1] == [1]"), Typ::Jona);
+        assert_eq!(typ_von("[[\"a\"]] != [[\"b\"]]"), Typ::Jona);
+        ok(&format!("{PUNKT}SOG AU a = Punkt(1, 2) = Punkt(1, 2) OIDA\nSOG AU b = [Punkt(1, 2)] != [Punkt(3, 4)] OIDA"));
+        ok("SOG AU v = VAZEICHNIS VON ZOI UND KETTN() OIDA\nSOG AU g = v == v OIDA");
+        // Die leere Liste nimmt den Typ der anderen Seite an, links wie rechts.
+        ok("SOG AU l = [1] OIDA\nSOG AU a = l == [] OIDA\nSOG AU b = [] != l OIDA");
+        // Objekte darin gehen (dasselbe Objekt oder nicht), Funktionen nicht.
+        ok("KLASSE K\n x ZOI\nPASST SCHO\nSTRUKTUR S\n k K\nPASST SCHO\nSOG AU s = S(K(1)) OIDA\nSOG AU g = s == s OIDA");
+        let f = fehler("STRUKTUR S\n f FUNKTIAUN() GIBT ZRUCK ZOI\nPASST SCHO\nFUNKTIAUN g(a S, b S) GIBT ZRUCK JONA\n GIB ZRUCK [a] == [b] OIDA\nPASST SCHO");
+        assert_eq!(
+            f.meldung,
+            "A LISTN VON S == a LISTN VON S? Des geht ned, weu do a FUNKTIAUN() GIBT ZRUCK ZOI drinsteckt, und des kaun ma ned vergleichn."
+        );
+        // Verschiedene Typen und größer/kleiner gehen weiterhin nicht.
+        let f = fehler("SOG AU a = [1] == [\"a\"] OIDA");
+        assert_eq!(f.meldung, "A LISTN VON ZOI == a LISTN VON KETTN? Des geht si ned aus.");
+        let f = fehler(&format!("{PUNKT}SOG AU a = Punkt(1, 2) < Punkt(1, 2) OIDA"));
+        assert_eq!(f.meldung, "A Punkt < a Punkt? Des geht si ned aus.");
+        // In einer Vorlage geht == jetzt auch mit einer Struktur.
+        ok(&format!("{PUNKT}FUNKTIAUN gleich VON T(a T, b T) GIBT ZRUCK JONA\n GIB ZRUCK a == b OIDA\nPASST SCHO\nSCHREIB(gleich(Punkt(1, 2), Punkt(1, 2)), gleich([1], [1])) OIDA"));
+    }
+
+    #[test]
+    fn zahl_auf_feste_kommastellen() {
+        assert_eq!(typ_von("AUF STÖN(3.14159, 2)"), Typ::Kettn);
+        // Wo eine KOMMAZOI verlangt ist, geht auch eine ZOI.
+        assert_eq!(typ_von("AUF STÖN(7, 2)"), Typ::Kettn);
+        assert_eq!(fehler("SCHREIB(AUF STÖN(\"x\", 2)) OIDA").meldung, "'AUF STÖN' wü ois 1. Wert a KOMMAZOI, du gibst eam a KETTN.");
+        // Der Text mit eingesetzten Werten ist ein gewöhnlicher Text.
+        assert_eq!(typ_von("$\"a {1 + 2} b {2.5:1} {WOAHR}\""), Typ::Kettn);
+        assert_eq!(fehler("SCHREIB($\"{[1]}\") OIDA").meldung, "Aus ana LISTN VON ZOI kaun i ka KETTN mochn.");
     }
 
     const WESEN: &str = "KLASSE Wesen\n name KETTN\n lebn ZOI = 100\n \

@@ -98,12 +98,14 @@ declare i32 @oida_text_vergleich(ptr, ptr)
 declare void @oida_text_frei(ptr)
 declare ptr @oida_zoi_zu_text(i64)
 declare ptr @oida_kommazoi_zu_text(double)
+declare ptr @oida_zahl_auf_stellen(double, i64)
 declare i64 @oida_text_zu_zoi(ptr, i64)
 declare double @oida_text_zu_kommazoi(ptr, i64)
 declare ptr @oida_text_als_zoi(ptr, ptr)
 declare ptr @oida_text_als_kommazoi(ptr, ptr)
 declare ptr @oida_json_lesen(ptr, ptr, ptr)
 declare ptr @oida_json_schreiben(ptr, ptr, i1 zeroext, i64)
+declare zeroext i1 @oida_gleich(ptr, ptr, ptr, i64)
 declare void @oida_fehler_durch_null(i64) noreturn
 declare void @oida_fehler_schritt_null(i64) noreturn
 declare void @oida_fehler_stelle(i64, i64, i64) noreturn
@@ -511,6 +513,8 @@ impl Modul<'_> {
             Typ::Kommazoi => (1, "0".to_string(), nix(), nix()),
             Typ::Jona => (2, "0".to_string(), nix(), nix()),
             Typ::Kettn => (3, "0".to_string(), nix(), nix()),
+            // Ein Objekt: nur zum Vergleichen (dasselbe Objekt oder nicht); als JSON geht es nicht.
+            Typ::Klasse(_) => (10, "0".to_string(), nix(), nix()),
             Typ::Liste(_) => {
                 let element = typen.element(typ).expect("eine Liste hat Elemente");
                 (5, "0".to_string(), self.json_typ(element), nix())
@@ -2231,6 +2235,7 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             Eingebaut::Ersetz => {
                 format!("call ptr @oida_text_ersetzt(ptr {}, ptr {}, ptr {}, i64 {zeile})", w(0), w(1), w(2))
             }
+            Eingebaut::AufStellen => format!("call ptr @oida_zahl_auf_stellen(double {}, i64 {})", w(0), w(1)),
             Eingebaut::Wurzel => rechnen("sqrt"),
             Eingebaut::Sinus => rechnen("sin"),
             Eingebaut::Kosinus => rechnen("cos"),
@@ -2356,6 +2361,18 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 let v = self.temp();
                 self.zeile(&format!("{v} = call i32 @oida_text_vergleich(ptr {l}, ptr {r})"));
                 format!("icmp {} i32 {v}, 0", vergleich_ganz(op))
+            }
+            // Strukturen, Listen und Verzeichnisse: Die Laufzeit geht mit der Beschreibung des
+            // Typs (dieselbe wie für JSON) durch beide Werte und vergleicht alles darin.
+            (Typ::Struktur(_) | Typ::Liste(_) | Typ::Verzeichnis(_), BinaerOp::Gleich | BinaerOp::Ungleich) => {
+                let it = ir_typ(typ);
+                let (a, b) = (self.versteckter_platz(&it), self.versteckter_platz(&it));
+                let beschreibung = self.modul.json_typ(typ);
+                let v = self.temp();
+                self.zeile(&format!("store {it} {l}, ptr {a}"));
+                self.zeile(&format!("store {it} {r}, ptr {b}"));
+                self.zeile(&format!("{v} = call zeroext i1 @oida_gleich(ptr {a}, ptr {b}, ptr {beschreibung}, i64 {zeile})"));
+                format!("icmp eq i1 {v}, {}", op == BinaerOp::Gleich)
             }
             _ => unreachable!("von der Typprüfung abgelehnt"),
         };

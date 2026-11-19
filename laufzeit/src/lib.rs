@@ -240,6 +240,49 @@ pub extern "C" fn oida_kommazoi_zu_text(wert: f64) -> *mut TextKopf {
     neuer_text(kommazoi_als_text(wert).as_bytes())
 }
 
+/// `AUF STÖN(zahl, stellen)`: die Zahl mit genau so vielen Kommastellen, gerundet.
+/// Weniger als 0 Stellen gibt es nicht, mehr als 30 auch nicht.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_zahl_auf_stellen(wert: f64, stellen: i64) -> *mut TextKopf {
+    neuer_text(auf_stellen(wert, stellen).as_bytes())
+}
+
+fn auf_stellen(wert: f64, stellen: i64) -> String {
+    if !wert.is_finite() {
+        return kommazoi_als_text(wert);
+    }
+    let stellen = stellen.clamp(0, 30) as usize;
+    // Die Zahl mit viel mehr Stellen als verlangt, so genau, wie sie im Speicher steht.
+    // Gerundet wird dann von Hand: ab der Hälfte weg von der Null, wie bei RUNDN
+    // (die Standardbibliothek würde 2.5 auf null Stellen zu 2 machen).
+    const MEHR: usize = 40;
+    let genau = format!("{:.*}", stellen + MEHR, wert.abs());
+    let (vorne, hinten) = genau.split_at(genau.len() - MEHR);
+    let mut ziffern: Vec<u8> = vorne.trim_end_matches('.').bytes().collect();
+    if hinten.as_bytes()[0] >= b'5' {
+        let mut i = ziffern.len();
+        loop {
+            if i == 0 {
+                ziffern.insert(0, b'1');
+                break;
+            }
+            i -= 1;
+            match ziffern[i] {
+                b'.' => {}
+                b'9' => ziffern[i] = b'0',
+                ziffer => {
+                    ziffern[i] = ziffer + 1;
+                    break;
+                }
+            }
+        }
+    }
+    // Aus -0.004 auf zwei Stellen würde "-0.00": Ein Minus vor lauter Nullen ist Unsinn.
+    let nur_nullen = ziffern.iter().all(|b| *b == b'0' || *b == b'.');
+    let text = String::from_utf8(ziffern).expect("nur Ziffern und ein Punkt");
+    if wert < 0.0 && !nur_nullen { format!("-{text}") } else { text }
+}
+
 fn text_zu_zoi(inhalt: &[u8]) -> Option<i64> {
     std::str::from_utf8(inhalt).ok()?.trim().parse().ok()
 }
@@ -1139,6 +1182,26 @@ mod tests {
         assert_eq!(inhalt(oida_zoi_zu_text(0)), "0");
         assert_eq!(inhalt(oida_zoi_zu_text(i64::MAX)), "9223372036854775807");
         assert_eq!(inhalt(oida_zoi_zu_text(i64::MIN)), "-9223372036854775808");
+        assert_eq!(auf_stellen(3.14159, 2), "3.14");
+        assert_eq!(auf_stellen(2.0, 2), "2.00");
+        // Ab der Hälfte weg von der Null, wie RUNDN.
+        assert_eq!(auf_stellen(2.5, 0), "3");
+        assert_eq!(auf_stellen(3.5, 0), "4");
+        assert_eq!(auf_stellen(-2.5, 0), "-3");
+        assert_eq!(auf_stellen(0.125, 2), "0.13");
+        assert_eq!(auf_stellen(0.4999, 0), "0");
+        // Der Übertrag geht durch alle Neuner und über den Punkt.
+        assert_eq!(auf_stellen(9.99, 1), "10.0");
+        assert_eq!(auf_stellen(999.5, 0), "1000");
+        // 1.005 steht im Speicher als 1.00499999...: Das wird ehrlich abgerundet.
+        assert_eq!(auf_stellen(1.005, 2), "1.00");
+        assert_eq!(auf_stellen(-1.005, 1), "-1.0");
+        assert_eq!(auf_stellen(1234.5678, 1), "1234.6");
+        // Kein Minus vor lauter Nullen, keine Stellen unter 0, nicht endlos viele.
+        assert_eq!(auf_stellen(-0.004, 2), "0.00");
+        assert_eq!(auf_stellen(7.9, -3), "8");
+        assert_eq!(auf_stellen(1.0, 1000).len(), 32);
+        assert_eq!(inhalt(oida_zahl_auf_stellen(0.1 + 0.2, 3)), "0.300");
         assert_eq!(inhalt(oida_kommazoi_zu_text(3.0)), "3.0");
         assert_eq!(inhalt(oida_kommazoi_zu_text(2.5)), "2.5");
     }

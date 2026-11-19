@@ -1,0 +1,107 @@
+BRAUCH listen OIDA
+BRAUCH json OIDA
+
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+
+STRUKTUR Spiela
+    nam KETTN
+    wo Punkt
+    sochn LISTN VON KETTN
+    oita VIELLEICHT ZOI
+    spitznam VIELLEICHT KETTN
+    zöhla VAZEICHNIS VON KETTN UND ZOI
+PASST SCHO
+
+KLASSE Viech
+    nam KETTN
+PASST SCHO
+
+STRUKTUR Stoi
+    viecha LISTN VON Viech
+PASST SCHO
+
+STRUKTUR Ast
+    nam KETTN
+    äste LISTN VON Ast
+PASST SCHO
+
+FUNKTIAUN bau(nam KETTN, oita VIELLEICHT ZOI) GIBT ZRUCK Spiela
+    SOG AU z = VAZEICHNIS VON KETTN UND ZOI() OIDA
+    z["a"] = 1 OIDA
+    z["b"] = 2 OIDA
+    GIB ZRUCK Spiela(nam, Punkt(1, 2), ["Schwert", "Schüd"], oita, NIX, z) OIDA
+PASST SCHO
+
+SCHREIB("--- Strukturen") OIDA
+SCHREIB(Punkt(1, 2) == Punkt(1, 2), Punkt(1, 2) == Punkt(1, 3), Punkt(1, 2) != Punkt(1, 3), Punkt(1, 2) != Punkt(1, 2)) OIDA
+SOG AU a = bau("Hansi", 17) OIDA
+SOG AU b = bau("Hansi", 17) OIDA
+SCHREIB(a == b, a != b) OIDA
+b.sochn[1] = "Bogn" OIDA
+SCHREIB(a == b) OIDA
+b = bau("Hansi", NIX) OIDA
+SCHREIB(a == b, b == bau("Hansi", NIX)) OIDA
+b = bau("Hansi", 17) OIDA
+b.zöhla["b"] = 3 OIDA
+SCHREIB(a == b) OIDA
+b.zöhla["b"] = 2 OIDA
+b.spitznam = "Hanse" OIDA
+SCHREIB(a == b) OIDA
+a.spitznam = "Hanse" OIDA
+SCHREIB(a == b) OIDA
+
+SCHREIB("--- Listn") OIDA
+SCHREIB([1, 2, 3] == [1, 2, 3], [1, 2, 3] == [1, 2], [1, 2] != [2, 1], ["a"] == ["a"], [[1], [2, 3]] == [[1], [2, 3]]) OIDA
+SOG AU laar LISTN VON ZOI = [] OIDA
+SOG AU l = [1] OIDA
+SCHREIB(laar == laar, l == laar, [Punkt(0, 0)] == [Punkt(0, 0)], [1.5] == [1.5]) OIDA
+SCHREIB(hot([Punkt(1, 1), Punkt(2, 2)], Punkt(2, 2)), hot([Punkt(1, 1)], Punkt(2, 2)), wo([[1], [2]], FUNKTIAUN(e LISTN VON ZOI) => e == [2])) OIDA
+
+SCHREIB("--- Vazeichnisse (de Reihenfoig zöht ned)") OIDA
+SOG AU v = VAZEICHNIS VON KETTN UND ZOI() OIDA
+SOG AU w = VAZEICHNIS VON KETTN UND ZOI() OIDA
+SCHREIB(v == w) OIDA
+v["a"] = 1 OIDA
+v["b"] = 2 OIDA
+w["b"] = 2 OIDA
+SCHREIB(v == w) OIDA
+w["a"] = 1 OIDA
+SCHREIB(v == w, v != w) OIDA
+w["a"] = 9 OIDA
+SCHREIB(v == w) OIDA
+SOG AU n = VAZEICHNIS VON ZOI UND LISTN VON KETTN() OIDA
+SOG AU m = VAZEICHNIS VON ZOI UND LISTN VON KETTN() OIDA
+n[7] = ["x"] OIDA
+m[7] = ["x"] OIDA
+SCHREIB(n == m) OIDA
+m[8] = [] OIDA
+SCHREIB(n == m) OIDA
+
+SCHREIB("--- Objekte drin: gleich haaßt dessöwe Objekt") OIDA
+SOG AU bello = Viech("Bello") OIDA
+SCHREIB(Stoi([bello]) == Stoi([bello]), Stoi([bello]) == Stoi([Viech("Bello")])) OIDA
+
+SCHREIB("--- a Struktur, de si söwa enthoit, und Json") OIDA
+SOG AU baam = Ast("Stamm", [Ast("links", [Ast("Blattl", [])]), Ast("rechts", [])]) OIDA
+SCHREIB(baam == Ast("Stamm", [Ast("links", [Ast("Blattl", [])]), Ast("rechts", [])]), baam == Ast("Stamm", [Ast("links", []), Ast("rechts", [])])) OIDA
+SOG AU j1 = json_lesn("{\"a\": [1, 2.5, \"x\", null, true], \"b\": {\"c\": 1}}") ODA HOID j_nix() OIDA
+SOG AU j2 = json_lesn("{ \"a\" : [1, 2.5, \"x\", null, true], \"b\": {\"c\": 1} }") ODA HOID j_nix() OIDA
+SOG AU j3 = json_lesn("{\"a\": [1, 2.5, \"x\", null, false], \"b\": {\"c\": 1}}") ODA HOID j_nix() OIDA
+SCHREIB(j1 == j2, j1 == j3, j_nix() == j_nix(), j_zoi(1) == j_text("1")) OIDA
+
+SCHREIB("--- in ana Bedingung") OIDA
+WENN a.wo == Punkt(1, 2) UND a.sochn != [] DAUN
+    SCHREIB("passt") OIDA
+PASST SCHO
+
+SCHREIB("--- Texte, de erst beim Laufn entstehn (gleicher Inhalt, aundare Stö im Speicher)") OIDA
+SOG AU ans = "Han" OIDA
+SCHREIB([ans + "si"] == [ans + "si"], [ans + "si"] == [ans + "so"], bau(ans + "si", 17) == bau(STUTZ(" Hansi "), 17), bau(ans + "si", 17) != bau("Hansi", 17)) OIDA
+SOG AU t1 = VAZEICHNIS VON KETTN UND KETTN() OIDA
+SOG AU t2 = VAZEICHNIS VON KETTN UND KETTN() OIDA
+t1[ans + "s"] = SCHREI(ans) OIDA
+t2["Hans"] = "HAN" OIDA
+SCHREIB(t1 == t2) OIDA

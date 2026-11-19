@@ -1,0 +1,23 @@
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+STRUKTUR Knopf
+    nam KETTN
+    drucka FUNKTIAUN(ZOI) GIBT ZRUCK ZOI
+PASST SCHO
+SOG AU zoin = [1, 2] OIDA
+SOG AU nam = "Hansi" OIDA
+SCHREIB($"Listn: {zoin}") OIDA
+SCHREIB($"Punkt: {Punkt(1, 2)}") OIDA
+SCHREIB($"Den gibt's ned: {gibtsned + 1}") OIDA
+SCHREIB($"Kommastön von am Text: {nam:2}") OIDA
+SCHREIB($"{nam} hot {zoin[0] + "x"} Punkte") OIDA
+SOG AU z ZOI = $"{nam}" OIDA
+SCHREIB(AUF STÖN("3.14", 2), AUF STÖN(3.14), AUF STÖN(3.14, 2.5)) OIDA
+SOG AU k = Knopf("ok", FUNKTIAUN(x ZOI) => x) OIDA
+SCHREIB(k == k) OIDA
+SCHREIB([k] != [k]) OIDA
+SCHREIB(Punkt(1, 2) == zoin) OIDA
+SCHREIB(zoin == ["a"]) OIDA
+SCHREIB(Punkt(1, 2) < Punkt(1, 3)) OIDA

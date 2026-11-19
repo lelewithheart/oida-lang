@@ -1236,6 +1236,7 @@ fn eingebaut(schluessel: Schluessel) -> Option<Eingebaut> {
         Schluessel::Remove => Eingebaut::Raus,
         Schluessel::ParseInt => Eingebaut::ZoiAus,
         Schluessel::ParseFloat => Eingebaut::KommazoiAus,
+        Schluessel::Fixed => Eingebaut::AufStellen,
         Schluessel::ToJson => Eingebaut::AlsJson,
         Schluessel::ToJsonPretty => Eingebaut::AlsJsonSchoen,
         _ => return None,

@@ -125,6 +125,9 @@ REPLACE   = ERSETZ, AUSTAUSCH
 # --- Text in eine Zahl verwandeln; geht das nicht, kommt ein FEHLA zurück ----
 PARSEINT   = ZOI AUS
 PARSEFLOAT = KOMMAZOI AUS
+# --- Eine Zahl als Text mit fester Anzahl von Kommastellen:
+#     AUF STÖN(3.14159, 2) ist "3.14"
+FIXED      = AUF STÖN, AUF STELLEN
 # --- JSON:  OIS JSON(wert) macht aus einem Wert JSON-Text (OIS SCHEES JSON: mit
 #     Zeilen und Einrückung), AUS JSON VON Punkt(text) macht aus dem Text
 #     wieder einen Wert oder einen FEHLA.

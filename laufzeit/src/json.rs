@@ -14,8 +14,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 
 use super::{
-    ListenKopf, TextKopf, WbKopf, abbruch, bytes, neuer_text, oida_liste_neu, oida_wb_dazu, oida_wb_neu, text_behalten,
-    text_loslassen,
+    ListenKopf, TextKopf, WbKopf, abbruch, bytes, neuer_text, oida_liste_neu, oida_wb_dazu, oida_wb_finde, oida_wb_neu,
+    text_behalten, text_loslassen,
 };
 
 // Die Arten von Typen. Die Nummern müssen zu denen im Compiler passen (irgen.rs).
@@ -34,6 +34,8 @@ pub const ART_VAZEICHNIS: i64 = 8;
 /// Die Struktur `Json` aus der Bibliothek: JSON, von dem man den Aufbau nicht vorher kennt.
 /// Ihre sieben Felder stehen in `felder`: oat, is_woahr, gaunze, komma, inhalt, teile, nama.
 pub const ART_BELIEBIG: i64 = 9;
+/// Ein Objekt (ein Zeiger). Das kommt nur beim Vergleichen vor: als JSON gehen Objekte nicht.
+pub const ART_OBJEKT: i64 = 10;
 
 // Was ein `Json`-Wert sein kann (das Feld `oat`); steht so auch in bibliothek/json.oida.
 const OAT_NIX: i64 = 0;
@@ -627,6 +629,125 @@ pub unsafe extern "C" fn oida_json_lesen(text: *const TextKopf, typ: *const Json
             }
             Err(meldung) => neuer_text(format!("JSON: {meldung}").as_bytes()),
         }
+    }
+}
+
+// -------------------------------------------------------------- Vergleichen
+
+/// `a == b` für Strukturen, Listen und Verzeichnisse: Zwei Werte sind gleich,
+/// wenn alles darin gleich ist. Die Beschreibung des Typs ist dieselbe wie für
+/// JSON; hier dürfen auch Objekte vorkommen (gleich heißt bei ihnen: dasselbe).
+///
+/// # Safety
+/// `a` und `b` müssen auf Werte des Typs zeigen, den `typ` beschreibt.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn oida_gleich(a: *const u8, b: *const u8, typ: *const JsonTyp, zeile: i64) -> bool {
+    unsafe { gleich(a, b, &*typ, 0, zeile) }
+}
+
+unsafe fn gleich(a: *const u8, b: *const u8, typ: &JsonTyp, tiefe: usize, zeile: i64) -> bool {
+    if tiefe > 10_000 {
+        abbruch(zeile, "Des is z'tiaf verschachtelt zum Vergleichn (oda es zagt im Kreis auf si söwa).");
+    }
+    unsafe {
+        let zeiger = |wo: *const u8| (wo as *const *const u8).read_unaligned();
+        match typ.art {
+            ART_ZOI => (a as *const i64).read_unaligned() == (b as *const i64).read_unaligned(),
+            ART_KOMMAZOI => (a as *const f64).read_unaligned() == (b as *const f64).read_unaligned(),
+            ART_JONA => (a.read() != 0) == (b.read() != 0),
+            ART_KETTN => bytes(zeiger(a).cast()) == bytes(zeiger(b).cast()),
+            ART_OBJEKT => zeiger(a) == zeiger(b),
+            ART_VIELLEICHT_ZEIGER => match (zeiger(a).is_null(), zeiger(b).is_null()) {
+                (true, true) => true,
+                (false, false) => gleich(a, b, typ.innen(), tiefe, zeile),
+                _ => false,
+            },
+            ART_VIELLEICHT_WERT => match (a.read() != 0, b.read() != 0) {
+                (false, false) => true,
+                (true, true) => gleich(a.add(typ.anzahl as usize), b.add(typ.anzahl as usize), typ.innen(), tiefe, zeile),
+                _ => false,
+            },
+            ART_STRUKTUR => typ.felder().iter().all(|feld| {
+                gleich(a.add(feld.stelle as usize), b.add(feld.stelle as usize), &*feld.typ, tiefe + 1, zeile)
+            }),
+            ART_LISTN => listen_gleich(zeiger(a).cast(), zeiger(b).cast(), typ.innen(), tiefe, zeile),
+            ART_VAZEICHNIS => {
+                let (va, vb) = (zeiger(a) as *mut WbKopf, zeiger(b) as *mut WbKopf);
+                if va == vb {
+                    return true;
+                }
+                let innen = typ.innen();
+                let groesse = innen.groesse as usize;
+                // Dieselben Schlüssel mit denselben Werten; die Reihenfolge zählt nicht.
+                (*va).laenge == (*vb).laenge
+                    && (0..(*va).laenge as usize).all(|i| {
+                        let stelle = oida_wb_finde(vb, *(*va).schluessel.add(i));
+                        stelle >= 0
+                            && gleich((*va).werte.add(i * groesse), (*vb).werte.add(stelle as usize * groesse), innen, tiefe + 1, zeile)
+                    })
+            }
+            ART_BELIEBIG => {
+                // Die Struktur Json: Von ihren Feldern steht in der Beschreibung nur, wo sie liegen.
+                let felder = typ.felder();
+                let (pa, pb) = (|n: usize| a.add(felder[n].stelle as usize), |n: usize| b.add(felder[n].stelle as usize));
+                let oat = (pa(0) as *const i64).read_unaligned();
+                if oat != (pb(0) as *const i64).read_unaligned() {
+                    return false;
+                }
+                match oat {
+                    OAT_JONA => (pa(1).read() != 0) == (pb(1).read() != 0),
+                    OAT_ZOI => (pa(2) as *const i64).read_unaligned() == (pb(2) as *const i64).read_unaligned(),
+                    OAT_KOMMAZOI => (pa(3) as *const f64).read_unaligned() == (pb(3) as *const f64).read_unaligned(),
+                    OAT_TEXT => texte_gleich(zeiger(pa(4)).cast(), zeiger(pb(4)).cast()),
+                    OAT_LISTN => listen_gleich(zeiger(pa(5)).cast(), zeiger(pb(5)).cast(), typ, tiefe, zeile),
+                    // Bei Objekten zählt hier auch die Reihenfolge der Einträge.
+                    OAT_OBJEKT => {
+                        let (na, nb): (*const ListenKopf, *const ListenKopf) = (zeiger(pa(6)).cast(), zeiger(pb(6)).cast());
+                        let namen_gleich = match (na.is_null(), nb.is_null()) {
+                            (true, true) => true,
+                            (false, false) => {
+                                (*na).laenge == (*nb).laenge
+                                    && (0..(*na).laenge as usize).all(|i| {
+                                        texte_gleich(
+                                            ((*na).daten as *const *const TextKopf).add(i).read(),
+                                            ((*nb).daten as *const *const TextKopf).add(i).read(),
+                                        )
+                                    })
+                            }
+                            _ => false,
+                        };
+                        namen_gleich && listen_gleich(zeiger(pa(5)).cast(), zeiger(pb(5)).cast(), typ, tiefe, zeile)
+                    }
+                    _ => true,
+                }
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Zwei Texte, von denen jeder auch fehlen kann (null).
+unsafe fn texte_gleich(a: *const TextKopf, b: *const TextKopf) -> bool {
+    match (a.is_null(), b.is_null()) {
+        (true, true) => true,
+        (false, false) => unsafe { bytes(a) == bytes(b) },
+        _ => false,
+    }
+}
+
+/// Zwei Listen (jede kann auch fehlen): gleich lang und Stelle für Stelle gleich.
+unsafe fn listen_gleich(a: *const ListenKopf, b: *const ListenKopf, element: &JsonTyp, tiefe: usize, zeile: i64) -> bool {
+    if a == b {
+        return true;
+    }
+    if a.is_null() || b.is_null() {
+        return false;
+    }
+    unsafe {
+        let groesse = element.groesse as usize;
+        (*a).laenge == (*b).laenge
+            && (0..(*a).laenge as usize)
+                .all(|i| gleich((*a).daten.add(i * groesse), (*b).daten.add(i * groesse), element, tiefe + 1, zeile))
     }
 }
 

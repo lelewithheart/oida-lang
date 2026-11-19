@@ -407,6 +407,8 @@ pub enum Eingebaut {
     ZoiAus,
     /// `KOMMAZOI AUS(text)`: die Kommazahl, die im Text steht, oder ein Fehler
     KommazoiAus,
+    /// `AUF STÖN(zahl, stellen)`: die Zahl als Text mit genau so vielen Kommastellen
+    AufStellen,
     /// `OIS JSON(wert)`: der Wert als JSON-Text in einer Zeile
     AlsJson,
     /// `OIS SCHEES JSON(wert)`: ... mit Zeilen und Einrückung
