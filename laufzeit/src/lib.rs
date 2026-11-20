@@ -1131,6 +1131,17 @@ pub extern "C" fn oida_fehler_schritt_null(zeile: i64) -> ! {
     abbruch(zeile, "A Zöhschleifn mit Schritt 0 kummt nie weida.");
 }
 
+/// Tests, die Verbindungen aufmachen oder Programme starten, laufen einer nach dem anderen.
+/// Zwei Gründe: Sonst schnappt sich einer den Port, den ein anderer gerade freigegeben hat und
+/// für unbesetzt hält. Und unter Linux erbt ein Programm, das gerade gestartet wird, für einen
+/// Augenblick alle offenen Verbindungen: Ein Horcher, der hier schon zu ist, nimmt dann dort
+/// noch eine Verbindung an.
+#[cfg(test)]
+pub(crate) fn test_allein() -> std::sync::MutexGuard<'static, ()> {
+    static NACHEINANDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    NACHEINANDER.lock().unwrap_or_else(|vergiftet| vergiftet.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

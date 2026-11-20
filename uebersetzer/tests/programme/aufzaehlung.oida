@@ -1,0 +1,212 @@
+# Aufzählungen, Verzweigung nach Fällen (JE NOCHDEM) und die Frage, was ein
+# Objekt wirklich ist (OIS, IS A).
+BRAUCH listen OIDA
+
+AUFZÖHLUNG Foab
+    ROT, GRÜN, BLAU
+PASST SCHO
+
+AUFZÖHLUNG Zuastaund
+    MENÜ
+    SPÜ
+    PAUSE
+    AUS
+PASST SCHO
+
+STRUKTUR Stift
+    nam KETTN
+    foab Foab
+    reserve VIELLEICHT Foab
+PASST SCHO
+
+# Jeder Wert kommt vor: Der Compiler weiß, dass jeder Weg etwas zurückgibt.
+FUNKTIAUN auf_deitsch(f Foab) GIBT ZRUCK KETTN
+    JE NOCHDEM f
+        BEI Foab.ROT DAUN
+            GIB ZRUCK "rot" OIDA
+        BEI Foab.GRÜN DAUN
+            GIB ZRUCK "grün" OIDA
+        BEI Foab.BLAU DAUN
+            GIB ZRUCK "blau" OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN is_woam(f Foab) GIBT ZRUCK JONA
+    JE NOCHDEM f
+        BEI Foab.ROT DAUN
+            GIB ZRUCK WOAHR OIDA
+        SUNST
+            GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN nächsta(z Zuastaund, taste KETTN) GIBT ZRUCK Zuastaund
+    JE NOCHDEM z
+        BEI Zuastaund.MENÜ DAUN
+            WENN taste == "enter" DAUN
+                GIB ZRUCK Zuastaund.SPÜ OIDA
+            PASST SCHO
+        BEI Zuastaund.SPÜ, Zuastaund.PAUSE DAUN
+            WENN taste == "p" DAUN
+                WENN z == Zuastaund.SPÜ DAUN
+                    GIB ZRUCK Zuastaund.PAUSE OIDA
+                PASST SCHO
+                GIB ZRUCK Zuastaund.SPÜ OIDA
+            PASST SCHO
+            WENN taste == "esc" DAUN
+                GIB ZRUCK Zuastaund.AUS OIDA
+            PASST SCHO
+        BEI Zuastaund.AUS DAUN
+            GIB ZRUCK Zuastaund.AUS OIDA
+    PASST SCHO
+    GIB ZRUCK z OIDA
+PASST SCHO
+
+FUNKTIAUN note(punkte ZOI) GIBT ZRUCK KETTN
+    JE NOCHDEM punkte
+        BEI 90 BIS 100 DAUN
+            GIB ZRUCK "Sehr gut" OIDA
+        BEI 80 BIS 89 DAUN
+            GIB ZRUCK "Gut" OIDA
+        BEI 65 BIS 79, 64 DAUN
+            GIB ZRUCK "Befriedigend" OIDA
+        BEI 50 BIS 63 DAUN
+            GIB ZRUCK "Genügend" OIDA
+        SUNST
+            GIB ZRUCK "Nicht genügend" OIDA
+    PASST SCHO
+PASST SCHO
+
+SCHREIB("--- Werte") OIDA
+SOG AU f = Foab.GRÜN OIDA
+SCHREIB(f, Foab.ROT, [Foab.BLAU, Foab.ROT], Stift("Edding", Foab.BLAU, NIX)) OIDA
+SCHREIB(f == Foab.GRÜN, f == Foab.ROT, f != Foab.ROT, Foab.ROT == Foab.ROT) OIDA
+SCHREIB(KETTN(f), ZOI(f), ZOI(Foab.ROT), ZOI(Foab.BLAU), $"de Foab is {f}, de aundare {Foab.BLAU}") OIDA
+f = Foab.BLAU OIDA
+SCHREIB(f, auf_deitsch(f), auf_deitsch(Foab.ROT), is_woam(f), is_woam(Foab.ROT)) OIDA
+SOG AU stift = Stift("Marker", Foab.ROT, Foab.GRÜN) OIDA
+stift.foab = Foab.GRÜN OIDA
+SCHREIB(stift, stift.foab == (stift.reserve ODA HOID Foab.ROT), stift == Stift("Marker", Foab.GRÜN, Foab.GRÜN)) OIDA
+SCHREIB(hot([Foab.ROT, Foab.BLAU], Foab.BLAU), hot([Foab.ROT], Foab.BLAU), wo([Foab.ROT, Foab.GRÜN], FUNKTIAUN(x Foab) => x == Foab.GRÜN)) OIDA
+
+SCHREIB("--- ois JSON: da Nom vom Wert") OIDA
+SOG AU json = OIS JSON(stift) OIDA
+SCHREIB(json, OIS JSON([Foab.ROT, Foab.BLAU]), OIS JSON(Foab.GRÜN)) OIDA
+SCHREIB(AUS JSON VON Stift(json), AUS JSON VON Foab("\"BLAU\""), AUS JSON VON LISTN VON Foab("[\"ROT\", \"ROT\"]")) OIDA
+SCHREIB(AUS JSON VON Foab("\"LILA\"")) OIDA
+SCHREIB(AUS JSON VON Stift("{\"nam\": \"x\", \"foab\": \"gelb\"}")) OIDA
+SCHREIB(AUS JSON VON Foab("2")) OIDA
+
+SCHREIB("--- JE NOCHDEM") OIDA
+SOG AU z = Zuastaund.MENÜ OIDA
+FIA JEDE taste IN ["x", "enter", "p", "p", "x", "esc", "enter"] TUA
+    z = nächsta(z, taste) OIDA
+    SCHREIB(taste, "->", z) OIDA
+PASST SCHO
+SCHREIB(note(100), note(95), note(85), note(64), note(65), note(50), note(49), note(-3), note(101)) OIDA
+
+# Mit Texten, mit Kommazahlen, ohne SUNST (dann passiert einfach nichts), und der Wert wird nur einmal ausgerechnet.
+FUNKTIAUN frog(wos KETTN) GIBT ZRUCK KETTN
+    SCHREIB("(i frog:", wos + ")") OIDA
+    GIB ZRUCK wos OIDA
+PASST SCHO
+FIA JEDE wort IN ["jo", "na", "vielleicht", "JO"] TUA
+    JE NOCHDEM FLÜSTER(frog(wort))
+        BEI "jo", "freilich" DAUN
+            SCHREIB("  passt") OIDA
+        BEI "na" DAUN
+            SCHREIB("  schod") OIDA
+    PASST SCHO
+PASST SCHO
+JE NOCHDEM 2.5
+    BEI 0 BIS 1 DAUN
+        SCHREIB("klan") OIDA
+    BEI 2 BIS 3.5 DAUN
+        SCHREIB("mittl") OIDA
+PASST SCHO
+# Verschachtelt, in einer Schleife, mit HAU OB und einer Variable im Fall.
+SOG AU gsaumt = 0 OIDA
+FIA i VON 1 BIS 10 TUA
+    JE NOCHDEM i % 4
+        BEI 0 DAUN
+            SOG AU doppet = i * 2 OIDA
+            gsaumt += doppet OIDA
+        BEI 1 DAUN
+            JE NOCHDEM i
+                BEI 9 DAUN
+                    HAU OB OIDA
+                SUNST
+                    gsaumt += 100 OIDA
+            PASST SCHO
+        SUNST
+            WEIDA OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(gsaumt) OIDA
+# In einer Funktion ohne Namen.
+SOG AU kuaz = FUNKTIAUN(x Foab) GIBT ZRUCK ZOI
+    JE NOCHDEM x
+        BEI Foab.ROT DAUN
+            GIB ZRUCK 1 OIDA
+        BEI Foab.GRÜN, Foab.BLAU DAUN
+            GIB ZRUCK 2 OIDA
+    PASST SCHO
+PASST SCHO OIDA
+SCHREIB(kuaz(Foab.ROT), kuaz(Foab.BLAU), mach([Foab.BLAU, Foab.ROT], kuaz)) OIDA
+
+SCHREIB("--- wos a Objekt wirklich is") OIDA
+KLASSE Viech
+    nam KETTN
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK "..." OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Hund ERBT VON Viech
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK "Wau" OIDA
+    PASST SCHO
+
+    FUNKTIAUN hol_stöckl() GIBT ZRUCK KETTN
+        GIB ZRUCK SÖWA.nam + " bringt's Stöckl" OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Dackl ERBT VON Hund
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK "Wiff" OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Kotz ERBT VON Viech
+    lebn ZOI = 9
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK "Miau" OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU viecha LISTN VON Viech = [Hund("Bello"), Kotz("Minki"), Dackl("Waldi"), Viech("Irgendwos")] OIDA
+FIA JEDE v IN viecha TUA
+    SOG AU hund = v OIS Hund OIDA
+    WENN hund != NIX DAUN
+        SCHREIB(v.nam, "is a Hund:", hund.hol_stöckl(), hund.sog()) OIDA
+    SUNST WENN v IS A Kotz DAUN
+        SOG AU kotz = v OIS Kotz OIDA
+        WENN kotz != NIX DAUN
+            SCHREIB(v.nam, "is a Kotz mit", kotz.lebn, "Lebn") OIDA
+        PASST SCHO
+    SUNST
+        SCHREIB(v.nam, "is irgendwos:", v.sog()) OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(viecha[2] IS A Dackl, viecha[2] IS A Hund, viecha[2] IS A Viech, viecha[0] IS A Dackl, viecha[1] IS A Hund) OIDA
+SCHREIB(wievü(viecha, FUNKTIAUN(v Viech) => v IS A Hund), LÄNGN(nur(viecha, FUNKTIAUN(v Viech) => NED (v IS A Hund)))) OIDA
+# Von unten nach oben geht es immer; das Ergebnis ist trotzdem VIELLEICHT.
+SOG AU waldi = Dackl("Waldi") OIDA
+SOG AU ois_viech = waldi OIS Viech OIDA
+WENN ois_viech != NIX DAUN
+    SCHREIB(ois_viech.nam, ois_viech.sog(), ois_viech == waldi) OIDA
+PASST SCHO
+SCHREIB((Kotz("Mautzi") OIS Kotz) != NIX, (Viech("x") OIS Kotz) == NIX) OIDA

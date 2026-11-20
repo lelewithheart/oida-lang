@@ -84,6 +84,12 @@ pub enum Schluessel {
     ParseInt,
     ParseFloat,
     Fixed,
+    // Aufzählung, Verzweigung nach Fällen, Art eines Objekts
+    Enum,
+    Match,
+    Case,
+    As,
+    Is,
     // JSON
     ToJson,
     ToJsonPretty,
@@ -100,7 +106,7 @@ pub enum Schluessel {
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 76] = [
+    pub const ALLE: [(Schluessel, &'static str); 81] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -170,6 +176,11 @@ impl Schluessel {
         (Schluessel::ParseInt, "PARSEINT"),
         (Schluessel::ParseFloat, "PARSEFLOAT"),
         (Schluessel::Fixed, "FIXED"),
+        (Schluessel::Enum, "ENUM"),
+        (Schluessel::Match, "MATCH"),
+        (Schluessel::Case, "CASE"),
+        (Schluessel::As, "AS"),
+        (Schluessel::Is, "IS"),
         (Schluessel::ToJson, "TOJSON"),
         (Schluessel::ToJsonPretty, "TOJSONPRETTY"),
         (Schluessel::FromJson, "FROMJSON"),

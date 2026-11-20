@@ -272,6 +272,7 @@ mod tests {
 
     #[test]
     fn ein_programm_starten_und_seine_ausgabe_lesen() {
+        let _allein = crate::test_allein();
         // Die Befehlszeile des Systems: unter Windows cmd, sonst sh.
         let (schale, schalter) = if cfg!(windows) { ("cmd", "/c") } else { ("sh", "-c") };
         let argumente = liste_aus_texten(&[schalter.to_string(), "echo Servas&& echo Na 1>&2&& exit 3".to_string()]);

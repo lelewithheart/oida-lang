@@ -36,6 +36,9 @@ pub const ART_VAZEICHNIS: i64 = 8;
 pub const ART_BELIEBIG: i64 = 9;
 /// Ein Objekt (ein Zeiger). Das kommt nur beim Vergleichen vor: als JSON gehen Objekte nicht.
 pub const ART_OBJEKT: i64 = 10;
+/// Eine Aufzählung: im Speicher die Nummer des Werts (64 Bit), im JSON sein Name als Text.
+/// Die Namen stehen in `felder`, in der Reihenfolge der Nummern.
+pub const ART_AUFZAEHLUNG: i64 = 11;
 
 // Was ein `Json`-Wert sein kann (das Feld `oat`); steht so auch in bibliothek/json.oida.
 const OAT_NIX: i64 = 0;
@@ -357,6 +360,7 @@ unsafe fn erwartet(typ: &JsonTyp) -> &'static str {
         ART_KOMMAZOI => "a Zoi",
         ART_JONA => "true oda false",
         ART_KETTN => "a Text",
+        ART_AUFZAEHLUNG => "a Text mit an von de Werte",
         ART_STRUKTUR | ART_VAZEICHNIS => "a Objekt ({...})",
         ART_LISTN => "a Listn ([...])",
         ART_VIELLEICHT_ZEIGER | ART_VIELLEICHT_WERT => unsafe { erwartet(typ.innen()) },
@@ -442,6 +446,13 @@ unsafe fn pruefe(wert: &Wert, typ: &JsonTyp) -> Result<(), Daneben> {
             (ART_KOMMAZOI, Wert::Ganz(_) | Wert::Komma(_)) => Ok(()),
             (ART_JONA, Wert::Jona(_)) => Ok(()),
             (ART_KETTN, Wert::Text(_)) => Ok(()),
+            (ART_AUFZAEHLUNG, Wert::Text(text)) => {
+                if typ.felder().iter().any(|feld| name_von(feld) == text.as_ref()) {
+                    return Ok(());
+                }
+                let alle: Vec<&str> = typ.felder().iter().map(|feld| name_von(feld)).collect();
+                Err(Daneben { weg: Vec::new(), was: Some(format!("'{text}' gibt's do ned. Es gibt: {}.", alle.join(", "))) })
+            }
             (ART_VIELLEICHT_ZEIGER | ART_VIELLEICHT_WERT, Wert::Nix) => Ok(()),
             (ART_VIELLEICHT_ZEIGER | ART_VIELLEICHT_WERT, _) => pruefe(wert, typ.innen()),
             (ART_LISTN, Wert::Liste(elemente)) => {
@@ -497,6 +508,10 @@ unsafe fn baue(wert: &Wert, typ: &JsonTyp, ziel: *mut u8) {
             (ART_KOMMAZOI, Wert::Komma(k)) => (ziel as *mut f64).write_unaligned(*k),
             (ART_JONA, Wert::Jona(j)) => ziel.write(*j as u8),
             (ART_KETTN, Wert::Text(t)) => (ziel as *mut *mut TextKopf).write_unaligned(neuer_text(t.as_bytes())),
+            (ART_AUFZAEHLUNG, Wert::Text(text)) => {
+                let nummer = typ.felder().iter().position(|feld| name_von(feld) == text.as_ref()).unwrap_or(0);
+                (ziel as *mut i64).write_unaligned(nummer as i64);
+            }
             (ART_VIELLEICHT_ZEIGER | ART_VIELLEICHT_WERT, Wert::Nix) => std::ptr::write_bytes(ziel, 0, typ.groesse as usize),
             (ART_VIELLEICHT_ZEIGER, _) => baue(wert, typ.innen(), ziel),
             (ART_VIELLEICHT_WERT, _) => {
@@ -656,6 +671,7 @@ unsafe fn gleich(a: *const u8, b: *const u8, typ: &JsonTyp, tiefe: usize, zeile:
             ART_KOMMAZOI => (a as *const f64).read_unaligned() == (b as *const f64).read_unaligned(),
             ART_JONA => (a.read() != 0) == (b.read() != 0),
             ART_KETTN => bytes(zeiger(a).cast()) == bytes(zeiger(b).cast()),
+            ART_AUFZAEHLUNG => (a as *const i64).read_unaligned() == (b as *const i64).read_unaligned(),
             ART_OBJEKT => zeiger(a) == zeiger(b),
             ART_VIELLEICHT_ZEIGER => match (zeiger(a).is_null(), zeiger(b).is_null()) {
                 (true, true) => true,
@@ -832,6 +848,13 @@ impl Schreiber {
                 ART_KOMMAZOI => self.kommazahl((wert as *const f64).read_unaligned()),
                 ART_JONA => self.aus.push_str(if wert.read() & 1 != 0 { "true" } else { "false" }),
                 ART_KETTN => self.text(bytes((wert as *const *const TextKopf).read_unaligned())),
+                ART_AUFZAEHLUNG => {
+                    let nummer = (wert as *const i64).read_unaligned();
+                    match usize::try_from(nummer).ok().and_then(|n| typ.felder().get(n)) {
+                        Some(feld) => self.text(bytes(feld.name)),
+                        None => self.aus.push_str("null"),
+                    }
+                }
                 ART_VIELLEICHT_ZEIGER => {
                     if (wert as *const *const u8).read_unaligned().is_null() {
                         self.aus.push_str("null");

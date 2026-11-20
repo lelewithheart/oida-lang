@@ -536,7 +536,14 @@ impl Modul<'_> {
                 let info = typen.struktur(typ).expect("die Struktur gibt es");
                 let beliebig = ist_json_struktur(typen, typ);
                 let mut eintraege = Vec::new();
-                for (i, (name, feld_typ)) in info.felder.iter().enumerate() {
+                // Eine Aufzählung steht im JSON als Text mit dem Namen ihres Werts: Statt der
+                // Felder stehen hier die Namen der Werte, in der Reihenfolge ihrer Nummern.
+                let aufzaehlung = !info.werte.is_empty();
+                for wert in &info.werte {
+                    let name = self.text(wert);
+                    eintraege.push(format!("{{ ptr, i64, ptr }} {{ ptr {name}, i64 0, ptr null }}"));
+                }
+                for (i, (name, feld_typ)) in info.felder.iter().enumerate().filter(|_| !aufzaehlung) {
                     let name = self.text(name);
                     // Bei `Json` selbst braucht die Laufzeit von den Feldern nur, wo sie liegen.
                     let feld = if beliebig { nix() } else { self.json_typ(*feld_typ) };
@@ -555,7 +562,7 @@ impl Modul<'_> {
                     );
                     format!("@oida.json.f{n}")
                 };
-                (if beliebig { 9 } else { 4 }, eintraege.len().to_string(), nix(), felder)
+                (if aufzaehlung { 11 } else if beliebig { 9 } else { 4 }, eintraege.len().to_string(), nix(), felder)
             }
             _ => unreachable!("von der Typprüfung abgelehnt"),
         };
@@ -835,6 +842,20 @@ impl Modul<'_> {
                     }
                     aus.push_str("  ret void\n}\n\n");
                 }
+            }
+            // Eine Aufzählung: Ausgegeben wird der Name des Werts. Die Namen stehen in einer
+            // Tabelle, die auch KETTN(wert) verwendet.
+            if !s.werte.is_empty() {
+                let namen: Vec<String> = s.werte.iter().map(|wert| format!("ptr {}", self.text(wert))).collect();
+                let anzahl = namen.len();
+                let _ = writeln!(aus, "@oida.aufz.{n} = private unnamed_addr constant [{anzahl} x ptr] [{}]", namen.join(", "));
+                let _ = writeln!(
+                    aus,
+                    "define internal void @oida.schreib.s{n}(%s{n} %w) {{\nstart:\n  %i = extractvalue %s{n} %w, 0\n  \
+                     %p = getelementptr inbounds [{anzahl} x ptr], ptr @oida.aufz.{n}, i64 0, i64 %i\n  \
+                     %t = load ptr, ptr %p\n  call void @oida_schreib_text(ptr %t)\n  ret void\n}}\n"
+                );
+                continue;
             }
             // Ausgeben: Name(feld, feld, ...)
             let anfang = self.text(&format!("{}(", s.name));
@@ -1118,6 +1139,12 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.lass_wenn_eigen(&r, wert.typ, r_eigen);
                 self.lass_wurzel(wurzel);
             }
+            AnweisungArt::Folge(teile) => {
+                for teil in teile {
+                    self.anweisung(teil);
+                }
+            }
+            AnweisungArt::JeNachdem { .. } => unreachable!("die Typprüfung macht daraus eine Folge"),
             AnweisungArt::Wenn { bedingung, dann, sunst } => {
                 let b = self.ausdruck(bedingung);
                 let m_dann = self.marke("dann");
@@ -1868,6 +1895,38 @@ impl<'m, 't> FunktionsBau<'m, 't> {
             }
             AusdruckArt::OdaHoid { links, rechts } => self.oda_hoid(links, rechts, ausdruck.typ),
             AusdruckArt::Probier { innen } => self.probier(innen),
+            AusdruckArt::Als { objekt, klasse, .. } => {
+                // Jedes Objekt trägt einen Zeiger auf die Angaben seiner Klasse. Ist es die gesuchte
+                // Klasse oder eine, die von ihr erbt, ist das Ergebnis das Objekt, sonst NIX.
+                let o = self.ausdruck(objekt);
+                let (kp, k) = (self.temp(), self.temp());
+                self.zeile(&format!("{kp} = getelementptr inbounds {{ i64, ptr }}, ptr {o}, i32 0, i32 1"));
+                self.zeile(&format!("{k} = load ptr, ptr {kp}"));
+                let typen = self.modul.typen;
+                let mut passt = "false".to_string();
+                for (n, info) in typen.klassen.iter().enumerate() {
+                    if info.vorlage || !typen.erbt_von(n as u32, *klasse) {
+                        continue;
+                    }
+                    let (gleich, oder) = (self.temp(), self.temp());
+                    self.zeile(&format!("{gleich} = icmp eq ptr {k}, @oida.klasse.{n}"));
+                    self.zeile(&format!("{oder} = or i1 {passt}, {gleich}"));
+                    passt = oder;
+                }
+                let (m_jo, m_na, m_ende) = (self.marke("ois_jo"), self.marke("ois_na"), self.marke("ois_ende"));
+                self.zeile(&format!("br i1 {passt}, label %{m_jo}, label %{m_na}"));
+                // Ist es keines, wird das Objekt an dieser Stelle nicht mehr gebraucht. Losgelassen
+                // wird es als das, was es vorher war: Als die gesuchte Klasse wäre falsch, es ist ja keine.
+                self.beginne_block(&m_na);
+                self.lass_wenn_eigen(&o, objekt.typ, true);
+                self.zeile(&format!("br label %{m_ende}"));
+                self.beginne_block(&m_jo);
+                self.zeile(&format!("br label %{m_ende}"));
+                self.beginne_block(&m_ende);
+                let ergebnis = self.temp();
+                self.zeile(&format!("{ergebnis} = phi ptr [ {o}, %{m_jo} ], [ null, %{m_na} ]"));
+                ergebnis
+            }
             AusdruckArt::AusJson { text, .. } => {
                 // Die Laufzeit baut den Wert in den Platz und gibt den Fehler zurück (null: keiner).
                 let ziel = self.modul.typen.wert_von(ausdruck.typ).expect("die Typprüfung macht daraus ... ODA FEHLA");
@@ -2362,6 +2421,15 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.zeile(&format!("{v} = call i32 @oida_text_vergleich(ptr {l}, ptr {r})"));
                 format!("icmp {} i32 {v}, 0", vergleich_ganz(op))
             }
+            // Zwei Werte einer Aufzählung: einfach ihre Nummern vergleichen.
+            (Typ::Struktur(n), BinaerOp::Gleich | BinaerOp::Ungleich)
+                if !self.modul.typen.strukturen[n as usize].werte.is_empty() =>
+            {
+                let (a, b) = (self.temp(), self.temp());
+                self.zeile(&format!("{a} = extractvalue %s{n} {l}, 0"));
+                self.zeile(&format!("{b} = extractvalue %s{n} {r}, 0"));
+                format!("icmp {} i64 {a}, {b}", vergleich_ganz(op))
+            }
             // Strukturen, Listen und Verzeichnisse: Die Laufzeit geht mit der Beschreibung des
             // Typs (dieselbe wie für JSON) durch beide Werte und vergleicht alles darin.
             (Typ::Struktur(_) | Typ::Liste(_) | Typ::Verzeichnis(_), BinaerOp::Gleich | BinaerOp::Ungleich) => {
@@ -2384,6 +2452,19 @@ impl<'m, 't> FunktionsBau<'m, 't> {
     fn umwandlung(&mut self, von: Typ, ziel: Typ, w: &str, zeile: u32) -> String {
         if (von, ziel) == (Typ::Jona, Typ::Kettn) {
             return self.jona_als_text(w);
+        }
+        if let Typ::Struktur(n) = von {
+            // Eine Aufzählung: als Zahl die Nummer des Werts, als Text sein Name aus der Tabelle.
+            let i = self.temp();
+            self.zeile(&format!("{i} = extractvalue %s{n} {w}, 0"));
+            if ziel == Typ::Zoi {
+                return i;
+            }
+            let anzahl = self.modul.typen.strukturen[n as usize].werte.len();
+            let (p, t) = (self.temp(), self.temp());
+            self.zeile(&format!("{p} = getelementptr inbounds [{anzahl} x ptr], ptr @oida.aufz.{n}, i64 0, i64 {i}"));
+            self.zeile(&format!("{t} = load ptr, ptr {p}"));
+            return t;
         }
         let t = self.temp();
         let befehl = match (von, ziel) {
@@ -2834,5 +2915,39 @@ mod tests {
             "STRUKTUR Json\n {FELDER} nama VIELLEICHT LISTN VON KETTN\n teile VIELLEICHT LISTN VON Json\nPASST SCHO\n{lesen}"
         ));
         assert!(!ir.contains("{ i64 9, ") && ir.contains("{ i64 4, "), "{ir}");
+    }
+
+    #[test]
+    fn aufzaehlung_im_speicher() {
+        let ir = ir("AUFZÖHLUNG Foab\n ROT, GRÜN, BLAU\nPASST SCHO\nSOG AU f = Foab.BLAU OIDA\n\
+             SCHREIB(f, f == Foab.ROT, KETTN(f), ZOI(f), OIS JSON(f)) OIDA\n\
+             JE NOCHDEM f\n BEI Foab.ROT DAUN\n  SCHREIB(1) OIDA\n BEI Foab.GRÜN, Foab.BLAU DAUN\n  SCHREIB(2) OIDA\nPASST SCHO");
+        // Eine Struktur mit einer Zahl; die Namen der Werte stehen in einer Tabelle.
+        assert!(ir.contains("%s0 = type { i64 }"), "{ir}");
+        assert!(ir.contains("@oida.aufz.0 = private unnamed_addr constant [3 x ptr]"), "{ir}");
+        let haupt = haupt(&ir);
+        // Vergleichen heißt die Nummern vergleichen, ohne die Laufzeit zu fragen.
+        assert!(haupt.contains("icmp eq i64") && !haupt.contains("@oida_gleich"), "{haupt}");
+        // Als JSON: Art 11 mit den drei Namen.
+        assert!(ir.contains("{ i64 11, ") && ir.contains("i64 3, ptr null, ptr @oida.json.f"), "{ir}");
+        // JE NOCHDEM rechnet den Wert einmal aus; der letzte Fall braucht keinen Vergleich mehr.
+        assert_eq!(haupt.matches("icmp eq i64").count(), 2, "{haupt}");
+    }
+
+    #[test]
+    fn objekt_als_klasse_vergleicht_die_klassen() {
+        let ir = ir("KLASSE Viech\n nam KETTN\nPASST SCHO\nKLASSE Hund ERBT VON Viech\nPASST SCHO\nKLASSE Dackl ERBT VON Hund\nPASST SCHO\n\
+             KLASSE Kotz ERBT VON Viech\nPASST SCHO\nSOG AU v = Viech(\"a\") OIDA\nSOG AU h = v OIS Hund OIDA");
+        let haupt = haupt(&ir);
+        // Ein Hund ist, was Hund oder Dackl ist: zwei Vergleiche, die Katze kommt nicht vor.
+        assert!(haupt.contains("icmp eq ptr") && haupt.contains("@oida.klasse.1") && haupt.contains("@oida.klasse.2"), "{haupt}");
+        assert!(!haupt.contains("@oida.klasse.3\n") && haupt.matches("icmp eq ptr").count() == 2, "{haupt}");
+        // Passt es nicht, wird das Objekt als das losgelassen, was es vorher war (hier: irgendein Viech,
+        // also über die Tabelle seiner wirklichen Klasse), nie als die gesuchte Klasse.
+        let anfang = haupt.find("
+ois_na").expect("der Block für: es ist keines");
+        let nein = &haupt[anfang..anfang + haupt[anfang..].find("br label").unwrap()];
+        assert!(nein.contains("call void @oida.lass.objekt(ptr") && !nein.contains("@oida.lass.v"), "{nein}");
+        assert!(haupt.contains("= phi ptr ["), "{haupt}");
     }
 }

@@ -480,7 +480,7 @@ impl Pruefer<'_> {
         }
         let nummer = self.typen.strukturen.len() as u32;
         let voller_name = self.fassungs_name(name, &typen);
-        self.typen.strukturen.push(StrukturInfo { name: voller_name.clone(), felder: Vec::new() });
+        self.typen.strukturen.push(StrukturInfo { name: voller_name.clone(), felder: Vec::new(), werte: Vec::new() });
         self.struktur_fassungen.insert(schluessel, nummer);
         self.struktur_aus.insert(nummer, (name.to_string(), typen.clone()));
 
@@ -663,6 +663,139 @@ impl Pruefer<'_> {
                 _ => Typ::Fehler,
             }
         }
+    }
+
+    fn ist_aufzaehlung(&self, typ: Typ) -> bool {
+        self.typen.struktur(typ).is_some_and(|s| !s.werte.is_empty())
+    }
+
+    /// `Foab.ROT`: Steht da der Name einer Aufzählung mit einem ihrer Werte dahinter, wird daraus
+    /// der Wert (im Speicher: die Struktur mit der Nummer seiner Stelle).
+    fn aufzaehlungswert(&mut self, ausdruck: &mut Ausdruck) -> Option<Typ> {
+        let AusdruckArt::Feld { objekt, name, .. } = &ausdruck.art else { return None };
+        let AusdruckArt::Variable { name: typ_name, .. } = &objekt.art else { return None };
+        if self.ist_variable(typ_name) {
+            return None;
+        }
+        let nummer = *self.struktur_nummern.get(typ_name)?;
+        let werte = self.typen.strukturen[nummer as usize].werte.clone();
+        if werte.is_empty() {
+            return None;
+        }
+        let (typ_name, name, pos) = (typ_name.clone(), name.clone(), ausdruck.pos);
+        let Some(stelle) = werte.iter().position(|wert| *wert == name) else {
+            self.melde(pos, format!("'{typ_name}' hot kan Wert '{name}'. Es gibt: {}.", werte.join(", ")));
+            ausdruck.typ = Typ::Fehler;
+            return Some(Typ::Fehler);
+        };
+        let mut zahl = Ausdruck::neu(AusdruckArt::Zoi(stelle as i64), pos);
+        zahl.typ = Typ::Zoi;
+        ausdruck.art = AusdruckArt::Bau { struktur: nummer, argumente: vec![zahl] };
+        ausdruck.typ = Typ::Struktur(nummer);
+        Some(ausdruck.typ)
+    }
+
+    /// `JE NOCHDEM wert BEI ... DAUN ... [SUNST ...] PASST SCHO`. Daraus wird, was man sonst von
+    /// Hand schriebe: der Wert einmal in eine eigene Variable, dann eine Kette aus WENN und
+    /// SUNST WENN. So gilt dafür alles, was für WENN gilt, und die Code-Erzeugung braucht nichts
+    /// Eigenes. Bei einer Aufzählung wird zusätzlich geprüft, dass kein Wert vergessen ist.
+    fn je_nachdem(&mut self, anweisung: &mut Anweisung) {
+        let pos = anweisung.pos;
+        let alt = std::mem::replace(&mut anweisung.art, AnweisungArt::Folge(Vec::new()));
+        let AnweisungArt::JeNachdem { wert, faelle, sunst } = alt else { unreachable!() };
+        // Der Name lässt sich im Programm nicht hinschreiben und ist für jede Stelle ein anderer.
+        let name = format!("#je{}:{}", pos.zeile, pos.spalte);
+        let mut deklaration =
+            Anweisung { art: AnweisungArt::Deklaration { name: name.clone(), angabe: None, wert, id: 0 }, pos };
+        self.anweisung(&mut deklaration);
+        let typ = match &deklaration.art {
+            AnweisungArt::Deklaration { wert, .. } => wert.typ,
+            _ => Typ::Fehler,
+        };
+
+        // Bei einer Aufzählung: Welche Werte kommen vor, welche fehlen, welche doppelt?
+        let (typ_name, werte) =
+            self.typen.struktur(typ).map(|s| (s.name.clone(), s.werte.clone())).unwrap_or_default();
+        let mut alle_da = false;
+        if !werte.is_empty() {
+            let mut gesehen: Vec<String> = Vec::new();
+            let mut doppelt: Vec<(Position, String)> = Vec::new();
+            for fall in &faelle {
+                for fall_wert in &fall.werte {
+                    if let FallWert::Gleich(a) = fall_wert
+                        && let AusdruckArt::Feld { objekt, name: wert_name, .. } = &a.art
+                        && let AusdruckArt::Variable { name: t, .. } = &objekt.art
+                        && *t == typ_name
+                        && werte.contains(wert_name)
+                    {
+                        if gesehen.contains(wert_name) {
+                            doppelt.push((a.pos, wert_name.clone()));
+                        } else {
+                            gesehen.push(wert_name.clone());
+                        }
+                    }
+                }
+            }
+            for (wo, wert_name) in doppelt {
+                let meldung = format!("'{typ_name}.{wert_name}' kummt in dem {} zwamoi vua.", self.wort(Schluessel::Match));
+                self.melde(wo, meldung);
+            }
+            let fehlt: Vec<String> =
+                werte.iter().filter(|w| !gesehen.contains(w)).map(|w| format!("{typ_name}.{w}")).collect();
+            alle_da = fehlt.is_empty();
+            if !alle_da && sunst.is_none() {
+                let meldung = format!(
+                    "Bei dem {} fehlt no: {}. Schreib dafia an Foi mit {} oda {} fia ollas aundare.",
+                    self.wort(Schluessel::Match),
+                    fehlt.join(", "),
+                    self.wort(Schluessel::Case),
+                    self.wort(Schluessel::Else)
+                );
+                self.melde(pos, meldung);
+            }
+        }
+
+        // Die Kette von hinten aufbauen: Jeder Fall ist ein WENN, der Rest steht in seinem SUNST.
+        let zwei = |op: BinaerOp, links: Ausdruck, rechts: Ausdruck, wo: Position| {
+            Ausdruck::neu(AusdruckArt::Binaer { op, links: Box::new(links), rechts: Box::new(rechts) }, wo)
+        };
+        let variable = |wo: Position| Ausdruck::neu(AusdruckArt::Variable { name: name.clone(), id: 0 }, wo);
+        let ohne_sunst = sunst.is_none();
+        let mut rest: Vec<Anweisung> = sunst.unwrap_or_default();
+        let anzahl = faelle.len();
+        for (i, fall) in faelle.into_iter().enumerate().rev() {
+            let mut bedingung: Option<Ausdruck> = None;
+            for fall_wert in fall.werte {
+                let (wo, eine) = match fall_wert {
+                    FallWert::Gleich(a) => (a.pos, zwei(BinaerOp::Gleich, variable(a.pos), a.clone(), a.pos)),
+                    FallWert::Bereich(von, bis) => {
+                        let wo = von.pos;
+                        let ab = zwei(BinaerOp::GroesserGleich, variable(wo), von, wo);
+                        let hoechstens = zwei(BinaerOp::KleinerGleich, variable(wo), bis, wo);
+                        (wo, zwei(BinaerOp::Und, ab, hoechstens, wo))
+                    }
+                };
+                bedingung = Some(match bedingung {
+                    None => eine,
+                    Some(bisher) => zwei(BinaerOp::Oda, bisher, eine, wo),
+                });
+            }
+            let mut bedingung = bedingung.expect("der Parser verlangt mindestens einen Wert je Fall");
+            if alle_da && ohne_sunst && i == anzahl - 1 {
+                // Alle Werte der Aufzählung kommen vor: Der letzte Fall ist "alles andere". So weiß
+                // auch die Prüfung, ob jeder Weg etwas zurückgibt, dass kein Fall fehlen kann.
+                self.ausdruck(&mut bedingung);
+                rest = fall.block;
+            } else {
+                rest = vec![Anweisung { art: AnweisungArt::Wenn { bedingung, dann: fall.block, sunst: rest }, pos: fall.pos }];
+            }
+        }
+        for teil in &mut rest {
+            self.anweisung(teil);
+        }
+        let mut teile = vec![deklaration];
+        teile.extend(rest);
+        anweisung.art = AnweisungArt::Folge(teile);
     }
 
     /// Der erste Typ in `typ`, bei dem man nicht sagen kann, ob zwei Werte gleich sind
@@ -1031,7 +1164,8 @@ impl Pruefer<'_> {
                 continue;
             }
             self.struktur_nummern.insert(s.name.clone(), gueltig.len() as u32);
-            self.typen.strukturen.push(StrukturInfo { name: s.name.clone(), felder: Vec::new() });
+            let werte = s.werte.iter().map(|(wert, _)| wert.clone()).collect();
+            self.typen.strukturen.push(StrukturInfo { name: s.name.clone(), felder: Vec::new(), werte });
             gueltig.push(s);
         }
         // Auch die Namen der Klassen müssen bekannt sein, bevor Felder aufgelöst werden.
@@ -1810,7 +1944,16 @@ impl Pruefer<'_> {
 
     fn anweisung(&mut self, anweisung: &mut Anweisung) {
         let pos = anweisung.pos;
+        if matches!(anweisung.art, AnweisungArt::JeNachdem { .. }) {
+            return self.je_nachdem(anweisung);
+        }
         match &mut anweisung.art {
+            AnweisungArt::Folge(teile) => {
+                for teil in teile {
+                    self.anweisung(teil);
+                }
+            }
+            AnweisungArt::JeNachdem { .. } => unreachable!("gleich oben erledigt"),
             AnweisungArt::Deklaration { name, angabe, wert, id } => {
                 self.probier_erlaubt = true;
                 let wert_typ = self.ausdruck(wert);
@@ -2362,6 +2505,10 @@ impl Pruefer<'_> {
         {
             return self.ist_nix(ausdruck);
         }
+        // `Foab.ROT`: ein Wert einer Aufzählung.
+        if let Some(typ) = self.aufzaehlungswert(ausdruck) {
+            return typ;
+        }
         // Ein fester Wert: Seine Rechnung kommt an die Stelle des Namens.
         if let AusdruckArt::Variable { name, .. } = &ausdruck.art
             && !self.ist_variable(name)
@@ -2520,10 +2667,58 @@ impl Pruefer<'_> {
                 let funktion = *funktion;
                 self.eingebaut(funktion, argumente, pos)
             }
+            AusdruckArt::Als { objekt, angabe, klasse } => {
+                let angabe = angabe.clone();
+                let von = self.ausdruck(objekt);
+                let ziel = self.typ_aus(&angabe);
+                let wort = self.wort(Schluessel::As).to_string();
+                match (von, ziel) {
+                    (Typ::Fehler, _) | (_, Typ::Fehler) => Typ::Fehler,
+                    // Nach oben oder nach unten in derselben Familie: Das kann zutreffen.
+                    (Typ::Klasse(a), Typ::Klasse(b)) if self.typen.erbt_von(b, a) || self.typen.erbt_von(a, b) => {
+                        *klasse = b;
+                        self.typen.vielleicht_von(ziel)
+                    }
+                    (Typ::Klasse(_), Typ::Klasse(_)) => {
+                        let meldung = format!(
+                            "{} kaun nia {} sei: De zwa hom nix mitanaund z'tuan.",
+                            self.typ_name(von).replacen("a ", "A ", 1),
+                            self.typ_name(ziel)
+                        );
+                        self.melde(pos, meldung);
+                        Typ::Fehler
+                    }
+                    (Typ::Klasse(_), _) => {
+                        let meldung =
+                            format!("Noch {wort} ghört a {}, ned {}.", self.wort(Schluessel::Class), self.typ_name(ziel));
+                        self.melde(pos, meldung);
+                        Typ::Fehler
+                    }
+                    _ => {
+                        let mut meldung = format!(
+                            "{wort} geht nur mit an Objekt von ana {}, des do is oba {}.",
+                            self.wort(Schluessel::Class),
+                            self.typ_name(von)
+                        );
+                        if matches!(von, Typ::Vielleicht { .. }) {
+                            meldung.push_str(&format!(
+                                " Schau z'erst noch, ob's {nix} is ({} x != {nix} {} ...).",
+                                self.wort(Schluessel::If),
+                                self.wort(Schluessel::Then),
+                                nix = self.wort(Schluessel::Null)
+                            ));
+                        }
+                        self.melde(objekt.pos, meldung);
+                        Typ::Fehler
+                    }
+                }
+            }
             AusdruckArt::Umwandlung { ziel, innen } => {
                 let ziel = *ziel;
                 let von = self.ausdruck(innen);
+                // Eine Aufzählung wird zum Namen ihres Werts (KETTN) oder zu seiner Nummer (ZOI).
                 let erlaubt = von == ziel
+                    || (self.ist_aufzaehlung(von) && matches!(ziel, Typ::Kettn | Typ::Zoi))
                     || matches!(
                         (von, ziel),
                         (Typ::Zoi, Typ::Kommazoi)
@@ -2940,6 +3135,19 @@ impl Pruefer<'_> {
         let AusdruckArt::Aufruf { name, argumente } = &mut ausdruck.art else { unreachable!() };
         let name = name.clone();
         let mut argumente = std::mem::take(argumente);
+        // Eine Aufzählung hat genau ihre Werte; bauen lässt sich keiner.
+        let werte = self.typen.strukturen[nummer as usize].werte.clone();
+        if !werte.is_empty() {
+            let alle: Vec<String> = werte.iter().map(|wert| format!("{name}.{wert}")).collect();
+            let meldung = format!(
+                "'{name}' is a {}, do gibt's nix zum Baun. Nimm an von ihre Werte: {}.",
+                self.wort(Schluessel::Enum),
+                alle.join(", ")
+            );
+            self.melde(ausdruck.pos, meldung);
+            ausdruck.typ = Typ::Fehler;
+            return Typ::Fehler;
+        }
         let typen: Vec<Typ> = match geprueft {
             Some(typen) => typen,
             None => argumente.iter_mut().map(|a| self.ausdruck(a)).collect(),
@@ -3384,6 +3592,7 @@ fn verlaesst(block: &[Anweisung]) -> bool {
         AnweisungArt::Wenn { dann, sunst, .. } | AnweisungArt::Probier { dann, sunst, .. } => {
             verlaesst(dann) && verlaesst(sunst)
         }
+        AnweisungArt::Folge(teile) => verlaesst(teile),
         _ => false,
     })
 }
@@ -3401,6 +3610,15 @@ fn sammle_zugewiesene(block: &[Anweisung], namen: &mut Vec<String>) {
                 sammle_zugewiesene(dann, namen);
                 sammle_zugewiesene(sunst, namen);
             }
+            AnweisungArt::Folge(teile) => sammle_zugewiesene(teile, namen),
+            AnweisungArt::JeNachdem { faelle, sunst, .. } => {
+                for fall in faelle {
+                    sammle_zugewiesene(&fall.block, namen);
+                }
+                if let Some(sunst) = sunst {
+                    sammle_zugewiesene(sunst, namen);
+                }
+            }
             AnweisungArt::Solong { rumpf, .. }
             | AnweisungArt::Fia { rumpf, .. }
             | AnweisungArt::FiaJede { rumpf, .. } => sammle_zugewiesene(rumpf, namen),
@@ -3416,6 +3634,7 @@ fn gibt_sicher_zruck(block: &[Anweisung]) -> bool {
         AnweisungArt::Wenn { dann, sunst, .. } | AnweisungArt::Probier { dann, sunst, .. } => {
             gibt_sicher_zruck(dann) && gibt_sicher_zruck(sunst)
         }
+        AnweisungArt::Folge(teile) => gibt_sicher_zruck(teile),
         _ => false,
     })
 }
@@ -4264,5 +4483,68 @@ mod tests {
         ok(&format!("{J}SCHREIB(j(1), j(\"a\")) OIDA"));
         let f = fehler(&format!("{P}{J}SCHREIB(j(K(1))) OIDA"));
         assert!(f.meldung.starts_with("A K geht ned ois JSON.") && f.meldung.ends_with("(bei 'j VON K')"), "{}", f.meldung);
+    }
+
+    const FOAB: &str = "AUFZÖHLUNG Foab\n ROT, GRÜN, BLAU\nPASST SCHO\n";
+
+    #[test]
+    fn aufzaehlungen() {
+        let programm = ok(&format!("{FOAB}SOG AU f = Foab.GRÜN OIDA\nSOG AU g = f == Foab.ROT OIDA\nSOG AU t = KETTN(f) + $\"{{f}}\" OIDA\nSOG AU z = ZOI(f) + 1 OIDA"));
+        // Der Wert ist die Struktur der Aufzählung mit der Nummer seiner Stelle.
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[0].art else { panic!() };
+        assert_eq!(wert.typ, Typ::Struktur(0));
+        let AusdruckArt::Bau { argumente, .. } = &wert.art else { panic!("{:?}", wert.art) };
+        assert!(matches!(argumente[0].art, AusdruckArt::Zoi(1)));
+        assert_eq!(programm.typen.strukturen[0].werte, vec!["ROT", "GRÜN", "BLAU"]);
+        assert_eq!(fehler(&format!("{FOAB}SOG AU f = Foab.LILA OIDA")).meldung, "'Foab' hot kan Wert 'LILA'. Es gibt: ROT, GRÜN, BLAU.");
+        assert!(fehler(&format!("{FOAB}SOG AU f = Foab(0) OIDA")).meldung.starts_with("'Foab' is a AUFZÖHLUNG, do gibt's nix zum Baun."));
+        assert_eq!(fehler(&format!("{FOAB}SOG AU g = Foab.ROT == 0 OIDA")).meldung, "A Foab == a ZOI? Des geht si ned aus.");
+        assert_eq!(fehler(&format!("{FOAB}SOG AU g = Foab.ROT < Foab.BLAU OIDA")).meldung, "A Foab < a Foab? Des geht si ned aus.");
+        // Eine Variable mit dem Namen der Aufzählung geht vor (ihr Feld wird gesucht, nicht der Wert).
+        assert!(fehler(&format!("{FOAB}STRUKTUR P\n x ZOI\nPASST SCHO\nFUNKTIAUN f(Foab P) GIBT ZRUCK ZOI\n GIB ZRUCK Foab.ROT OIDA\nPASST SCHO")).meldung.contains("ROT"));
+    }
+
+    #[test]
+    fn je_nachdem() {
+        const NAM: &str = "FUNKTIAUN nam(f Foab) GIBT ZRUCK ZOI\n JE NOCHDEM f\n  BEI Foab.ROT DAUN\n   GIB ZRUCK 1 OIDA\n";
+        // Kommt jeder Wert vor, gibt jeder Weg etwas zurück: Der letzte Fall ist "alles andere".
+        let programm = ok(&format!("{FOAB}{NAM}  BEI Foab.GRÜN, Foab.BLAU DAUN\n   GIB ZRUCK 2 OIDA\n PASST SCHO\nPASST SCHO"));
+        let AnweisungArt::Folge(teile) = &programm.funktionen[0].rumpf[0].art else { panic!() };
+        assert!(matches!(teile[0].art, AnweisungArt::Deklaration { .. }));
+        let AnweisungArt::Wenn { sunst, .. } = &teile[1].art else { panic!() };
+        assert!(matches!(sunst[0].art, AnweisungArt::GibZruck { .. }));
+        // Fehlt einer, sagt die Meldung, welcher; mit SUNST fehlt nichts.
+        let f = fehler(&format!("{FOAB}SOG AU f = Foab.ROT OIDA\nJE NOCHDEM f\n BEI Foab.BLAU DAUN\nPASST SCHO"));
+        assert_eq!(f.meldung, "Bei dem JE NOCHDEM fehlt no: Foab.ROT, Foab.GRÜN. Schreib dafia an Foi mit BEI oda SUNST fia ollas aundare.");
+        assert_eq!(f.pos, Position::neu(5, 1));
+        ok(&format!("{FOAB}SOG AU f = Foab.ROT OIDA\nJE NOCHDEM f\n BEI Foab.BLAU DAUN\n SUNST\nPASST SCHO"));
+        let f = fehler(&format!("{FOAB}SOG AU f = Foab.ROT OIDA\nJE NOCHDEM f\n BEI Foab.BLAU, Foab.ROT DAUN\n BEI Foab.GRÜN, Foab.BLAU DAUN\nPASST SCHO"));
+        assert_eq!(f.meldung, "'Foab.BLAU' kummt in dem JE NOCHDEM zwamoi vua.");
+        // Ohne SUNST und ohne alle Werte gibt nicht jeder Weg etwas zurück.
+        let alle = pruefe(&format!("{FOAB}{NAM} PASST SCHO\nPASST SCHO")).unwrap_err();
+        assert!(alle.iter().any(|f| f.meldung.contains("ned jeda Weg")), "{alle:?}");
+        // Mit Zahlen und Texten, mit Bereichen; die Werte müssen zum Typ passen.
+        ok("SOG AU x = 5 OIDA\nJE NOCHDEM x\n BEI 1, 2 DAUN\n BEI 3 BIS 9 DAUN\nPASST SCHO\nJE NOCHDEM \"a\"\n BEI \"a\" BIS \"f\" DAUN\nPASST SCHO");
+        assert_eq!(fehler("JE NOCHDEM 5\n BEI \"a\" DAUN\nPASST SCHO").meldung, "A ZOI == a KETTN? Des geht si ned aus.");
+        // Eine Variable aus einem Fall gibt es im nächsten nicht mehr.
+        assert!(fehler("JE NOCHDEM 5\n BEI 1 DAUN\n  SOG AU a = 1 OIDA\n BEI 2 DAUN\n  SCHREIB(a) OIDA\nPASST SCHO").meldung.contains("'a' kenn i ned"));
+    }
+
+    #[test]
+    fn objekt_als_klasse() {
+        const VIECHA: &str = "KLASSE Viech\n nam KETTN\nPASST SCHO\nKLASSE Hund ERBT VON Viech\nPASST SCHO\nKLASSE Auto\n ps ZOI\nPASST SCHO\n";
+        let programm = ok(&format!("{VIECHA}SOG AU v = Viech(\"a\") OIDA\nSOG AU h = v OIS Hund OIDA\nSOG AU j = v IS A Hund OIDA\nSOG AU o = Hund(\"b\") OIS Viech OIDA"));
+        // Heraus kommt VIELLEICHT Hund: Es kann ja auch keiner sein.
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[1].art else { panic!() };
+        assert_eq!(programm.typen.innen(wert.typ), Some(Typ::Klasse(1)));
+        assert!(matches!(wert.art, AusdruckArt::Als { klasse: 1, .. }));
+        let AnweisungArt::Deklaration { wert, .. } = &programm.haupt[2].art else { panic!() };
+        assert_eq!(wert.typ, Typ::Jona);
+        assert_eq!(
+            fehler(&format!("{VIECHA}SOG AU v = Viech(\"a\") OIDA\nSOG AU a = v OIS Auto OIDA")).meldung,
+            "A Viech kaun nia a Auto sei: De zwa hom nix mitanaund z'tuan."
+        );
+        assert_eq!(fehler(&format!("{VIECHA}SOG AU a = 5 OIS Hund OIDA")).meldung, "OIS geht nur mit an Objekt von ana KLASSE, des do is oba a ZOI.");
+        assert!(fehler(&format!("{VIECHA}SOG AU v = Viech(\"a\") OIDA\nSOG AU h Hund = v OIS Hund OIDA")).meldung.contains("VIELLEICHT Hund"));
     }
 }

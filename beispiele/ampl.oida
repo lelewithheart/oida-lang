@@ -1,0 +1,90 @@
+# Eine Ampel als Aufzählung: Sie kann genau vier Zustände haben, und der
+# Compiler passt auf, dass bei JE NOCHDEM keiner vergessen wird. Am Schluss
+# Fahrzeuge, bei denen gefragt wird, was sie wirklich sind (OIS, IS A).
+
+AUFZÖHLUNG Ampl
+    ROT
+    ROT_GÖB
+    GRÜN
+    GÖB
+PASST SCHO
+
+# Worauf die Ampel als Nächstes schaltet. Kommt einmal ein fünfter Zustand
+# dazu, meldet der Compiler hier, dass ein Fall fehlt.
+FUNKTIAUN nächste(a Ampl) GIBT ZRUCK Ampl
+    JE NOCHDEM a
+        BEI Ampl.ROT DAUN
+            GIB ZRUCK Ampl.ROT_GÖB OIDA
+        BEI Ampl.ROT_GÖB DAUN
+            GIB ZRUCK Ampl.GRÜN OIDA
+        BEI Ampl.GRÜN DAUN
+            GIB ZRUCK Ampl.GÖB OIDA
+        BEI Ampl.GÖB DAUN
+            GIB ZRUCK Ampl.ROT OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN derf_foan(a Ampl) GIBT ZRUCK JONA
+    JE NOCHDEM a
+        BEI Ampl.GRÜN DAUN
+            GIB ZRUCK WOAHR OIDA
+        SUNST
+            GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+PASST SCHO
+
+# Wie lange ein Zustand dauert, in Sekunden.
+FUNKTIAUN dauer(a Ampl) GIBT ZRUCK ZOI
+    JE NOCHDEM a
+        BEI Ampl.ROT, Ampl.GRÜN DAUN
+            GIB ZRUCK 20 OIDA
+        BEI Ampl.ROT_GÖB, Ampl.GÖB DAUN
+            GIB ZRUCK 2 OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU ampl = Ampl.ROT OIDA
+SOG AU zeit = 0 OIDA
+FIA i VON 1 BIS 6 TUA
+    SCHREIB($"noch {zeit} Sekundn: {ampl} (foan: {derf_foan(ampl)})") OIDA
+    zeit += dauer(ampl) OIDA
+    ampl = nächste(ampl) OIDA
+PASST SCHO
+
+# Mit Zahlen geht JE NOCHDEM auch, samt Bereichen.
+FUNKTIAUN strof(z_schnö ZOI) GIBT ZRUCK KETTN
+    JE NOCHDEM z_schnö
+        BEI 0 DAUN
+            GIB ZRUCK "nix" OIDA
+        BEI 1 BIS 10 DAUN
+            GIB ZRUCK "20 Euro" OIDA
+        BEI 11 BIS 30 DAUN
+            GIB ZRUCK "50 Euro" OIDA
+        SUNST
+            GIB ZRUCK "Auzeige" OIDA
+    PASST SCHO
+PASST SCHO
+SCHREIB(strof(0), strof(7), strof(30), strof(55)) OIDA
+
+# Was ein Objekt wirklich ist.
+KLASSE Foazeig
+    nam KETTN
+PASST SCHO
+
+KLASSE Auto ERBT VON Foazeig
+    sitz ZOI = 5
+PASST SCHO
+
+KLASSE Radl ERBT VON Foazeig
+    gäng ZOI = 21
+PASST SCHO
+
+SOG AU schlaunga LISTN VON Foazeig = [Auto("Golf"), Radl("Puch"), Auto("Bus")] OIDA
+FIA JEDE foazeig IN schlaunga TUA
+    SOG AU auto = foazeig OIS Auto OIDA
+    WENN auto != NIX DAUN
+        SCHREIB($"{foazeig.nam}: a Auto mit {auto.sitz} Sitz") OIDA
+    SUNST WENN foazeig IS A Radl DAUN
+        SCHREIB($"{foazeig.nam}: a Radl, des derf am Radlweg vorbei") OIDA
+    PASST SCHO
+PASST SCHO

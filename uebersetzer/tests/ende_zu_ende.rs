@@ -91,8 +91,14 @@ fn befehl(exe: &Path, quelle: Option<&Path>) -> Command {
     // Programme mit Tönen bleiben im Test stumm.
     befehl.env("OIDA_TON_AUS", "1");
     // Programme, die Dateien schreiben, tun das im Arbeitsordner des Tests, nicht im Projekt.
+    // Auch der Temp-Ordner ist für sie der Arbeitsordner des Tests: Zwei Tests lassen dasselbe
+    // Programm zur selben Zeit laufen, und im echten Temp-Ordner würden sie sich die Dateien
+    // gegenseitig überschreiben und löschen.
     if let Some(ordner) = exe.parent() {
         befehl.current_dir(ordner);
+        for name in ["TMPDIR", "TMP", "TEMP"] {
+            befehl.env(name, ordner);
+        }
     }
     match quelle.map(|q| q.with_extension("eingabe")).filter(|e| e.is_file()) {
         Some(eingabe) => befehl.stdin(fs::File::open(eingabe).unwrap()),

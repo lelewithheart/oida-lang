@@ -442,6 +442,10 @@ impl Parser<'_> {
                     let struktur = self.struktur()?;
                     programm.strukturen.push(struktur);
                 }
+                TokenArt::Schluessel(Schluessel::Enum) => {
+                    let aufzaehlung = self.aufzaehlung()?;
+                    programm.strukturen.push(aufzaehlung);
+                }
                 TokenArt::Schluessel(Schluessel::Class) => {
                     let klasse = self.klasse()?;
                     programm.klassen.push(klasse);
@@ -486,7 +490,79 @@ impl Parser<'_> {
             felder.push(FeldDef { name: feld, angabe, pos: feld_pos });
         }
         self.erwarte_end(pos, Schluessel::Struct)?;
-        Ok(StrukturDef { name, typ_parameter, felder, pos })
+        Ok(StrukturDef { name, typ_parameter, felder, werte: Vec::new(), pos })
+    }
+
+    /// `AUFZÖHLUNG Foab ROT, GRÜN, BLAU PASST SCHO`: ein eigener Typ mit genau diesen Werten.
+    /// Die Werte stehen untereinander oder mit Beistrich dazwischen.
+    fn aufzaehlung(&mut self) -> Result<StrukturDef, Fehler> {
+        let pos = self.weiter().pos; // AUFZÖHLUNG
+        let wort = self.wort(Schluessel::Enum).to_string();
+        let (name, _) = self.name(&format!("de {wort}"))?;
+        let mut werte: Vec<(String, Position)> = Vec::new();
+        while !self.ist(Schluessel::End) && self.aktuell().art != TokenArt::DateiEnde {
+            let (wert, wert_pos) = self.name("den Wert")?;
+            if werte.iter().any(|(w, _)| *w == wert) {
+                return Err(Fehler::neu(wert_pos, format!("Den Wert '{wert}' gibt's in '{name}' scho.")));
+            }
+            werte.push((wert, wert_pos));
+            // Ein Beistrich oder ein OIDA hinter dem Wert darf sein, muss aber nicht.
+            if self.aktuell().art == TokenArt::Komma {
+                self.weiter();
+            } else {
+                self.nimm(Schluessel::Oida);
+            }
+        }
+        if werte.is_empty() {
+            return Err(Fehler::neu(pos, format!("A {wort} braucht mindestens an Wert.")));
+        }
+        self.erwarte_end(pos, Schluessel::Enum)?;
+        // Im Speicher ist ein Wert die Nummer seiner Stelle, verpackt in eine Struktur mit einem
+        // Feld. Dessen Name lässt sich im Programm nicht hinschreiben.
+        let felder = vec![FeldDef { name: "#wert".to_string(), angabe: TypAngabe::Einfach(Typ::Zoi), pos }];
+        Ok(StrukturDef { name, typ_parameter: Vec::new(), felder, werte, pos })
+    }
+
+    /// Das JE NOCHDEM ist schon gelesen:
+    /// `JE NOCHDEM wert  BEI a, b DAUN ...  BEI c BIS d DAUN ...  [SUNST ...]  PASST SCHO`
+    fn je_nachdem(&mut self, pos: Position) -> Result<Anweisung, Fehler> {
+        let wert = self.ausdruck()?;
+        let mut faelle = Vec::new();
+        while self.ist(Schluessel::Case) {
+            let fall_pos = self.weiter().pos;
+            let mut werte = Vec::new();
+            loop {
+                let von = self.summe()?;
+                werte.push(if self.nimm(Schluessel::To) { FallWert::Bereich(von, self.summe()?) } else { FallWert::Gleich(von) });
+                if self.aktuell().art != TokenArt::Komma {
+                    break;
+                }
+                self.weiter();
+            }
+            self.erwarte_schluessel(Schluessel::Then)?;
+            let block = self.block()?;
+            faelle.push(Fall { werte, block, pos: fall_pos });
+        }
+        if faelle.is_empty() {
+            return Err(Fehler::neu(
+                self.aktuell().pos,
+                format!(
+                    "Noch {} ghört mindestens a Foi: {} wert {} ...",
+                    self.wort(Schluessel::Match),
+                    self.wort(Schluessel::Case),
+                    self.wort(Schluessel::Then)
+                ),
+            ));
+        }
+        let sunst = if self.nimm(Schluessel::Else) { Some(self.block()?) } else { None };
+        if self.ist(Schluessel::Case) {
+            return Err(Fehler::neu(
+                self.aktuell().pos,
+                format!("Noch {} kummt ka {} mehr: {} ghört gaunz noch hintn.", self.wort(Schluessel::Else), self.wort(Schluessel::Case), self.wort(Schluessel::Else)),
+            ));
+        }
+        self.erwarte_end(pos, Schluessel::Match)?;
+        Ok(Anweisung { art: AnweisungArt::JeNachdem { wert, faelle, sunst }, pos })
     }
 
     fn klasse(&mut self) -> Result<KlassenDef, Fehler> {
@@ -559,8 +635,11 @@ impl Parser<'_> {
                 TokenArt::DateiEnde
                 | TokenArt::Schluessel(Schluessel::End)
                 | TokenArt::Schluessel(Schluessel::Else)
-                | TokenArt::Schluessel(Schluessel::Catch) => return Ok(anweisungen),
-                TokenArt::Schluessel(wort @ (Schluessel::Function | Schluessel::Struct | Schluessel::Class)) => {
+                | TokenArt::Schluessel(Schluessel::Catch)
+                | TokenArt::Schluessel(Schluessel::Case) => return Ok(anweisungen),
+                TokenArt::Schluessel(
+                    wort @ (Schluessel::Function | Schluessel::Struct | Schluessel::Class | Schluessel::Enum),
+                ) => {
                     return Err(Fehler::neu(
                         token.pos,
                         format!("A {} kaunst ned in wos aundas einebaun, de ghört gaunz noch außn.", self.wort(wort)),
@@ -641,6 +720,10 @@ impl Parser<'_> {
             TokenArt::Schluessel(Schluessel::If) => {
                 self.weiter();
                 return self.wenn(pos);
+            }
+            TokenArt::Schluessel(Schluessel::Match) => {
+                self.weiter();
+                return self.je_nachdem(pos);
             }
             TokenArt::Schluessel(Schluessel::While) => {
                 self.weiter();
@@ -1045,6 +1128,26 @@ impl Parser<'_> {
                     let argumente = self.argumente()?;
                     ausdruck = Ausdruck::neu(AusdruckArt::WertAufruf { funktion: Box::new(ausdruck), argumente }, pos);
                 }
+                // objekt OIS Klasse: das Objekt als diese Klasse, oder NIX, wenn es keines davon ist.
+                TokenArt::Schluessel(Schluessel::As) => {
+                    let pos = self.weiter().pos;
+                    let angabe = self.typ_kern()?;
+                    ausdruck = Ausdruck::neu(AusdruckArt::Als { objekt: Box::new(ausdruck), angabe, klasse: 0 }, pos);
+                }
+                // objekt IS A Klasse: dasselbe als Frage, also (objekt OIS Klasse) != NIX.
+                TokenArt::Schluessel(Schluessel::Is) => {
+                    let pos = self.weiter().pos;
+                    let angabe = self.typ_kern()?;
+                    let als = Ausdruck::neu(AusdruckArt::Als { objekt: Box::new(ausdruck), angabe, klasse: 0 }, pos);
+                    ausdruck = Ausdruck::neu(
+                        AusdruckArt::Binaer {
+                            op: BinaerOp::Ungleich,
+                            links: Box::new(als),
+                            rechts: Box::new(Ausdruck::neu(AusdruckArt::Nix, pos)),
+                        },
+                        pos,
+                    );
+                }
                 _ => return Ok(ausdruck),
             }
         }
@@ -1312,6 +1415,10 @@ mod tests {
                 format!("{}({})", klammern(funktion), argumente.join(", "))
             }
             AusdruckArt::AusJson { angabe, text } => format!("AUS JSON VON {angabe:?}({})", klammern(text)),
+            AusdruckArt::Als { objekt, angabe, .. } => match angabe {
+                TypAngabe::Name { name, .. } => format!("({} OIS {name})", klammern(objekt)),
+                _ => format!("({} OIS ?)", klammern(objekt)),
+            },
             AusdruckArt::Erzeug { argumente, .. } => {
                 let argumente: Vec<String> = argumente.iter().map(klammern).collect();
                 format!("NEU({})", argumente.join(", "))
@@ -1756,7 +1863,40 @@ PASST SCHO");
         assert_eq!(fehler("x = AUS JSON Punkt(t) OIDA").meldung, "Do ghört VON her, ned 'Punkt'.");
         assert_eq!(fehler("x = AUS JSON VON Punkt OIDA").meldung, "Do ghört a '(' her, ned OIDA.");
         assert_eq!(fehler("x = AUS JSON VON Punkt(t OIDA").meldung, "Do ghört a ')' her, ned OIDA.");
-        // Ohne Klammer dahinter sind OIS und JSON ganz normale Namen.
-        assert_eq!(ausdruck("OIS + JSON"), "(OIS + JSON)");
+        // JSON und SCHEES allein sind ganz normale Namen (OIS ist seit OIS Klasse ein Wort der Sprache).
+        assert_eq!(ausdruck("JSON + SCHEES"), "(JSON + SCHEES)");
+    }
+
+    #[test]
+    fn aufzaehlung_je_nachdem_und_ois() {
+        // Die Werte stehen untereinander oder mit Beistrich dazwischen; im Speicher ist es eine Struktur.
+        let p = parse("AUFZÖHLUNG Foab\n ROT, GRÜN\n BLAU\nPASST SCHO");
+        let namen: Vec<&str> = p.strukturen[0].werte.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!((p.strukturen[0].name.as_str(), namen), ("Foab", vec!["ROT", "GRÜN", "BLAU"]));
+        assert_eq!(fehler("AUFZÖHLUNG Foab\nPASST SCHO").meldung, "A AUFZÖHLUNG braucht mindestens an Wert.");
+        assert_eq!(fehler("AUFZÖHLUNG Foab\n ROT, BLAU, ROT\nPASST SCHO").meldung, "Den Wert 'ROT' gibt's in 'Foab' scho.");
+        assert!(fehler("AUFZÖHLUNG Foab\n ROT\n").meldung.contains("PASST SCHO"));
+        assert!(fehler("WENN WOAHR DAUN\n AUFZÖHLUNG F\n A\n PASST SCHO\nPASST SCHO").meldung.contains("ghört gaunz noch außn"));
+
+        // JE NOCHDEM: Fälle mit einem oder mehreren Werten und mit Bereichen, SUNST ganz hinten.
+        let p = parse("JE NOCHDEM x\n BEI 1, 2 DAUN\n  a = 1 OIDA\n BEI 3 BIS 5 DAUN\n SUNST\n  a = 2 OIDA\nPASST SCHO");
+        let AnweisungArt::JeNachdem { faelle, sunst, .. } = &p.haupt[0].art else { panic!() };
+        assert_eq!((faelle.len(), faelle[0].werte.len(), faelle[0].block.len(), sunst.as_ref().map(Vec::len)), (2, 2, 1, Some(1)));
+        assert!(matches!(faelle[1].werte[0], FallWert::Bereich(..)));
+        assert_eq!(fehler("JE NOCHDEM x\nPASST SCHO").meldung, "Noch JE NOCHDEM ghört mindestens a Foi: BEI wert DAUN ...");
+        assert_eq!(
+            fehler("JE NOCHDEM x\n BEI 1 DAUN\n SUNST\n BEI 2 DAUN\nPASST SCHO").meldung,
+            "Noch SUNST kummt ka BEI mehr: SUNST ghört gaunz noch hintn."
+        );
+        assert!(fehler("JE NOCHDEM x\n BEI 1\nPASST SCHO").meldung.contains("DAUN"));
+        assert!(fehler("JE NOCHDEM x\n BEI 1 DAUN\n").meldung.contains("PASST SCHO"));
+
+        // OIS hängt direkt am Wert, wie ein Feld; IS A ist dasselbe als Frage.
+        assert_eq!(ausdruck("a.b OIS Hund"), "(a.b OIS Hund)");
+        assert_eq!(ausdruck("1 + a OIS Hund"), "(1 + (a OIS Hund))");
+        let frage = ausdruck("a IS A Hund");
+        assert!(frage.starts_with("((a OIS Hund) != "), "{frage}");
+        // Ohne ein A dahinter ist "is" ein Name wie jeder andere.
+        assert_eq!(ausdruck("is + 1"), "(is + 1)");
     }
 }

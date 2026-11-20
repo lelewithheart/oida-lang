@@ -1168,12 +1168,9 @@ mod tests {
         inhalt(super::super::dateien::oida_datei_fehler())
     }
 
-    /// Die Tests mit echten Verbindungen laufen einer nach dem anderen: Sonst schnappt sich
-    /// einer den Port, den ein anderer gerade freigegeben hat und für unbesetzt hält.
-    static NACHEINANDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
+    /// Die Tests mit echten Verbindungen laufen einer nach dem anderen (warum, steht bei `test_allein`).
     fn allein() -> std::sync::MutexGuard<'static, ()> {
-        NACHEINANDER.lock().unwrap_or_else(|vergiftet| vergiftet.into_inner())
+        crate::test_allein()
     }
 
     fn zahlen(liste: *mut ListenKopf) -> Vec<i64> {

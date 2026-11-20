@@ -1,0 +1,41 @@
+--- Werte
+GRÜN ROT [BLAU, ROT] Stift("Edding", BLAU, NIX)
+WOAHR FOISCH WOAHR WOAHR
+GRÜN 1 0 2 de Foab is GRÜN, de aundare BLAU
+BLAU blau rot FOISCH WOAHR
+Stift("Marker", GRÜN, GRÜN) WOAHR WOAHR
+WOAHR FOISCH 1
+--- ois JSON: da Nom vom Wert
+{"nam":"Marker","foab":"GRÜN","reserve":"GRÜN"} ["ROT","BLAU"] "GRÜN"
+Stift("Marker", GRÜN, GRÜN) BLAU [ROT, ROT]
+FEHLA("JSON: 'LILA' gibt's do ned. Es gibt: ROT, GRÜN, BLAU.")
+FEHLA("JSON: Bei 'foab': 'gelb' gibt's do ned. Es gibt: ROT, GRÜN, BLAU.")
+FEHLA("JSON: Do ghört a Text mit an von de Werte her, im JSON steht oba a gaunze Zoi.")
+--- JE NOCHDEM
+x -> MENÜ
+enter -> SPÜ
+p -> PAUSE
+p -> SPÜ
+x -> SPÜ
+esc -> AUS
+enter -> AUS
+Sehr gut Sehr gut Gut Befriedigend Befriedigend Genügend Nicht genügend Nicht genügend Nicht genügend
+(i frog: jo)
+  passt
+(i frog: na)
+  schod
+(i frog: vielleicht)
+(i frog: JO)
+  passt
+mittl
+224
+1 2 [2, 1]
+--- wos a Objekt wirklich is
+Bello is a Hund: Bello bringt's Stöckl Wau
+Minki is a Kotz mit 9 Lebn
+Waldi is a Hund: Waldi bringt's Stöckl Wiff
+Irgendwos is irgendwos: ...
+WOAHR WOAHR WOAHR FOISCH FOISCH
+2 2
+Waldi Wiff WOAHR
+WOAHR WOAHR

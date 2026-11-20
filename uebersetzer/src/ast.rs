@@ -52,6 +52,9 @@ pub struct StrukturInfo {
     pub name: String,
     /// Die Felder in der Reihenfolge, in der sie angesagt wurden.
     pub felder: Vec<(String, Typ)>,
+    /// Nur bei einer Aufzählung: die Namen ihrer Werte. Im Speicher ist eine Aufzählung
+    /// eine Struktur mit einem einzigen Feld, der Nummer des Werts (seiner Stelle hier).
+    pub werte: Vec<String>,
 }
 
 /// Ein Feld einer Klasse.
@@ -496,6 +499,9 @@ pub enum AusdruckArt {
     /// `AUS JSON VON Punkt(text)`: der Wert, der im JSON-Text steht, oder ein Fehler.
     /// Der Typ des Ausdrucks ist `<angabe> ODA FEHLA`.
     AusJson { angabe: TypAngabe, text: Box<Ausdruck> },
+    /// `objekt OIS Klasse`: das Objekt als diese Klasse, wenn es wirklich eines davon ist, sonst
+    /// `NIX`. `klasse` ist die Nummer der Klasse; die Typprüfung trägt sie ein.
+    Als { objekt: Box<Ausdruck>, angabe: TypAngabe, klasse: u32 },
 }
 
 /// Ein Wert von außen, den eine Funktion ohne Namen mitnimmt. Er wird
@@ -525,6 +531,11 @@ pub enum AnweisungArt {
     Zuweisung { ziel: Ausdruck, op: Option<BinaerOp>, wert: Ausdruck },
     /// `WENN bedingung DAUN ... [SUNST ...] PASST SCHO`
     Wenn { bedingung: Ausdruck, dann: Vec<Anweisung>, sunst: Vec<Anweisung> },
+    /// `JE NOCHDEM wert BEI ... DAUN ... [SUNST ...] PASST SCHO`. Die Typprüfung macht daraus
+    /// eine [`AnweisungArt::Folge`]: den Wert in einer eigenen Variable und eine Kette aus `Wenn`.
+    JeNachdem { wert: Ausdruck, faelle: Vec<Fall>, sunst: Option<Vec<Anweisung>> },
+    /// Mehrere Anweisungen hintereinander, die zusammengehören (ohne eigenen Block für Variablen).
+    Folge(Vec<Anweisung>),
     /// `SOLONG bedingung TUA ... PASST SCHO`
     Solong { bedingung: Ausdruck, rumpf: Vec<Anweisung> },
     /// `FIA name VON von BIS bis [SCHRITT schritt] TUA ... PASST SCHO`
@@ -603,7 +614,24 @@ pub struct StrukturDef {
     /// `STRUKTUR Paar VON A UND B`: die Namen der Typen, die erst beim Verwenden feststehen.
     pub typ_parameter: Vec<String>,
     pub felder: Vec<FeldDef>,
+    /// `AUFZÖHLUNG Foab ... PASST SCHO`: die Werte, wie sie dastehen (sonst leer).
+    pub werte: Vec<(String, Position)>,
     pub pos: Position,
+}
+
+/// Ein Fall in `JE NOCHDEM`: `BEI wert, wert DAUN ...`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fall {
+    pub werte: Vec<FallWert>,
+    pub block: Vec<Anweisung>,
+    pub pos: Position,
+}
+
+/// Wofür ein Fall gilt: für genau einen Wert oder für alles `von BIS bis`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FallWert {
+    Gleich(Ausdruck),
+    Bereich(Ausdruck, Ausdruck),
 }
 
 /// Ein Feld in `KLASSE ... PASST SCHO`.

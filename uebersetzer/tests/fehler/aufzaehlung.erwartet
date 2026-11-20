@@ -1,0 +1,19 @@
+:16:17: 'Foab' hot kan Wert 'LILA'. Es gibt: ROT, GRÜN, BLAU.
+:17:12: 'Foab' is a AUFZÖHLUNG, do gibt's nix zum Baun. Nimm an von ihre Werte: Foab.ROT, Foab.GRÜN, Foab.BLAU.
+:18:11: A Foab == a ZOI? Des geht si ned aus.
+:19:11: A Foab < a Foab? Des geht si ned aus.
+:20:16: 'c' soll a ZOI sei, oba des do is a Foab.
+:21:1: Bei dem JE NOCHDEM fehlt no: Foab.GRÜN. Schreib dafia an Foi mit BEI oda SUNST fia ollas aundare.
+:30:25: 'Foab.ROT' kummt in dem JE NOCHDEM zwamoi vua.
+:33:1: De FUNKTIAUN 'nam' muass a KETTN zruckgebn, oba ned jeda Weg hört mit GIB ZRUCK auf.
+:44:9: A ZOI == a KETTN? Des geht si ned aus.
+:46:9: A ZOI <= a KETTN? Des geht si ned aus.
+:50:9: A Punkt >= a Punkt? Des geht si ned aus.
+:50:9: A Punkt <= a Punkt? Des geht si ned aus.
+:54:21: A Viech kaun nia a Auto sei: De zwa hom nix mitanaund z'tuan.
+:55:22: Noch OIS ghört a KLASSE, ned a Punkt.
+:56:16: OIS geht nur mit an Objekt von ana KLASSE, des do is oba a ZOI.
+:58:15: OIS geht nur mit an Objekt von ana KLASSE, des do is oba a VIELLEICHT Viech. Schau z'erst noch, ob's NIX is (WENN x != NIX DAUN ...).
+:59:27: 'sicha' soll a Hund sei, oba des do is a VIELLEICHT Hund.
+:60:9: OIS geht nur mit an Objekt von ana KLASSE, des do is oba a Foab.
+Na, des wird nix: 18 Fehler.

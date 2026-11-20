@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.17.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.18.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -46,7 +46,8 @@ direkt aus einer `STRUKTUR` und zurück, ohne dass man dafür etwas schreiben mu
 jetzt auch unter [Linux](#windows-und-linux), und für beide Systeme gibt es [Installer](#installieren).
 Zuletzt dazugekommen: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten)
 (`$"Servas {nam}"`), `==` für Strukturen und Listen, und das [Netzwerk](#netzwerk): Seiten holen
-über HTTP und HTTPS und eigene Verbindungen über TCP.
+über HTTP und HTTPS und eigene Verbindungen über TCP. Und zuletzt: [Aufzählungen](#aufzählungen)
+und die Verzweigung nach Fällen, [`JE NOCHDEM`](#nach-fällen-je-nochdem).
 Wohin es geht, steht unten im [Fahrplan](#fahrplan).
 Für VS Code gibt es eine [Erweiterung](#in-vs-code-programmieren).
 Für Windows und Linux (64 Bit). Fenster und Ton gibt es derzeit nur unter Windows.
@@ -251,7 +252,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.17)
+## Die Sprache (v0.18)
 
 ### Typen
 
@@ -350,6 +351,35 @@ PASST SCHO
 `PASST SCHO` für die ganze Kette. Steht das `WENN` in der Zeile nach `SUNST`, ist es eine eigene
 Anweisung im `SUNST`-Teil und braucht sein eigenes `PASST SCHO`.
 
+#### Nach Fällen: JE NOCHDEM
+
+Hängt es von einem Wert ab, was passiert, schreibt man statt einer langen Kette aus
+`SUNST WENN` die Fälle untereinander:
+
+```
+JE NOCHDEM punkte
+    BEI 90 BIS 100 DAUN
+        SCHREIB("Sehr gut") OIDA
+    BEI 80 BIS 89 DAUN
+        SCHREIB("Gut") OIDA
+    BEI 0, 1, 2 DAUN
+        SCHREIB("Host di vatippt?") OIDA
+    SUNST
+        SCHREIB("Do geht no wos") OIDA
+PASST SCHO
+```
+
+- Hinter `BEI` stehen ein oder mehrere Werte mit Beistrich dazwischen, oder ein Bereich
+  `von BIS bis` (beide Enden gehören dazu). Es geht mit Zahlen, Texten und
+  [Aufzählungen](#aufzählungen).
+- Es gilt der erste Fall, der passt; danach geht es hinter `PASST SCHO` weiter (ein `break` wie
+  in anderen Sprachen braucht es nicht, und nichts "fällt durch" in den nächsten Fall).
+- `SUNST` steht ganz hinten und gilt für alles andere. Ohne `SUNST` passiert dann einfach nichts.
+- Der Wert hinter `JE NOCHDEM` wird nur einmal ausgerechnet.
+- Bei einer Aufzählung prüft der Compiler, dass **kein Wert vergessen** ist (oder ein `SUNST`
+  dasteht): `Bei dem JE NOCHDEM fehlt no: Ampl.GÖB.` Kommt später ein Wert dazu, zeigt er
+  jede Stelle, an der er noch fehlt.
+
 ### Schleifen
 
 Solange eine Bedingung gilt:
@@ -433,6 +463,41 @@ SCHREIB(p.x, p) OIDA              # 11.5 Punkt(11.5, 2.0)
   Struktur nicht enthalten (über eine Liste geht es).
 - Strukturen stehen ganz außen wie Funktionen, die Reihenfolge ist egal.
 
+### Aufzählungen
+
+Eine Aufzählung ist ein eigener Typ mit genau den Werten, die man hinschreibt:
+
+```
+AUFZÖHLUNG Ampl
+    ROT, GÖB, GRÜN          # mit Beistrich oder untereinander
+PASST SCHO
+
+FUNKTIAUN nächste(a Ampl) GIBT ZRUCK Ampl
+    JE NOCHDEM a
+        BEI Ampl.ROT DAUN
+            GIB ZRUCK Ampl.GRÜN OIDA
+        BEI Ampl.GRÜN DAUN
+            GIB ZRUCK Ampl.GÖB OIDA
+        BEI Ampl.GÖB DAUN
+            GIB ZRUCK Ampl.ROT OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU ampl = Ampl.ROT OIDA
+ampl = nächste(ampl) OIDA
+SCHREIB(ampl, ampl == Ampl.GRÜN) OIDA          # GRÜN WOAHR
+```
+
+- Einen Wert schreibt man `Ampl.ROT`. Eine `Ampl` kann nie etwas anderes sein als einer ihrer
+  Werte: Eine Zahl oder ein Text passt dort nicht hinein, und "bauen" lässt sich keiner.
+- Vergleichen geht mit `==` und `!=`. `SCHREIB` und `$"{ampl}"` geben den Namen aus.
+- `KETTN(ampl)` ist der Name (`"ROT"`), `ZOI(ampl)` die Stelle in der Liste, gezählt ab 0.
+- Als [JSON](#json) steht der Name da (`"ROT"`); beim Lesen muss es einer der Werte sein.
+- Zusammen mit [`JE NOCHDEM`](#nach-fällen-je-nochdem) prüft der Compiler, dass jeder Wert
+  bedacht ist. Im Beispiel oben weiß er darum auch, dass jeder Weg etwas zurückgibt.
+
+Ein Beispiel: [`beispiele/ampl.oida`](beispiele/ampl.oida).
+
 ### Klassen
 
 Eine Klasse hat Felder wie eine Struktur und dazu **Methoden**: Funktionen, die zu ihr gehören.
@@ -492,6 +557,24 @@ PASST SCHO
 - Um den Speicher kümmert sich OIDA: Ein Objekt wird freigegeben, sobald es niemand mehr braucht.
   Eine Ausnahme gibt es noch: Zeigen zwei Objekte gegenseitig aufeinander, bleiben beide bis zum
   Ende des Programms liegen, außer man trennt den Kreis selbst auf (ein Feld auf `NIX` setzen).
+
+**Was ist es wirklich?** In einer `LISTN VON Wesen` können auch Gegner stecken. Mit `OIS` holt
+man sich ein Objekt als das, was es wirklich ist:
+
+```
+FIA JEDE w IN olle TUA
+    SOG AU gegner = w OIS Gegner OIDA          # VIELLEICHT Gegner: NIX, wenn es keiner ist
+    WENN gegner != NIX DAUN
+        SCHREIB(gegner.staerke) OIDA           # hier ist es sicher ein Gegner
+    PASST SCHO
+    WENN w IS A Gegner DAUN ... PASST SCHO     # nur die Frage: WOAHR oder FOISCH
+PASST SCHO
+```
+
+Weil `OIS` ein `VIELLEICHT` ergibt, kann man nicht vergessen nachzuschauen: Ein Absturz wie bei
+einer falschen Umwandlung in anderen Sprachen ist so nicht möglich. Es gilt auch für alles, was
+von der Klasse erbt (ein `Dackl` ist ein `Hund`). Bei zwei Klassen, die nichts miteinander zu
+tun haben, sagt schon der Compiler, dass das nie zutreffen kann.
 
 Ein größeres Beispiel steht in [`beispiele/arena.oida`](beispiele/arena.oida).
 
@@ -1918,13 +2001,13 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 
 ## Was OIDA noch nicht kann
 
-- Aus einem `Wesen` wieder einen `Gegner` machen (fragen, was es wirklich ist) geht noch nicht.
 - Objekte, die im Kreis aufeinander zeigen, werden erst am Ende des Programms freigegeben, wenn
   man den Kreis nicht selbst auftrennt. Verweise, die nicht mitzählen, fehlen noch.
 - Ob etwas `NIX` ist, merkt sich der Compiler nur bei Variablen, nicht bei Feldern und Listenstellen.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - In einen Text mit `$` lassen sich Listen und Strukturen noch nicht als Ganzes einsetzen.
-- Aufzählungen und eine Verzweigung nach Fällen (wie `switch`) fehlen noch.
+- Bei `JE NOCHDEM` gehen als Fälle Werte und Bereiche, aber noch keine Klassen (`BEI Gegner ...`)
+  und keine eigenen Bedingungen. Die Werte einer Aufzählung tragen keine eigenen Daten.
 - Im Netz: Ein Server bedient einen Gast nach dem anderen (Threads fehlen noch); kein Server für
   `https`, kein UDP, keine WebSockets, kein gzip; unter Linux kein Proxy.
 - Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
@@ -1980,7 +2063,7 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 11c | Fenster und Ton unter Linux | später |
 | 12 | Die Sprache selbst, Teil 1: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten), Kommastellen, Zahlen wie `1_000`, `0xFF`, `1e9`; `==` für Strukturen, Listen und Verzeichnisse | fertig |
 | 13 | [Netzwerk](#netzwerk): HTTP und HTTPS als Client, dazu TCP-Verbindungen in beide Richtungen | fertig |
-| 14 | Die Sprache selbst, Teil 2: Aufzählungen, Verzweigung nach Fällen, fragen, was ein Objekt wirklich ist | offen |
+| 14 | Die Sprache selbst, Teil 2: [Aufzählungen](#aufzählungen), [`JE NOCHDEM`](#nach-fällen-je-nochdem) mit Prüfung, dass kein Fall fehlt; fragen, was ein Objekt wirklich ist (`OIS`, `IS A`) | fertig |
 | 15 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
 | 16 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 

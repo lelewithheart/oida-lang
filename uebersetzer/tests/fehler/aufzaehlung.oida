@@ -1,0 +1,60 @@
+AUFZÖHLUNG Foab
+    ROT, GRÜN, BLAU
+PASST SCHO
+STRUKTUR Punkt
+    x ZOI
+PASST SCHO
+KLASSE Viech
+    nam KETTN
+PASST SCHO
+KLASSE Hund ERBT VON Viech
+PASST SCHO
+KLASSE Auto
+    ps ZOI
+PASST SCHO
+SOG AU f = Foab.ROT OIDA
+SOG AU a = Foab.LILA OIDA
+SOG AU b = Foab(1) OIDA
+SCHREIB(f == 1) OIDA
+SCHREIB(f < Foab.BLAU) OIDA
+SOG AU c ZOI = f OIDA
+JE NOCHDEM f
+    BEI Foab.ROT DAUN
+        SCHREIB("rot") OIDA
+    BEI Foab.BLAU DAUN
+        SCHREIB("blau") OIDA
+PASST SCHO
+JE NOCHDEM f
+    BEI Foab.ROT, Foab.GRÜN DAUN
+        SCHREIB("woam") OIDA
+    BEI Foab.BLAU, Foab.ROT DAUN
+        SCHREIB("koid") OIDA
+PASST SCHO
+FUNKTIAUN nam(f Foab) GIBT ZRUCK KETTN
+    JE NOCHDEM f
+        BEI Foab.ROT DAUN
+            GIB ZRUCK "rot" OIDA
+        BEI Foab.GRÜN DAUN
+            SCHREIB("nix") OIDA
+        BEI Foab.BLAU DAUN
+            GIB ZRUCK "blau" OIDA
+    PASST SCHO
+PASST SCHO
+JE NOCHDEM 5
+    BEI "fünf" DAUN
+        SCHREIB("a Text") OIDA
+    BEI 1 BIS "drei" DAUN
+        SCHREIB("a Bereich") OIDA
+PASST SCHO
+JE NOCHDEM Punkt(1)
+    BEI Punkt(1) BIS Punkt(2) DAUN
+        SCHREIB("dazwischn") OIDA
+PASST SCHO
+SOG AU viech = Viech("Bello") OIDA
+SOG AU auto = viech OIS Auto OIDA
+SOG AU punkt = viech OIS Punkt OIDA
+SOG AU fünfe = 5 OIS Hund OIDA
+SOG AU kana VIELLEICHT Viech = NIX OIDA
+SOG AU hund = kana OIS Hund OIDA
+SOG AU sicha Hund = viech OIS Hund OIDA
+SCHREIB(f IS A Hund) OIDA

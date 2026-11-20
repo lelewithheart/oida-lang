@@ -153,3 +153,23 @@ SEED      = SOMEN
 
 # --- Feste Werte ------------------------------------------------------------
 PI        = PI
+
+# --- Aufzählung: ein eigener Typ mit festen Werten --------------------------
+#     AUFZÖHLUNG Foab
+#         ROT, GRÜN, BLAU
+#     PASST SCHO
+ENUM      = AUFZÖHLUNG, AUFZÄHLUNG
+
+# --- Verzweigung nach Fällen -------------------------------------------------
+#     JE NOCHDEM foab
+#         BEI Foab.ROT DAUN ...
+#         BEI Foab.GRÜN, Foab.BLAU DAUN ...
+#     PASST SCHO
+MATCH     = JE NOCHDEM
+CASE      = BEI
+
+# --- Was ein Objekt wirklich ist ---------------------------------------------
+#     viech OIS Hund      der Hund, wenn es einer ist, sonst NIX
+#     viech IS A Hund     WOAHR oder FOISCH
+AS        = OIS
+IS        = IS A, IS AN
