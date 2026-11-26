@@ -323,13 +323,75 @@ function kleinerBaustein(text) {
     return text.replace(/(?<![\p{L}\p{N}_])\p{Lu}[\p{Lu}_]+(?![\p{L}\p{N}_])/gu, (wort) => wort.toLowerCase());
 }
 
+// Die Namen aus dem Programm (siehe `alle_namen` in uebersetzer/src/editor.rs) und ihr Zeichen in der Liste.
+const NAMENS_ARTEN = {
+    funktion: vscode.CompletionItemKind.Function,
+    methode: vscode.CompletionItemKind.Method,
+    typ: vscode.CompletionItemKind.Class,
+    wert: vscode.CompletionItemKind.EnumMember,
+    feld: vscode.CompletionItemKind.Field,
+    variable: vscode.CompletionItemKind.Variable,
+    fix: vscode.CompletionItemKind.Constant,
+};
+
+/** Ein Name aus dem Programm als Vorschlag. `klammerDa`: Hinter dem Cursor steht schon eine Klammer. */
+function nameAlsVorschlag(n, klammerDa) {
+    const woher = n.zu || n.aus;
+    const eintrag = new vscode.CompletionItem(
+        woher ? { label: n.name, description: woher } : n.name, NAMENS_ARTEN[n.art] || vscode.CompletionItemKind.Text);
+    eintrag.detail = n.text;
+    if ((n.art === 'funktion' || n.art === 'methode') && !klammerDa) {
+        // Mit Klammern und den Namen der Parameter zum Überschreiben; TAB springt zum nächsten.
+        const parameter = (n.parameter || []).map((p, i) => `\${${i + 1}:${p}}`).join(', ');
+        eintrag.insertText = new vscode.SnippetString(`${n.name}(${parameter})`);
+    }
+    const hilfe = new vscode.MarkdownString();
+    hilfe.appendCodeblock(n.text, 'oida');
+    if (n.doku) {
+        hilfe.appendText(n.doku + '\n');
+    }
+    if (n.aus) {
+        hilfe.appendMarkdown(`\n*aus ${n.aus}*`);
+    }
+    eintrag.documentation = hilfe;
+    return eintrag;
+}
+
+/** Jeder Name nur einmal; kommt er in mehreren Klassen vor, stehen alle dabei. */
+function ohneDoppelte(namen) {
+    const nachName = new Map();
+    for (const n of namen) {
+        const schluessel = `${n.art}:${n.name}`;
+        const schon = nachName.get(schluessel);
+        if (!schon) {
+            nachName.set(schluessel, { ...n });
+        } else if (n.zu && !schon.zu.split(', ').includes(n.zu)) {
+            schon.zu += `, ${n.zu}`;
+        }
+    }
+    return [...nachName.values()];
+}
+
 const vorschlaege = {
     async provideCompletionItems(dokument, position) {
         const antwort = await untersuche(dokument);
         if (!antwort) {
             return [];
         }
-        const zeile = dokument.lineAt(position.line).text.slice(0, position.character);
+        const ganzeZeile = dokument.lineAt(position.line).text;
+        const zeile = ganzeZeile.slice(0, position.character);
+        const namen = antwort.namen || [];
+        const klammerDa = ganzeZeile.slice(position.character).startsWith('(');
+        // Hinter einem Punkt gibt es nur, was zu etwas gehört: hinter dem Namen einer Aufzählung
+        // ihre Werte (Ampl.ROT), sonst die Felder und Methoden.
+        const punkt = /([\p{L}\p{N}_]+)\s*\.\s*[\p{L}\p{N}_]*$/u.exec(zeile);
+        if (punkt && !/^\p{N}+$/u.test(punkt[1])) {
+            const werte = namen.filter((n) => n.art === 'wert' && n.zu === punkt[1]);
+            const glieder = werte.length > 0 ? werte : namen.filter((n) => n.art === 'feld' || n.art === 'methode');
+            return ohneDoppelte(glieder).map((n) => nameAlsVorschlag(n, klammerDa));
+        }
+        const namensListe = ohneDoppelte(namen.filter((n) => ['funktion', 'typ', 'variable', 'fix'].includes(n.art)))
+            .map((n) => nameAlsVorschlag(n, klammerDa));
         const davor = zeile.toUpperCase();
         const klein = kleinSchreiben(dokument, /[\p{L}\p{N}_]*$/u.exec(zeile)[0], antwort);
         const schreib = (text) => (klein ? text.toLowerCase() : text);
@@ -357,7 +419,7 @@ const vorschlaege = {
                 }
             }
             return eintrag;
-        }).concat(bausteinListe);
+        }).concat(bausteinListe, namensListe);
     },
 };
 
@@ -440,7 +502,8 @@ function activate(kontext) {
         protokoll,
         tokensGeaendert,
         vscode.languages.registerDocumentSemanticTokensProvider(sprache, einfaerber, LEGENDE),
-        vscode.languages.registerCompletionItemProvider(sprache, vorschlaege),
+        // Der Punkt löst die Vorschläge auch aus: punkt.| und Ampl.|
+        vscode.languages.registerCompletionItemProvider(sprache, vorschlaege, '.'),
         vscode.commands.registerCommand('oida.starten', () => ausfuehren(false)),
         vscode.commands.registerCommand('oida.uebersetzen', () => ausfuehren(true)),
         vscode.commands.registerCommand('oida.compilerAussuchen', compilerAussuchen),

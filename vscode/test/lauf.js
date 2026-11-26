@@ -264,6 +264,73 @@ const pruefungen = {
         }
     },
 
+    async 'Eigene Funktionen, Felder und Werte werden vorgeschlagen'() {
+        // Die letzten drei Zeilen sind unfertig, so wie beim Tippen.
+        const dokument = await oeffne(schreibe('namen.oida', [
+            'BRAUCH mathe OIDA',
+            '# Zählt zusammen.',
+            'FUNKTIAUN zamm_zöhn(a ZOI, b ZOI) GIBT ZRUCK ZOI',
+            '    GIB ZRUCK a + b OIDA',
+            'PASST SCHO',
+            'AUFZÖHLUNG Ampl',
+            '    ROT, GRÜN',
+            'PASST SCHO',
+            'STRUKTUR Punkt',
+            '    links ZOI',
+            'PASST SCHO',
+            'SOG AU eck = Punkt(1) OIDA',
+            'za',
+            'SOG AU a = Ampl.',
+            'eck.',
+            'SCHREIB(zamm())',
+            '',
+        ].join('\n')));
+        const hole = async (zeile, spalte) => {
+            const liste = await vscode.commands.executeCommand(
+                'vscode.executeCompletionItemProvider', dokument.uri, new vscode.Position(zeile, spalte));
+            return liste.items.filter((e) => e.kind !== vscode.CompletionItemKind.Text);
+        };
+        const name = (e) => (typeof e.label === 'string' ? e.label : e.label.label);
+        const finde = (liste, wie) => liste.find((e) => name(e) === wie);
+        const K = vscode.CompletionItemKind;
+
+        // Mitten im Programm: die eigene Funktion mit ihren Parametern, eine aus der Bibliothek, Typen, Variablen.
+        const frei = await hole(12, 2);
+        const eigene = finde(frei, 'zamm_zöhn');
+        assert.ok(eigene, `zamm_zöhn fehlt: ${frei.map(name).slice(0, 30).join(', ')}`);
+        assert.strictEqual(eigene.kind, K.Function);
+        assert.strictEqual(eigene.insertText.value, 'zamm_zöhn(${1:a}, ${2:b})');
+        assert.strictEqual(eigene.detail, 'zamm_zöhn(a ZOI, b ZOI) GIBT ZRUCK ZOI');
+        // (VS Code schreibt Leerzeichen in der Erklärung als &nbsp;.)
+        assert.ok(eigene.documentation.value.replace(/&nbsp;/g, ' ').includes('Zählt zusammen.'), eigene.documentation.value);
+        const klemm = finde(frei, 'klemm');
+        assert.ok(klemm && klemm.label.description === 'mathe', 'klemm aus der Bibliothek mathe fehlt');
+        assert.strictEqual(finde(frei, 'Punkt').kind, K.Class);
+        assert.strictEqual(finde(frei, 'eck').kind, K.Variable);
+        // Die Wörter der Sprache sind weiter dabei (klein, weil "za" klein getippt ist).
+        assert.ok(finde(frei, 'sog au'), 'die Wörter der Sprache sind weg');
+        assert.ok(!finde(frei, 'links') && !finde(frei, 'ROT'), 'Felder und Werte gehören hinter einen Punkt');
+        // Was nicht dazugeholt ist, wird auch nicht vorgeschlagen.
+        assert.ok(!finde(frei, 'sortiert'), 'sortiert kommt, obwohl listen nicht dazugeholt ist');
+
+        // Hinter dem Namen einer Aufzählung: genau ihre Werte.
+        const werte = await hole(13, 16);
+        assert.deepStrictEqual(werte.map(name).sort(), ['GRÜN', 'ROT']);
+        assert.strictEqual(werte[0].kind, K.EnumMember);
+
+        // Hinter einem anderen Punkt: Felder (und Methoden), aber keine Funktionen und Wörter.
+        const glieder = await hole(14, 4);
+        assert.strictEqual(finde(glieder, 'links').kind, K.Field);
+        assert.ok(!finde(glieder, 'zamm_zöhn') && !finde(glieder, 'SOG AU') && !finde(glieder, 'sog au'), glieder.map(name).join(', '));
+
+        // Steht die Klammer schon da, kommt nur der Name.
+        const mitKlammer = finde(await hole(15, 12), 'zamm_zöhn');
+        assert.ok(mitKlammer, 'zamm_zöhn fehlt vor der Klammer');
+        const eingesetzt = !mitKlammer.insertText ? name(mitKlammer)
+            : (typeof mitKlammer.insertText === 'string' ? mitKlammer.insertText : mitKlammer.insertText.value);
+        assert.strictEqual(eingesetzt, 'zamm_zöhn', 'trotz vorhandener Klammer kommen noch einmal Klammern');
+    },
+
     async 'F5 übersetzt und startet das Programm'() {
         await oeffne(path.join(wurzel, 'beispiele', 'fizzbuzz.oida'));
         const exe = path.join(os.tmpdir(), 'oida-vscode', 'fizzbuzz.exe');

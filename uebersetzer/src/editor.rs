@@ -97,7 +97,9 @@ impl Umrechner<'_> {
 ///   "woerterbuch": "woher das Wörterbuch kommt",
 ///   "fehler":  [ { "zeile": 0, "spalte": 4, "laenge": 3, "meldung": "..." } ],
 ///   "tokens":  [ [zeile, spalte, laenge, art], ... ],
-///   "woerter": [ { "wort": "WENN", "fest": "IF", "art": 0 }, ... ]
+///   "woerter": [ { "wort": "WENN", "fest": "IF", "art": 0 }, ... ],
+///   "namen":   [ { "name": "klemm", "art": "funktion", "text": "klemm VON T(wert T, ...) GIBT ZRUCK T",
+///                  "doku": "...", "aus": "mathe", "zu": "", "parameter": ["wert", "untn", "obn"] }, ... ]
 /// }
 /// ```
 ///
@@ -210,8 +212,241 @@ pub fn untersuche_datei(quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) 
             );
         }
     }
+
+    aus.push_str("],\"namen\":[");
+    for (i, n) in alle_namen(&tokens, quelltext, wb, pfad).iter().enumerate() {
+        let komma = if i > 0 { "," } else { "" };
+        let parameter: Vec<String> = n.parameter.iter().map(|p| json_text(p)).collect();
+        let _ = write!(
+            aus,
+            "{komma}{{\"name\":{},\"art\":{},\"text\":{},\"doku\":{},\"aus\":{},\"zu\":{},\"parameter\":[{}]}}",
+            json_text(&n.name),
+            json_text(n.art),
+            json_text(&n.text),
+            json_text(&n.doku),
+            json_text(&n.aus),
+            json_text(&n.zu),
+            parameter.join(",")
+        );
+    }
     aus.push_str("]}");
     aus
+}
+
+// ------------------------------------------------- Namen für die Vorschläge
+
+/// Ein Name aus dem Programm, den der Editor vorschlagen kann.
+struct Eintrag {
+    name: String,
+    /// "funktion", "methode", "typ", "wert" (einer Aufzählung), "feld", "variable" oder "fix"
+    art: &'static str,
+    /// Wie er im Programm dasteht: der Kopf der Funktion, das Feld mit seinem Typ ...
+    text: String,
+    /// Die Kommentarzeilen direkt darüber.
+    doku: String,
+    /// Woher er kommt: leer (diese Datei), "listen" (ein Teil der Bibliothek) oder "gegner.oida".
+    aus: String,
+    /// Bei Methoden, Feldern und Werten: die Klasse, Struktur oder Aufzählung dazu.
+    zu: String,
+    /// Bei Funktionen und Methoden: die Namen der Parameter.
+    parameter: Vec<String>,
+}
+
+/// Sammelt die Namen aus dem Text im Editor und aus allem, was er mit BRAUCH dazuholt.
+///
+/// Das geht absichtlich nur über die Wörter (Tokens) und nicht über den Syntaxbaum: Beim
+/// Tippen ist die Zeile unter dem Cursor fast immer unfertig, und genau dann braucht man die
+/// Vorschläge. Was zu einer Klasse, Struktur oder Aufzählung gehört, wird an der Einrückung
+/// erkannt (ihr Inhalt ist eingerückt, das nächste Wort am Zeilenanfang beendet sie).
+fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) -> Vec<Eintrag> {
+    let mut liste = Vec::new();
+    let ordner = pfad.and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
+    let mut offen: std::collections::VecDeque<(bool, String, std::path::PathBuf)> =
+        sammle_namen(tokens, quelltext, "", true, &mut liste).into_iter().map(|(b, ziel)| (b, ziel, ordner.clone())).collect();
+    let kennung = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()).to_string_lossy().to_lowercase();
+    let mut geladen: std::collections::HashSet<String> = pfad.map(kennung).into_iter().collect();
+    let eingebaut = Woerterbuch::eingebaut();
+
+    while let Some((bibliothek, ziel, ordner)) = offen.pop_front() {
+        if geladen.len() > 200 {
+            break;
+        }
+        let (text, woerter, name, daneben) = if bibliothek {
+            let Some((teil, text)) = treiber::BIBLIOTHEK.iter().find(|(teil, _)| *teil == ziel) else { continue };
+            if !geladen.insert(format!("oida:{teil}")) {
+                continue;
+            }
+            (text.to_string(), &eingebaut, teil.to_string(), std::path::PathBuf::new())
+        } else {
+            let mut datei = ordner.join(&ziel);
+            if datei.extension().is_none() {
+                datei.set_extension("oida");
+            }
+            if !geladen.insert(kennung(&datei)) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&datei) else { continue };
+            let name = datei.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            (text, wb, name, datei.parent().map(Path::to_path_buf).unwrap_or_default())
+        };
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        let (tokens, _) = lexer::zerlegen_nachsichtig(text, woerter);
+        for (b, ziel) in sammle_namen(&tokens, text, &name, false, &mut liste) {
+            offen.push_back((b, ziel, daneben.clone()));
+        }
+    }
+
+    // Jeder Name nur einmal (eine Variable wird oft mehrmals angelegt).
+    let mut gesehen = std::collections::HashSet::new();
+    liste.retain(|e| gesehen.insert((e.art, e.name.clone(), e.zu.clone())));
+    liste
+}
+
+/// Die Namen aus einer Datei. `haupt` ist die Datei im Editor: Nur aus ihr kommen die
+/// Variablen. Gibt zurück, was die Datei mit BRAUCH dazuholt: (aus der Bibliothek?, Ziel).
+fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mut Vec<Eintrag>) -> Vec<(bool, String)> {
+    use Schluessel as S;
+    let zeilen: Vec<&str> = text.split('\n').collect();
+    let zeile = |nr: u32| zeilen.get(nr as usize - 1).copied().unwrap_or("").trim_end_matches('\r');
+    // Die Zeile ab einem Token, höchstens bis vor ein anderes.
+    let ab = |von: &Token, bis: Option<&Token>| -> String {
+        let ganz = zeile(von.pos.zeile);
+        let ende = bis.map_or(usize::MAX, |b| b.pos.spalte as usize - 1);
+        ganz.chars().take(ende).skip(von.pos.spalte as usize - 1).collect::<String>().trim().to_string()
+    };
+    // Die Kommentarzeilen direkt über einer Zeile.
+    let doku = |nr: u32| -> String {
+        let mut teile = Vec::new();
+        let mut n = nr;
+        while n > 1 {
+            let Some(kommentar) = zeile(n - 1).trim().strip_prefix('#') else { break };
+            teile.push(kommentar.strip_prefix(' ').unwrap_or(kommentar));
+            n -= 1;
+        }
+        teile.reverse();
+        teile.join("\n")
+    };
+    let name_bei = |i: usize| match tokens.get(i).map(|t| &t.art) {
+        Some(TokenArt::Name(name)) => Some(name.clone()),
+        _ => None,
+    };
+    let mut neu = |name: String, art: &'static str, text: String, doku: String, zu: &str, parameter: Vec<String>| {
+        liste.push(Eintrag { name, art, text, doku, aus: aus.to_string(), zu: zu.to_string(), parameter });
+    };
+
+    let mut brauch = Vec::new();
+    // In welcher Klasse, Struktur oder Aufzählung wir gerade stecken.
+    let mut drin: Option<(String, Schluessel)> = None;
+    for (i, token) in tokens.iter().enumerate() {
+        let am_anfang = token.pos.spalte == 1;
+        let erstes_der_zeile = i == 0 || tokens[i - 1].pos.zeile < token.pos.zeile;
+        if am_anfang {
+            drin = None;
+        }
+        match &token.art {
+            TokenArt::Schluessel(S::Import) => match tokens.get(i + 1).map(|t| &t.art) {
+                Some(TokenArt::Name(ziel)) => brauch.push((true, ziel.clone())),
+                Some(TokenArt::Text(ziel)) => brauch.push((false, ziel.clone())),
+                _ => {}
+            },
+            TokenArt::Schluessel(art @ (S::Struct | S::Class | S::Enum)) => {
+                if let Some(name) = name_bei(i + 1) {
+                    neu(name.clone(), "typ", ab(token, None), doku(token.pos.zeile), "", Vec::new());
+                    drin = Some((name, *art));
+                }
+            }
+            TokenArt::Schluessel(S::Function) => {
+                let Some(name) = name_bei(i + 1) else { continue };
+                // Bis zur Klammer (dazwischen kann "VON T" stehen), dann die Parameter: der Name
+                // direkt hinter der Klammer und hinter jedem Beistrich auf der obersten Ebene.
+                let mut j = i + 2;
+                while tokens.get(j).is_some_and(|t| t.art != TokenArt::KlammerAuf && t.pos.zeile == token.pos.zeile) {
+                    j += 1;
+                }
+                if tokens.get(j).is_none_or(|t| t.art != TokenArt::KlammerAuf) {
+                    continue;
+                }
+                let mut parameter = Vec::new();
+                let mut tiefe = 0;
+                while let Some(t) = tokens.get(j) {
+                    match t.art {
+                        TokenArt::KlammerAuf | TokenArt::EckigAuf => tiefe += 1,
+                        TokenArt::KlammerZu | TokenArt::EckigZu => tiefe -= 1,
+                        TokenArt::DateiEnde => break,
+                        _ => {}
+                    }
+                    if tiefe == 0 {
+                        break;
+                    }
+                    let davor = &tokens[j].art;
+                    if tiefe == 1 && (*davor == TokenArt::KlammerAuf || *davor == TokenArt::Komma) {
+                        if let Some(p) = name_bei(j + 1) {
+                            parameter.push(p);
+                        }
+                    }
+                    j += 1;
+                }
+                // "VON DRAUSSN ..." (Funktionen aus der Laufzeit) gehört nicht zu dem, was man sehen will.
+                let draussen = tokens[i..]
+                    .iter()
+                    .take_while(|t| t.pos.zeile == token.pos.zeile)
+                    .find(|t| t.art == TokenArt::Schluessel(S::Extern));
+                let kopf = ab(&tokens[i + 1], draussen);
+                if haupt {
+                    for p in &parameter {
+                        neu(p.clone(), "variable", format!("Parameter von {name}"), String::new(), "", Vec::new());
+                    }
+                }
+                match &drin {
+                    Some((klasse, S::Class)) if !am_anfang => neu(name, "methode", kopf, doku(token.pos.zeile), klasse, parameter),
+                    _ => neu(name, "funktion", kopf, doku(token.pos.zeile), "", parameter),
+                }
+            }
+            TokenArt::Schluessel(S::Const) if am_anfang || haupt => {
+                if let Some(name) = name_bei(i + 1) {
+                    neu(name, "fix", ab(token, None), doku(token.pos.zeile), "", Vec::new());
+                }
+            }
+            TokenArt::Schluessel(S::Declare) if haupt => {
+                if let Some(name) = name_bei(i + 1) {
+                    neu(name, "variable", ab(token, None), String::new(), "", Vec::new());
+                }
+            }
+            TokenArt::Schluessel(S::For) if haupt => {
+                let stelle = if tokens.get(i + 1).is_some_and(|t| t.art == TokenArt::Schluessel(S::Each)) { i + 2 } else { i + 1 };
+                if let Some(name) = name_bei(stelle) {
+                    neu(name, "variable", ab(token, None), String::new(), "", Vec::new());
+                }
+            }
+            TokenArt::Name(name) if !am_anfang => match &drin {
+                // Die Werte einer Aufzählung: jeder Name darin (nur nicht ihr eigener).
+                Some((aufzaehlung, S::Enum)) if tokens[i - 1].art != TokenArt::Schluessel(S::Enum) => {
+                    let zu = aufzaehlung.clone();
+                    neu(name.clone(), "wert", format!("{zu}.{name}"), String::new(), &zu, Vec::new());
+                }
+                // Ein Feld: "name Typ" am Anfang einer Zeile, also ein Name und gleich dahinter ein Typ.
+                Some((besitzer, S::Struct | S::Class)) if erstes_der_zeile => {
+                    let typ_dahinter = tokens.get(i + 1).is_some_and(|t| {
+                        t.pos.zeile == token.pos.zeile
+                            && matches!(
+                                t.art,
+                                TokenArt::Name(_)
+                                    | TokenArt::Schluessel(
+                                        S::Int | S::Float | S::Boolean | S::Text | S::Error | S::List | S::Map | S::Maybe | S::Function
+                                    )
+                            )
+                    });
+                    if typ_dahinter {
+                        let zu = besitzer.clone();
+                        neu(name.clone(), "feld", ab(token, None), doku(token.pos.zeile), &zu, Vec::new());
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    brauch
 }
 
 /// Was der Editor für einen Fehler unterstreicht: das Token an der Stelle;
@@ -609,6 +844,7 @@ mod tests {
         let rest = &json[anfang + name.len() + 3..];
         let ende = match name {
             "tokens" => rest.find("],\"woerter\"").unwrap() + 1,
+            "woerter" => rest.find("],\"namen\"").unwrap() + 1,
             "fehler" => rest.find("],\"tokens\"").unwrap() + 1,
             _ => rest.len() - 1,
         };
@@ -758,6 +994,67 @@ mod tests {
         assert!(woerter.contains("{\"wort\":\"SOG AU\",\"fest\":\"DECLARE\",\"art\":0}"), "{woerter}");
         assert!(woerter.contains("{\"wort\":\"KETTN\",\"fest\":\"TEXT\",\"art\":1}"), "{woerter}");
         assert!(woerter.contains("{\"wort\":\"STIMMT NED\",\"fest\":\"FALSE\",\"art\":6}"), "{woerter}");
+    }
+
+    #[test]
+    fn namen_fuer_vorschlaege() {
+        // Die letzte Zeile ist unfertig, wie beim Tippen: Die Namen kommen trotzdem.
+        let quelle = [
+            "BRAUCH mathe OIDA",
+            "BRAUCH programm OIDA",
+            "",
+            "# Zählt zusammen.",
+            "# Zweite Zeile.",
+            "FUNKTIAUN zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI",
+            "    GIB ZRUCK a OIDA",
+            "PASST SCHO",
+            "",
+            "AUFZÖHLUNG Ampl",
+            "    ROT, GRÜN",
+            "PASST SCHO",
+            "",
+            "KLASSE Hund",
+            "    nam KETTN",
+            "    oita ZOI = 3",
+            "",
+            "    FUNKTIAUN bell(wia_oft ZOI)",
+            "        SOG AU drin = 1 OIDA",
+            "        drin = 2 OIDA",
+            "    PASST SCHO",
+            "PASST SCHO",
+            "",
+            "FIX GRENZE = 3 OIDA",
+            "FIA JEDE viech IN [1] TUA",
+            "PASST SCHO",
+            "SOG AU zöhla = zamm_zöhn(1, ",
+        ]
+        .join("\n");
+        let json = untersuche(&quelle, &wb());
+        let namen = feld(&json, "namen");
+        for erwartet in [
+            r#"{"name":"zamm_zöhn","art":"funktion","text":"zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI","doku":"Zählt zusammen.\nZweite Zeile.","aus":"","zu":"","parameter":["a","b"]}"#,
+            r#"{"name":"Ampl","art":"typ","text":"AUFZÖHLUNG Ampl","doku":"","aus":"","zu":"","parameter":[]}"#,
+            r#"{"name":"ROT","art":"wert","text":"Ampl.ROT","doku":"","aus":"","zu":"Ampl","parameter":[]}"#,
+            r#"{"name":"GRÜN","art":"wert","text":"Ampl.GRÜN","doku":"","aus":"","zu":"Ampl","parameter":[]}"#,
+            r#"{"name":"nam","art":"feld","text":"nam KETTN","doku":"","aus":"","zu":"Hund","parameter":[]}"#,
+            r#"{"name":"oita","art":"feld","text":"oita ZOI = 3","doku":"","aus":"","zu":"Hund","parameter":[]}"#,
+            r#"{"name":"bell","art":"methode","text":"bell(wia_oft ZOI)","doku":"","aus":"","zu":"Hund","parameter":["wia_oft"]}"#,
+            r#"{"name":"GRENZE","art":"fix","text":"FIX GRENZE = 3 OIDA","doku":"","aus":"","zu":"","parameter":[]}"#,
+            r#""name":"viech","art":"variable""#,
+            r#""name":"zöhla","art":"variable""#,
+            r#""name":"drin","art":"variable""#,
+            r#""name":"wia_oft","art":"variable","text":"Parameter von bell""#,
+            // Aus der Bibliothek, samt Erklärung; "VON DRAUSSN" wird nicht gezeigt.
+            r#"{"name":"klemm","art":"funktion","text":"klemm VON T(wert T, untn T, obn T) GIBT ZRUCK T","doku":"Hält den Wert zwischen `untn` und `obn`: klemm(15, 0, 10) ist 10.\n(Für alles, was man mit < vergleichen kann.)","aus":"mathe","zu":"","parameter":["wert","untn","obn"]}"#,
+            r#""name":"temp_ordna","art":"funktion","text":"temp_ordna() GIBT ZRUCK KETTN""#,
+        ] {
+            assert!(namen.contains(erwartet), "{erwartet}\nfehlt in\n{namen}");
+        }
+        // Der Name der Aufzählung ist keiner ihrer Werte, "drin = 2" kein Feld, und jede Variable kommt einmal.
+        assert!(!namen.contains(r#""name":"Ampl","art":"wert""#) && !namen.contains(r#""name":"drin","art":"feld""#));
+        assert_eq!(namen.matches(r#""name":"drin""#).count(), 1);
+        // Was nicht dazugeholt ist, kommt auch nicht vor.
+        assert!(!namen.contains(r#""name":"sortiert""#));
     }
 
     #[test]
