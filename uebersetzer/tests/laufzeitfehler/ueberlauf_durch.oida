@@ -1,0 +1,5 @@
+SOG AU klanste = -9223372036854775807 - 1 OIDA
+SOG AU weniga = 0 - 1 OIDA
+SCHREIB(klanste / 2) OIDA
+SCHREIB(klanste / weniga) OIDA
+SCHREIB("nachher") OIDA

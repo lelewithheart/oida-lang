@@ -1,0 +1,94 @@
+# Sichere Formen: Was sonst das Programm abbricht (eine Stelle, die es in der
+# Liste nicht gibt, Teilen durch 0), ergibt mit ODA HOID einen Ersatz.
+
+STRUKTUR Punkt
+    x ZOI
+    y ZOI
+PASST SCHO
+
+KLASSE Hund
+    nam KETTN
+PASST SCHO
+
+FUNKTIAUN hol_listn() GIBT ZRUCK LISTN VON ZOI
+    SCHREIB("(de Listn wird gholt)") OIDA
+    GIB ZRUCK [10, 20, 30] OIDA
+PASST SCHO
+
+FUNKTIAUN numma(n ZOI) GIBT ZRUCK ZOI
+    SCHREIB("(de Numma wird ausgrechnt)") OIDA
+    GIB ZRUCK n OIDA
+PASST SCHO
+
+# Holt den ersten Text in eine eigene Variable, die am Ende der Funktion wieder verschwindet.
+# Der Text in der Liste muss das überleben, auch beim zweiten Mal.
+FUNKTIAUN schau(texte LISTN VON KETTN)
+    SOG AU erste = texte[0] ODA HOID "kana" OIDA
+    SCHREIB("gschaut:", erste) OIDA
+PASST SCHO
+
+FUNKTIAUN schau_hund(viecha LISTN VON Hund)
+    SOG AU erste = viecha[0] ODA HOID Hund("kana") OIDA
+    SCHREIB("gschaut:", erste.nam) OIDA
+PASST SCHO
+
+FUNKTIAUN ersotz() GIBT ZRUCK ZOI
+    SCHREIB("(da Ersotz wird braucht)") OIDA
+    GIB ZRUCK -1 OIDA
+PASST SCHO
+
+SCHREIB("--- Listn") OIDA
+SOG AU liste = [1, 2, 3] OIDA
+SCHREIB(liste[0] ODA HOID 99, liste[2] ODA HOID 99, liste[3] ODA HOID 99, liste[-1] ODA HOID 99) OIDA
+SOG AU laar LISTN VON KETTN = [] OIDA
+SCHREIB(laar[0] ODA HOID "nix do") OIDA
+# Der Ersatz wird nur ausgerechnet, wenn er gebraucht wird; Stelle und Liste genau einmal.
+SCHREIB(hol_listn()[numma(1)] ODA HOID ersotz()) OIDA
+SCHREIB(hol_listn()[numma(7)] ODA HOID ersotz()) OIDA
+
+SCHREIB("--- Texte, Strukturn, Objekte") OIDA
+SOG AU nama = ["Rex" + "i", "Bello"] OIDA
+SCHREIB(nama[1] ODA HOID "kana", nama[5] ODA HOID "ka" + "na") OIDA
+# Derselbe Text (einer, der erst beim Laufen entsteht) zweimal geholt: Er gehört dann der
+# Liste und beiden Variablen, und jede gibt ihn am Ende wieder her.
+SOG AU erste = nama[0] ODA HOID "kana" OIDA
+SOG AU nochamoi = nama[0] ODA HOID "kana" OIDA
+SCHREIB(erste, nochamoi, nama[0], LÄNGN(nama)) OIDA
+schau(nama) OIDA
+schau(nama) OIDA
+SCHREIB(nama[0] + "!") OIDA
+SOG AU punkte = [Punkt(1, 2)] OIDA
+SOG AU p = punkte[3] ODA HOID Punkt(0, 0) OIDA
+SCHREIB(p.x, p.y, (punkte[0] ODA HOID Punkt(9, 9)).y) OIDA
+SOG AU hunde = [Hund("Rex")] OIDA
+SOG AU h = hunde[1] ODA HOID Hund("Neicha") OIDA
+SCHREIB(h.nam, (hunde[0] ODA HOID Hund("?")).nam) OIDA
+schau_hund(hunde) OIDA
+schau_hund(hunde) OIDA
+SCHREIB(hunde[0].nam + "!") OIDA
+
+SCHREIB("--- Listn in Listn") OIDA
+SOG AU gitta = [[1, 2], [3]] OIDA
+SCHREIB(gitta[1][0] ODA HOID 0, gitta[1][1] ODA HOID 0) OIDA
+SCHREIB((gitta[5] ODA HOID [7, 8])[1]) OIDA
+
+SCHREIB("--- wos söwa föhn kau") OIDA
+SOG AU kaunsei LISTN VON VIELLEICHT ZOI = [5, NIX] OIDA
+SCHREIB(kaunsei[0] ODA HOID -1, kaunsei[1] ODA HOID -1, kaunsei[2] ODA HOID -1) OIDA
+SOG AU viecha LISTN VON VIELLEICHT Hund = [Hund("Do"), NIX] OIDA
+SCHREIB((viecha[0] ODA HOID Hund("a")).nam, (viecha[1] ODA HOID Hund("b")).nam, (viecha[9] ODA HOID Hund("c")).nam) OIDA
+
+SCHREIB("--- Teiln") OIDA
+SOG AU n = numma(0) OIDA
+SCHREIB(10 / n ODA HOID -1, 10 % n ODA HOID -2, 10 / 3 ODA HOID -1, 10 % 3 ODA HOID -2) OIDA
+SCHREIB(7 / numma(0) ODA HOID ersotz()) OIDA
+SCHREIB(7 / numma(7) ODA HOID ersotz()) OIDA
+# Die kleinste Zahl durch -1 passt nicht in eine ZOI: auch dafür gilt der Ersatz.
+SOG AU klanste = -9223372036854775807 - 1 OIDA
+SOG AU weniga = numma(-1) OIDA
+SCHREIB(klanste / weniga ODA HOID 0, klanste % weniga ODA HOID 5, 9 / weniga ODA HOID 0) OIDA
+SCHREIB(1 + (4 / n ODA HOID 2) * 3) OIDA
+
+SCHREIB("--- grod no in ana ZOI") OIDA
+SOG AU gross = 9223372036854775806 + numma(1) OIDA
+SCHREIB(gross, -gross, gross - 1, klanste + 1, 3037000499 * 3037000499) OIDA

@@ -190,6 +190,26 @@ fn fehlermeldung_zeigt_die_stelle() {
 }
 
 #[test]
+fn ohne_zoinpruefung_laeuft_eine_zahl_still_ueber() {
+    // Der Schalter für enge Rechenschleifen: Was sonst mit einer Meldung abbricht, rechnet falsch weiter.
+    let arbeit = arbeitsordner("ohne_zoinpruefung");
+    let quelle = tests().join("laufzeitfehler").join("ueberlauf_plus.oida");
+    for schalter in ["--ohne-zoinprüfung", "--ohne-zoinpruefung"] {
+        let exe = arbeit.join("ueberlauf.exe");
+        uebersetze(&quelle, &exe, &[schalter]);
+        let lauf = starte(&exe);
+        assert_eq!(lauf.status.code(), Some(0), "{schalter}: {}", text(&lauf.stderr));
+        assert_eq!(text(&lauf.stdout), "vorher\n-9223372036854775808\nnachher\n", "{schalter}");
+    }
+    // Teilen durch 0 wird auch dann noch gemeldet.
+    let exe = arbeit.join("durch_null.exe");
+    uebersetze(&tests().join("laufzeitfehler").join("durch_null.oida"), &exe, &["--ohne-zoinprüfung"]);
+    let lauf = starte(&exe);
+    assert_eq!(lauf.status.code(), Some(1));
+    assert_eq!(text(&lauf.stderr), "Heast! Zeile 3: Durch nix kaun ma ned teilen.\n");
+}
+
+#[test]
 fn fehler_beim_laufen_werden_gemeldet() {
     let arbeit = arbeitsordner("laufzeitfehler");
     for quelle in oida_dateien(&tests().join("laufzeitfehler")) {

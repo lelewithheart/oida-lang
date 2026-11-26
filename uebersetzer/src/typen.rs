@@ -2629,6 +2629,9 @@ impl Pruefer<'_> {
                 for id in dazu {
                     self.sicher.remove(&id);
                 }
+                if matches!(op, BinaerOp::Durch | BinaerOp::Rest) && l == Typ::Zoi && matches!(rechts.art, AusdruckArt::Zoi(0)) {
+                    self.melde(rechts.pos, "Durch 0 teiln geht nie guat. Do steht oba a 0.".to_string());
+                }
                 self.binaer(op, links, rechts, l, r, pos)
             }
             AusdruckArt::Aufruf { name, argumente } => {
@@ -2935,9 +2938,19 @@ impl Pruefer<'_> {
                     l = links.typ;
                 }
                 let r = self.ausdruck(rechts);
+                // liste[i] ODA HOID ersatz und a / b ODA HOID ersatz (ganze Zahlen): Was sonst das
+                // Programm abbricht (die Stelle gibt es nicht, durch 0 geteilt), ergibt den Ersatz.
+                let rettet = match &links.art {
+                    AusdruckArt::Stelle { liste, .. } => {
+                        self.typen.verzeichnis(liste.typ).is_none() && self.typen.element(liste.typ).is_some()
+                    }
+                    AusdruckArt::Binaer { op: BinaerOp::Durch | BinaerOp::Rest, .. } => l == Typ::Zoi,
+                    _ => false,
+                };
                 let ziel = match l {
                     Typ::Fehler => Typ::Fehler,
                     Typ::Vielleicht { .. } => self.typen.innen(l).unwrap_or(Typ::Fehler),
+                    _ if rettet && !matches!(l, Typ::Ergebnis(_)) => l,
                     Typ::Ergebnis(_) if self.typen.wert_von(l) != Some(Typ::Nix) => {
                         self.typen.wert_von(l).unwrap_or(Typ::Fehler)
                     }
@@ -2952,10 +2965,12 @@ impl Pruefer<'_> {
                     }
                     _ => {
                         let meldung = format!(
-                            "Vua {} ghört wos, des {} oda a {} sei kunnt, des do is oba {}.",
+                            "Vua {} ghört wos, des {} oda a {} sei kunnt, a Stö in ana {} (liste[i]) oda a Teilung \
+                             vo gaunze Zoin (a / b). Des do is oba {}.",
                             self.wort(Schluessel::OrElse),
                             self.wort(Schluessel::Null),
                             self.wort(Schluessel::Error),
+                            self.wort(Schluessel::List),
                             self.typ_name(l)
                         );
                         self.melde(links.pos, meldung);
@@ -4297,7 +4312,7 @@ mod tests {
         };
         assert_eq!((typ(0), typ(1)), (Typ::Klasse(0), Typ::Zoi));
         let f = fehler("SOG AU a = 5 ODA HOID 6 OIDA");
-        assert_eq!(f.meldung, "Vua ODA HOID ghört wos, des NIX oda a FEHLA sei kunnt, des do is oba a ZOI.");
+        assert_eq!(f.meldung, "Vua ODA HOID ghört wos, des NIX oda a FEHLA sei kunnt, a Stö in ana LISTN (liste[i]) oda a Teilung vo gaunze Zoin (a / b). Des do is oba a ZOI.");
         let f = fehler(&format!("{SUCH}SOG AU a = teil(1, 2) ODA HOID \"zwa\" OIDA"));
         assert_eq!(f.meldung, "Noch ODA HOID brauch i a ZOI, des do is oba a KETTN.");
     }

@@ -1115,6 +1115,12 @@ pub extern "C" fn oida_fehler_durch_null(zeile: i64) -> ! {
     abbruch(zeile, "Durch nix kaun ma ned teilen.");
 }
 
+/// Eine ganze Zahl ist beim Rechnen größer oder kleiner geworden, als in 64 Bit passt.
+#[unsafe(no_mangle)]
+pub extern "C" fn oida_fehler_ueberlauf(zeile: i64) -> ! {
+    abbruch(zeile, "De Zoi is z'groß wuan, de geht si in ana ZOI nimma aus (mehr ois 64 Bit).");
+}
+
 /// Zugriff auf eine Stelle, die es in der Liste nicht gibt.
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_fehler_stelle(stelle: i64, laenge: i64, zeile: i64) -> ! {

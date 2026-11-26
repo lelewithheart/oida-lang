@@ -107,6 +107,7 @@ declare ptr @oida_json_lesen(ptr, ptr, ptr)
 declare ptr @oida_json_schreiben(ptr, ptr, i1 zeroext, i64)
 declare zeroext i1 @oida_gleich(ptr, ptr, ptr, i64)
 declare void @oida_fehler_durch_null(i64) noreturn
+declare void @oida_fehler_ueberlauf(i64) cold noreturn
 declare void @oida_fehler_schritt_null(i64) noreturn
 declare void @oida_fehler_stelle(i64, i64, i64) noreturn
 declare i64 @llvm.fptosi.sat.i64.f64(double)
@@ -159,10 +160,53 @@ declare i64 @llvm.abs.i64(i64, i1)
 declare i64 @llvm.smin.i64(i64, i64)
 declare i64 @llvm.smax.i64(i64, i64)
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
+declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
+declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare double @atan2(double, double)
 
-; Teilen von ganzen Zahlen: durch 0 gibt eine Meldung statt Unsinn,
-; und "kleinste Zahl / -1" läuft nicht über.
+; Rechnen mit ganzen Zahlen: Passt das Ergebnis nicht mehr in 64 Bit, gibt es eine
+; Meldung statt einer falschen Zahl. (!9: Das kommt so gut wie nie vor.)
+define internal i64 @oida.plus(i64 %a, i64 %b, i64 %zeile) alwaysinline {
+start:
+  %paar = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %a, i64 %b)
+  %ueber = extractvalue { i64, i1 } %paar, 1
+  br i1 %ueber, label %fehler, label %ok, !prof !9
+fehler:
+  call void @oida_fehler_ueberlauf(i64 %zeile)
+  unreachable
+ok:
+  %w = extractvalue { i64, i1 } %paar, 0
+  ret i64 %w
+}
+
+define internal i64 @oida.minus(i64 %a, i64 %b, i64 %zeile) alwaysinline {
+start:
+  %paar = call { i64, i1 } @llvm.ssub.with.overflow.i64(i64 %a, i64 %b)
+  %ueber = extractvalue { i64, i1 } %paar, 1
+  br i1 %ueber, label %fehler, label %ok, !prof !9
+fehler:
+  call void @oida_fehler_ueberlauf(i64 %zeile)
+  unreachable
+ok:
+  %w = extractvalue { i64, i1 } %paar, 0
+  ret i64 %w
+}
+
+define internal i64 @oida.mal(i64 %a, i64 %b, i64 %zeile) alwaysinline {
+start:
+  %paar = call { i64, i1 } @llvm.smul.with.overflow.i64(i64 %a, i64 %b)
+  %ueber = extractvalue { i64, i1 } %paar, 1
+  br i1 %ueber, label %fehler, label %ok, !prof !9
+fehler:
+  call void @oida_fehler_ueberlauf(i64 %zeile)
+  unreachable
+ok:
+  %w = extractvalue { i64, i1 } %paar, 0
+  ret i64 %w
+}
+
+; Teilen von ganzen Zahlen: durch 0 gibt eine Meldung statt Unsinn, und
+; "kleinste Zahl / -1" (das Ergebnis passt nicht in 64 Bit) meldet den Überlauf.
 define internal i64 @oida.durch(i64 %a, i64 %b, i64 %zeile) alwaysinline {
 start:
   %null = icmp eq i64 %b, 0
@@ -174,7 +218,7 @@ ok:
   %minus1 = icmp eq i64 %b, -1
   br i1 %minus1, label %negativ, label %normal
 negativ:
-  %n = sub i64 0, %a
+  %n = call i64 @oida.minus(i64 0, i64 %a, i64 %zeile)
   ret i64 %n
 normal:
   %q = sdiv i64 %a, %b
@@ -309,6 +353,7 @@ const FUSS: &str = r#"
 !2 = !{!"oida wert", !0}
 !3 = !{!1, !1, i64 0}
 !4 = !{!2, !2, i64 0}
+!9 = !{!"branch_weights", i32 1, i32 1048575}
 "#;
 
 /// Der Zusatz für `load` und `store` eines Werts in einer Variable oder Liste
@@ -1602,7 +1647,9 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 let w = self.ausdruck(innen);
                 let t = self.temp();
                 match (op, innen.typ) {
-                    (UnaerOp::Minus, Typ::Zoi) => self.zeile(&format!("{t} = sub i64 0, {w}")),
+                    (UnaerOp::Minus, Typ::Zoi) => {
+                        self.zeile(&format!("{t} = call i64 @oida.minus(i64 0, i64 {w}, i64 {})", ausdruck.pos.zeile))
+                    }
                     (UnaerOp::Minus, _) => self.zeile(&format!("{t} = fneg double {w}")),
                     (UnaerOp::Ned, _) => self.zeile(&format!("{t} = xor i1 {w}, true")),
                 }
@@ -2082,6 +2129,21 @@ impl<'m, 't> FunktionsBau<'m, 't> {
 
     /// `links ODA HOID rechts`: Rechts wird nur ausgerechnet, wenn links NIX oder ein Fehler ist.
     fn oda_hoid(&mut self, links: &Ausdruck, rechts: &Ausdruck, typ: Typ) -> String {
+        // liste[i] ODA HOID ersatz und a / b ODA HOID ersatz: Was sonst das Programm abbricht
+        // (die Stelle gibt es nicht, durch 0 geteilt), ergibt hier den Ersatz.
+        match &links.art {
+            AusdruckArt::Stelle { liste, index }
+                if !matches!(liste.typ, Typ::Verzeichnis(_)) && !matches!(links.typ, Typ::Ergebnis(_)) =>
+            {
+                return self.stelle_oda_hoid(links.typ, liste, index, rechts, typ);
+            }
+            AusdruckArt::Binaer { op: op @ (BinaerOp::Durch | BinaerOp::Rest), links: a, rechts: b }
+                if links.typ == Typ::Zoi =>
+            {
+                return self.teilen_oda_hoid(*op, a, b, rechts);
+            }
+            _ => {}
+        }
         let l = self.ausdruck(links);
         let lt = ir_typ(links.typ);
         let m_da = self.marke("hoid_da");
@@ -2121,6 +2183,117 @@ impl<'m, 't> FunktionsBau<'m, 't> {
         self.beginne_block(&m_ende);
         let t = self.temp();
         self.zeile(&format!("{t} = phi {} [ {wert_da}, %{m_da} ], [ {r}, %{von_rechts} ]", ir_typ(typ)));
+        t
+    }
+
+    /// `liste[stelle] ODA HOID ersatz`: Gibt es die Stelle nicht, kommt der Ersatz heraus. Kann an
+    /// der Stelle selbst NIX liegen (eine Liste aus VIELLEICHT ...), gilt der Ersatz auch dafür.
+    fn stelle_oda_hoid(&mut self, element: Typ, liste: &Ausdruck, index: &Ausdruck, rechts: &Ausdruck, typ: Typ) -> String {
+        let et = ir_typ(element);
+        // Die Reihenfolge wie bei liste[stelle] ohne Ersatz: Eine Liste, die erst ausgerechnet wird,
+        // kommt zuerst. Steht sie in einer Variable oder einem Feld, wird sie nur geliehen: Dann erst
+        // die Stelle ausrechnen (dabei können Funktionen laufen, die die Variable ändern) und danach hinschauen.
+        let steht_wo = matches!(
+            liste.art,
+            AusdruckArt::Variable { .. } | AusdruckArt::Feld { .. } | AusdruckArt::Selbst { .. } | AusdruckArt::Sicher { .. }
+        ) && feld_einer_variable(liste);
+        let (stelle, (l, l_eigen)) = if steht_wo {
+            let stelle = self.ausdruck(index);
+            (stelle, self.geliehen(liste))
+        } else {
+            let geholt = self.geliehen(liste);
+            (self.ausdruck(index), geholt)
+        };
+        let (lp, laenge, drin) = (self.temp(), self.temp(), self.temp());
+        let m_drin = self.marke("stelle_da");
+        let m_draussen = self.marke("stelle_fehlt");
+        let m_da = self.marke("hoid_da");
+        let m_sunst = self.marke("hoid_sunst");
+        let m_ende = self.marke("hoid_ende");
+        self.zeile(&format!("{lp} = getelementptr inbounds %oida.Liste, ptr {l}, i32 0, i32 1"));
+        self.zeile(&format!("{laenge} = load i64, ptr {lp}, !tbaa !3"));
+        self.zeile(&format!("{drin} = icmp ult i64 {stelle}, {laenge}"));
+        self.zeile(&format!("br i1 {drin}, label %{m_drin}, label %{m_draussen}"));
+
+        // Die Stelle gibt es: Der Wert gehört ab jetzt (auch) dem, der ihn bekommt.
+        self.beginne_block(&m_drin);
+        let (dp, daten, p, w) = (self.temp(), self.temp(), self.temp(), self.temp());
+        self.zeile(&format!("{dp} = getelementptr inbounds %oida.Liste, ptr {l}, i32 0, i32 3"));
+        self.zeile(&format!("{daten} = load ptr, ptr {dp}, !tbaa !3"));
+        self.zeile(&format!("{p} = getelementptr inbounds {et}, ptr {daten}, i64 {stelle}"));
+        self.zeile(&format!("{w} = load {et}, ptr {p}{}", wert_hinweis(element)));
+        self.behalt(&w, element);
+        self.lass_wenn_eigen(&l, liste.typ, l_eigen);
+        let wert_da = if matches!(element, Typ::Vielleicht { .. }) {
+            let da = self.ist_da(&w, element);
+            self.zeile(&format!("br i1 {da}, label %{m_da}, label %{m_sunst}"));
+            self.beginne_block(&m_da);
+            if let Typ::Vielleicht { zeiger: false, .. } = element {
+                let innen = self.temp();
+                self.zeile(&format!("{innen} = extractvalue {et} {w}, 1"));
+                innen
+            } else {
+                w
+            }
+        } else {
+            self.zeile(&format!("br label %{m_da}"));
+            self.beginne_block(&m_da);
+            w
+        };
+        self.zeile(&format!("br label %{m_ende}"));
+
+        // Die Stelle gibt es nicht.
+        self.beginne_block(&m_draussen);
+        self.lass_wenn_eigen(&l, liste.typ, l_eigen);
+        self.zeile(&format!("br label %{m_sunst}"));
+
+        self.beginne_block(&m_sunst);
+        let r = self.ausdruck(rechts);
+        let von_rechts = self.block.clone();
+        self.zeile(&format!("br label %{m_ende}"));
+        self.beginne_block(&m_ende);
+        let t = self.temp();
+        self.zeile(&format!("{t} = phi {} [ {wert_da}, %{m_da} ], [ {r}, %{von_rechts} ]", ir_typ(typ)));
+        t
+    }
+
+    /// `a / b ODA HOID ersatz` und `a % b ODA HOID ersatz` mit ganzen Zahlen: Ist `b` 0 (oder passt
+    /// das Ergebnis nicht in 64 Bit: kleinste Zahl durch -1), kommt der Ersatz heraus.
+    fn teilen_oda_hoid(&mut self, op: BinaerOp, a: &Ausdruck, b: &Ausdruck, rechts: &Ausdruck) -> String {
+        let l = self.ausdruck(a);
+        let r = self.ausdruck(b);
+        let m_da = self.marke("hoid_da");
+        let m_sunst = self.marke("hoid_sunst");
+        let m_ende = self.marke("hoid_ende");
+        let (null, minus1) = (self.temp(), self.temp());
+        self.zeile(&format!("{null} = icmp eq i64 {r}, 0"));
+        self.zeile(&format!("{minus1} = icmp eq i64 {r}, -1"));
+        let wert_da = if op == BinaerOp::Durch {
+            let (kleinste, ueber, schlecht, q) = (self.temp(), self.temp(), self.temp(), self.temp());
+            self.zeile(&format!("{kleinste} = icmp eq i64 {l}, {}", i64::MIN));
+            self.zeile(&format!("{ueber} = and i1 {kleinste}, {minus1}"));
+            self.zeile(&format!("{schlecht} = or i1 {null}, {ueber}"));
+            self.zeile(&format!("br i1 {schlecht}, label %{m_sunst}, label %{m_da}"));
+            self.beginne_block(&m_da);
+            self.zeile(&format!("{q} = sdiv i64 {l}, {r}"));
+            q
+        } else {
+            // Der Rest beim Teilen durch -1 ist immer 0 (und "kleinste Zahl % -1" darf der Prozessor nicht rechnen).
+            let (teiler, rest) = (self.temp(), self.temp());
+            self.zeile(&format!("br i1 {null}, label %{m_sunst}, label %{m_da}"));
+            self.beginne_block(&m_da);
+            self.zeile(&format!("{teiler} = select i1 {minus1}, i64 1, i64 {r}"));
+            self.zeile(&format!("{rest} = srem i64 {l}, {teiler}"));
+            rest
+        };
+        self.zeile(&format!("br label %{m_ende}"));
+        self.beginne_block(&m_sunst);
+        let ersatz = self.ausdruck(rechts);
+        let von_rechts = self.block.clone();
+        self.zeile(&format!("br label %{m_ende}"));
+        self.beginne_block(&m_ende);
+        let t = self.temp();
+        self.zeile(&format!("{t} = phi i64 [ {wert_da}, %{m_da} ], [ {ersatz}, %{von_rechts} ]"));
         t
     }
 
@@ -2399,9 +2572,9 @@ impl<'m, 't> FunktionsBau<'m, 't> {
     fn binaer(&mut self, op: BinaerOp, typ: Typ, l: &str, r: &str, zeile: u32) -> String {
         let t = self.temp();
         let befehl = match (typ, op) {
-            (Typ::Zoi, BinaerOp::Plus) => format!("add i64 {l}, {r}"),
-            (Typ::Zoi, BinaerOp::Minus) => format!("sub i64 {l}, {r}"),
-            (Typ::Zoi, BinaerOp::Mal) => format!("mul i64 {l}, {r}"),
+            (Typ::Zoi, BinaerOp::Plus) => format!("call i64 @oida.plus(i64 {l}, i64 {r}, i64 {zeile})"),
+            (Typ::Zoi, BinaerOp::Minus) => format!("call i64 @oida.minus(i64 {l}, i64 {r}, i64 {zeile})"),
+            (Typ::Zoi, BinaerOp::Mal) => format!("call i64 @oida.mal(i64 {l}, i64 {r}, i64 {zeile})"),
             (Typ::Zoi, BinaerOp::Durch) => format!("call i64 @oida.durch(i64 {l}, i64 {r}, i64 {zeile})"),
             (Typ::Zoi, BinaerOp::Rest) => format!("call i64 @oida.rest(i64 {l}, i64 {r}, i64 {zeile})"),
             (Typ::Kommazoi, BinaerOp::Plus) => format!("fadd double {l}, {r}"),
@@ -2648,6 +2821,23 @@ fn baue_funktion(modul: &mut Modul, f: &Funktion, art: FunktionsArt) -> String {
 }
 
 /// Erzeugt das LLVM-IR für ein Programm, das die Typprüfung bestanden hat.
+/// Macht aus dem fertigen IR eines ohne Überlaufprüfung (für `--ohne-zoinprüfung`): Plus, Minus
+/// und Mal mit ganzen Zahlen rechnen dann wie der Prozessor, und eine Zahl, die nicht mehr in
+/// 64 Bit passt, läuft still über. Das ist in engen Rechenschleifen spürbar schneller.
+///
+/// Geändert werden nur die drei kleinen Funktionen `@oida.plus`, `@oida.minus` und `@oida.mal`,
+/// die der Compiler überall einsetzt; Teilen durch 0 und Listenstellen werden weiter geprüft.
+pub fn ohne_ueberlaufpruefung(ir: &str) -> String {
+    let mut aus = ir.to_string();
+    for (name, befehl) in [("plus", "add"), ("minus", "sub"), ("mal", "mul")] {
+        let kopf = format!("define internal i64 @oida.{name}(i64 %a, i64 %b, i64 %zeile) alwaysinline {{\n");
+        let anfang = aus.find(&kopf).expect("die Rechenfunktion steht im Kopf des IR");
+        let ende = anfang + aus[anfang..].find("\n}\n").expect("die Funktion hört auf") + 3;
+        aus.replace_range(anfang..ende, &format!("{kopf}start:\n  %w = {befehl} i64 %a, %b\n  ret i64 %w\n}}\n"));
+    }
+    aus
+}
+
 pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     let mut modul = Modul {
         texte: Vec::new(),

@@ -20,6 +20,8 @@ Optionen:
   --renn                  des Programm noch'm Übersetzn glei startn
   --ir                    des LLVM-IR ois .ll-Datei danebn speichern
   --ohne-optimierung      schnölla übersetzn, dafia a langsamers Programm
+  --ohne-zoinprüfung      beim Rechnen ned prüfn, ob a gaunze Zoi z'groß wird: schnölla,
+                          oba a z'große Zoi rechnt daun stü foisch weida
   --woerterbuch <datei>   des Wörterbuch nehma
   --woerter               de Wörter von da Sproch auzagn
   --hilfe                 des do auzagn
@@ -38,6 +40,7 @@ struct Optionen {
     renn: bool,
     ir: bool,
     optimieren: bool,
+    zoin_pruefen: bool,
     woerterbuch: Option<PathBuf>,
     woerter: bool,
     editor: bool,
@@ -51,6 +54,7 @@ fn optionen_lesen(argumente: &[String]) -> Result<Optionen, String> {
         renn: false,
         ir: false,
         optimieren: true,
+        zoin_pruefen: true,
         woerterbuch: None,
         woerter: false,
         editor: false,
@@ -69,6 +73,7 @@ fn optionen_lesen(argumente: &[String]) -> Result<Optionen, String> {
             "--renn" => o.renn = true,
             "--ir" => o.ir = true,
             "--ohne-optimierung" => o.optimieren = false,
+            "--ohne-zoinprüfung" | "--ohne-zoinpruefung" => o.zoin_pruefen = false,
             "--woerter" => o.woerter = true,
             "--editor" => o.editor = true,
             "--editor-dateien" => o.editor_dateien = Some(wert("--editor-dateien")?),
@@ -150,6 +155,7 @@ fn hauptprogramm() -> Result<ExitCode, String> {
             return Ok(ExitCode::from(1));
         }
     };
+    let ir = if optionen.zoin_pruefen { ir } else { oida_uebersetzer::irgen::ohne_ueberlaufpruefung(&ir) };
 
     if optionen.ir {
         let ir_datei = datei.with_extension("ll");

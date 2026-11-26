@@ -1,0 +1,36 @@
+# Ein Notenschnitt, der nie abbricht: Was sonst das Programm beendet (eine
+# Stelle, die es in der Liste nicht gibt, Teilen durch 0, ein Text ohne Zahl),
+# bekommt mit ODA HOID einen Ersatz.
+
+# Der Schnitt mal 100, damit zwei Kommastellen in einer ganzen Zahl Platz haben.
+FUNKTIAUN schnitt(notn LISTN VON ZOI) GIBT ZRUCK ZOI
+    SOG AU summe = 0 OIDA
+    FIA JEDE note IN notn TUA
+        summe += note OIDA
+    PASST SCHO
+    # Ohne Noten wäre das "durch 0": Dann gilt 0.
+    GIB ZRUCK summe * 100 / LÄNGN(notn) ODA HOID 0 OIDA
+PASST SCHO
+
+FUNKTIAUN zag(nam KETTN, notn LISTN VON ZOI)
+    SOG AU s = schnitt(notn) OIDA
+    # Die erste und die dritte Note, auch wenn es gar nicht so viele gibt.
+    SOG AU erste = notn[0] ODA HOID 0 OIDA
+    SOG AU dritte = notn[2] ODA HOID 0 OIDA
+    SCHREIB($"{nam}: {LÄNGN(notn)} Notn, Schnitt {AUF STÖN(s / 100.0, 2)}, de erste {erste}, de dritte {dritte}") OIDA
+PASST SCHO
+
+zag("Franz", [1, 2, 2, 3]) OIDA
+zag("Resi", [1]) OIDA
+zag("da Neiche", []) OIDA
+
+# Noten aus Texten: Was keine Zahl ist, zählt nicht mit.
+SOG AU eingaben = ["2", "drei", "4", ""] OIDA
+SOG AU glesn LISTN VON ZOI = [] OIDA
+FIA JEDE eingab IN eingaben TUA
+    SOG AU note = ZOI AUS(eingab) ODA HOID 0 OIDA
+    WENN note > 0 DAUN
+        HAU EINE(glesn, note) OIDA
+    PASST SCHO
+PASST SCHO
+zag("aus Texten", glesn) OIDA

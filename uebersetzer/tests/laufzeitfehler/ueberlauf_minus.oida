@@ -1,0 +1,4 @@
+SOG AU klanste = -9223372036854775807 - 1 OIDA
+SCHREIB(klanste) OIDA
+SCHREIB(-klanste) OIDA
+SCHREIB("nachher") OIDA

@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.18.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.19.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -258,7 +258,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.18)
+## Die Sprache (v0.19)
 
 ### Typen
 
@@ -612,6 +612,8 @@ PASST SCHO
 - In `FIA JEDE` ist die Variable eine Kopie des Elements. Wer Elemente ändern will, zählt mit
   `FIA i VON 0 BIS LÄNGN(liste) - 1` und schreibt `liste[i]`.
 - Greift man auf eine Stelle zu, die es nicht gibt, bricht das Programm mit einer Meldung ab.
+  Wer das nicht will, gibt einen Ersatz an: `liste[5] ODA HOID 0` ist das Element an der Stelle 5,
+  und `0`, wenn es die Stelle nicht gibt. So bricht nichts ab, auch bei einer leeren Liste nicht.
 - Um den Speicher kümmert sich OIDA: Eine Liste wird freigegeben, sobald sie niemand mehr braucht.
 
 ### Fehlende Werte: VIELLEICHT und NIX
@@ -1939,12 +1941,41 @@ An Strichpunkt brauchst do ned. Bei uns haaßt des OIDA.
 ```
 
 Fehler bei den Typen werden alle auf einmal gemeldet, sonst hört der Compiler beim ersten auf.
-Beim Laufen bricht das Programm mit einer Meldung ab, wenn durch 0 geteilt wird oder
-`ZOI("...")` keine Zahl bekommt:
+Beim Laufen bricht das Programm mit einer Meldung ab, wenn es nicht mehr richtig weitergehen
+kann: beim Teilen durch 0, bei einer Stelle, die es in der Liste nicht gibt, wenn `ZOI("...")`
+keine Zahl bekommt, und wenn eine ganze Zahl beim Rechnen nicht mehr in 64 Bit passt:
 
 ```
 Heast! Zeile 3: Durch nix kaun ma ned teilen.
+Heast! Zeile 9: De Zoi is z'groß wuan, de geht si in ana ZOI nimma aus (mehr ois 64 Bit).
 ```
+
+Für alle vier gibt es eine Form, die nie abbricht, weil man sagt, was stattdessen gelten soll:
+
+| Statt | schreibt man | und bekommt |
+|---|---|---|
+| `liste[i]` | `liste[i] ODA HOID ersatz` | das Element, oder den Ersatz, wenn es die Stelle nicht gibt |
+| `a / b`, `a % b` (ganze Zahlen) | `a / b ODA HOID ersatz` | das Ergebnis, oder den Ersatz, wenn `b` 0 ist |
+| `ZOI(text)` | `ZOI AUS(text) ODA HOID ersatz` | die Zahl, oder den Ersatz, wenn im Text keine steht |
+| `verzeichnis[schlüssel]` | ergibt immer ein `VIELLEICHT` | man muss ohnehin nachschauen |
+
+```
+SOG AU zoin = [10, 20, 30] OIDA
+SCHREIB(zoin[1] ODA HOID -1, zoin[7] ODA HOID -1) OIDA      # 20 -1
+SOG AU leit = 0 OIDA
+SCHREIB(100 / leit ODA HOID 0) OIDA                         # 0
+SCHREIB(1 + (100 / leit ODA HOID 0)) OIDA                   # mitten in einer Rechnung: mit Klammern
+```
+
+- Der Ersatz wird nur ausgerechnet, wenn er gebraucht wird.
+- `ODA HOID` bindet am schwächsten. Steht die Stelle oder die Teilung mitten in einer Rechnung,
+  kommt sie samt Ersatz in Klammern.
+- Bei einer `LISTN VON VIELLEICHT ...` gilt der Ersatz für beides: Die Stelle gibt es nicht, oder
+  dort liegt `NIX`.
+- Kommazahlen brauchen das nicht: `1.0 / 0.0` ist `inf`, und sie laufen nicht über.
+- Steht beim Teilen eine `0` schon im Programm (`a / 0`), meldet es der Compiler.
+- Dass ganze Zahlen beim Überlaufen abbrechen statt still falsch weiterzurechnen, kostet beim
+  Rechnen ein wenig Zeit (siehe [Wie schnell ist das?](#wie-schnell-ist-das)).
 
 
 ## Wie schnell ist das?
@@ -1956,6 +1987,22 @@ Programmen gegen C, Rust, C#, Java, JavaScript und Python:
 
 Die Programme kommen mit dem aus, was OIDA schon kann; was der Vergleich zeigt und was nicht,
 steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
+
+**Die Messung stammt von v0.4.** Seit v0.19 prüft OIDA bei jedem Plus, Minus und Mal mit ganzen
+Zahlen, ob das Ergebnis noch in 64 Bit passt, und bricht sonst mit einer Meldung ab, statt still
+falsch weiterzurechnen. Das kostet dort Zeit, wo ein Programm fast nur mit ganzen Zahlen rechnet.
+An denselben neun Programmen gemessen (v0.19 gegen den Stand direkt davor, bester von sieben Läufen):
+
+| Programm | mit Prüfung |
+|---|---|
+| `fib` (fast nur Plus und Minus) | um rund 75 % langsamer |
+| `collatz` (enge Schleife mit Mal und Plus) | um rund 50 % langsamer |
+| die anderen sieben | zwischen 3 % schneller und 6 % langsamer, also im Rahmen der Messung gleich |
+
+Wer das Tempo braucht und weiß, dass seine Zahlen klein bleiben, stellt die Prüfung für ein
+Programm ab: `oida programm.oida --ohne-zoinprüfung`. Dann rechnet es wie in der Tabelle oben
+(und wie C und C#): Eine zu große Zahl läuft still über. Teilen durch 0 und Listenstellen werden
+auch dann geprüft.
 
 
 ## Aufbau
@@ -2026,9 +2073,11 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 - Als JSON gehen Strukturen, aber keine Klassen; die Felder heißen im JSON immer wie in der `STRUKTUR`.
 - Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
 - Bei einem Verzeichnis geht als Schlüssel nur `ZOI` oder `KETTN`.
-- Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0 und `ZOI("abc")` brechen das
-  Programm weiterhin mit einer Meldung ab (für Texte gibt es stattdessen `ZOI AUS`).
-- Ganze Zahlen laufen bei mehr als 64 Bit still über.
+- Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0, `ZOI("abc")` und eine ganze Zahl,
+  die nicht mehr in 64 Bit passt, brechen das Programm mit einer Meldung ab, wenn man keine der
+  [sicheren Formen](#fehlermeldungen) nimmt. Dass man sie nimmt, verlangt der Compiler nicht.
+- Für eine Stelle mitten in einer Kette (`spü.gegna[3].nam ODA HOID "?"`) gilt der Ersatz noch
+  nicht; dort schreibt man `(spü.gegna[3] ODA HOID ersatz).nam`.
 - Die Meldungen beim Laufen (`Durch nix kaun ma ned teilen`) richten sich nicht nach dem Wörterbuch.
 - Fenster und Ton gibt es nur unter Windows; unter Linux läuft alles andere. macOS ist nicht ausprobiert.
 - Ein Programm für das andere System übersetzen (unter Windows eines für Linux) geht nicht.
@@ -2070,8 +2119,9 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 12 | Die Sprache selbst, Teil 1: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten), Kommastellen, Zahlen wie `1_000`, `0xFF`, `1e9`; `==` für Strukturen, Listen und Verzeichnisse | fertig |
 | 13 | [Netzwerk](#netzwerk): HTTP und HTTPS als Client, dazu TCP-Verbindungen in beide Richtungen | fertig |
 | 14 | Die Sprache selbst, Teil 2: [Aufzählungen](#aufzählungen), [`JE NOCHDEM`](#nach-fällen-je-nochdem) mit Prüfung, dass kein Fall fehlt; fragen, was ein Objekt wirklich ist (`OIS`, `IS A`) | fertig |
-| 15 | Bibliotheken: Namensräume, Ordner als Bibliothek, Pakete holen, fremde DLLs aufrufen | offen |
-| 16 | Threads: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
+| 15 | Weniger Abstürze: `liste[i] ODA HOID ersatz` und `a / b ODA HOID ersatz` brechen nie ab; ganze Zahlen, die überlaufen, melden sich, statt falsch weiterzurechnen; `a / 0` meldet schon der Compiler | fertig |
+| 16 | Ordnung für große Programme: privat, Namensräume (`BRAUCH "datei" OIS name`), Schnittstellen, Pakete aus dem Netz holen | offen |
+| 17 | Threads ohne geteilte Daten: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind
 dort Springen zur Definition, Umbenennen und ein Debugger.

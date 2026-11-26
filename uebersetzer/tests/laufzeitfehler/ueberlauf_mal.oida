@@ -1,0 +1,11 @@
+FUNKTIAUN potenz(basis ZOI, wia_oft ZOI) GIBT ZRUCK ZOI
+    SOG AU ergebnis = 1 OIDA
+    FIA i VON 1 BIS wia_oft TUA
+        ergebnis *= basis OIDA
+    PASST SCHO
+    GIB ZRUCK ergebnis OIDA
+PASST SCHO
+
+SCHREIB(potenz(2, 62)) OIDA
+SCHREIB(potenz(2, 63)) OIDA
+SCHREIB("nachher") OIDA

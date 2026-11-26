@@ -1,0 +1,41 @@
+--- Listn
+1 3 99 99
+nix do
+(de Listn wird gholt)
+(de Numma wird ausgrechnt)
+20
+(de Listn wird gholt)
+(de Numma wird ausgrechnt)
+(da Ersotz wird braucht)
+-1
+--- Texte, Strukturn, Objekte
+Bello kana
+Rexi Rexi Rexi 2
+gschaut: Rexi
+gschaut: Rexi
+Rexi!
+0 0 2
+Neicha Rex
+gschaut: Rex
+gschaut: Rex
+Rex!
+--- Listn in Listn
+3 0
+8
+--- wos söwa föhn kau
+5 -1 -1
+Do b c
+--- Teiln
+(de Numma wird ausgrechnt)
+-1 -2 3 1
+(de Numma wird ausgrechnt)
+(da Ersotz wird braucht)
+-1
+(de Numma wird ausgrechnt)
+1
+(de Numma wird ausgrechnt)
+0 0 -9
+7
+--- grod no in ana ZOI
+(de Numma wird ausgrechnt)
+9223372036854775807 -9223372036854775807 9223372036854775806 -9223372036854775807 9223372030926249001
