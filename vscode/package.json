@@ -38,12 +38,6 @@
         "path": "./syntaxes/oida.tmLanguage.json"
       }
     ],
-    "snippets": [
-      {
-        "language": "oida",
-        "path": "./snippets/oida.json"
-      }
-    ],
     "semanticTokenTypes": [
       {
         "id": "wahrheitswert",
@@ -139,6 +133,21 @@
           "default": "",
           "scope": "machine-overridable",
           "markdownDescription": "Pfad zu einem eigenen Wörterbuch. Leer lassen, dann nimmt der Compiler seines (`woerterbuch.txt` neben der `oida.exe` oder bis zu zwei Ordner darüber)."
+        },
+        "oida.schreibweise": {
+          "type": "string",
+          "enum": [
+            "wie getippt",
+            "GROSS",
+            "klein"
+          ],
+          "enumDescriptions": [
+            "Wer klein tippt, bekommt `wenn`, wer groß tippt, `WENN`. Steht noch nichts da, zählt, wie die Datei bisher geschrieben ist.",
+            "Vorschläge und Bausteine immer in Großbuchstaben: `WENN ... DAUN`",
+            "Vorschläge und Bausteine immer in Kleinbuchstaben: `wenn ... daun`"
+          ],
+          "default": "wie getippt",
+          "markdownDescription": "Wie Vorschläge und Bausteine eingesetzt werden. Der Compiler nimmt beides: `WENN` und `wenn`."
         }
       }
     },

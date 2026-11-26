@@ -9,6 +9,7 @@ Damit schreibt und startet man [OIDA](https://github.com/lelewithheart)-Programm
 - **Starten mit F5** (oder dem Pfeil rechts oben): übersetzt das Programm und lässt es unten im Terminal laufen.
 - **Übersetzen mit Strg+Umschalt+B**: legt die `.exe` neben die `.oida`-Datei.
 - **Vorschläge** für die Wörter der Sprache und **Schnipsel** (`wenn`, `wennsunst`, `solong`, `fia`, `fiajede`, `struktur`, `funktiaun`, `sogau`, `schreib`).
+- **Groß oder klein:** Der Compiler nimmt `WENN` genauso wie `wenn`. Vorschläge und Schnipsel richten sich danach, wie man tippt: Wer klein tippt, bekommt `wenn ... daun`. Mit der Einstellung `oida.schreibweise` (`wie getippt`, `GROSS`, `klein`) lässt es sich festlegen.
 - **Einrücken** nach `DAUN`, `TUA`, `SUNST` und `FUNKTIAUN`, zurück bei `PASST SCHO`.
 - Eingebaute Funktionen wie `LÄNGN(...)` werden als Funktionen eingefärbt, aber nur mit Klammer.
 - Kommentare mit Strg+# ein- und ausschalten.

@@ -263,15 +263,87 @@ const einfaerber = {
 
 // ----------------------------------------------------------------- Vorschläge
 
+/**
+ * Sollen die Vorschläge an dieser Stelle klein eingesetzt werden? Der Compiler nimmt beides
+ * (WENN und wenn). Die Einstellung `oida.schreibweise` legt es fest; bei "wie getippt"
+ * entscheidet, was gerade getippt wurde, und wenn dort noch kein Buchstabe steht, wie die
+ * Wörter der Sprache in der Datei bisher geschrieben sind.
+ */
+function kleinSchreiben(dokument, getippt, antwort) {
+    const wahl = einstellung('schreibweise');
+    if (wahl === 'klein') {
+        return true;
+    }
+    if (wahl === 'GROSS') {
+        return false;
+    }
+    const hatKlein = /\p{Ll}/u.test(getippt);
+    const hatGross = /\p{Lu}/u.test(getippt);
+    if (hatKlein !== hatGross) {
+        return hatKlein;
+    }
+    let klein = 0;
+    let gross = 0;
+    for (const [zeile, spalte, laenge, art] of antwort.tokens || []) {
+        if (ARTEN[art] !== 'keyword' && ARTEN[art] !== 'endwort') {
+            continue;
+        }
+        const wort = dokument.lineAt(zeile).text.substr(spalte, laenge);
+        if (/\p{Ll}/u.test(wort) && !/\p{Lu}/u.test(wort)) {
+            klein++;
+        } else if (/\p{Lu}/u.test(wort) && !/\p{Ll}/u.test(wort)) {
+            gross++;
+        }
+    }
+    return klein > gross;
+}
+
+/** Die Bausteine (wenn, solong, funktiaun ...) aus snippets/oida.json; die Datei erzeugt der Compiler. */
+let bausteine = null;
+
+function ladeBausteine() {
+    if (bausteine === null) {
+        bausteine = [];
+        try {
+            const datei = path.join(ordnerDerErweiterung, 'snippets', 'oida.json');
+            for (const [name, b] of Object.entries(JSON.parse(fs.readFileSync(datei, 'utf8')))) {
+                if (b && typeof b === 'object' && b.prefix && b.body) {
+                    bausteine.push({ name, kuerzel: String(b.prefix), text: [].concat(b.body).join('\n'), was: b.description || '' });
+                }
+            }
+        } catch (fehler) {
+            protokoll.appendLine(`Die Bausteine lassen sich nicht lesen: ${fehler.message}`);
+        }
+    }
+    return bausteine;
+}
+
+/** Ein Baustein in Kleinbuchstaben: Nur die Wörter der Sprache (ganz groß geschrieben) werden klein, `${1:Name}` bleibt. */
+function kleinerBaustein(text) {
+    return text.replace(/(?<![\p{L}\p{N}_])\p{Lu}[\p{Lu}_]+(?![\p{L}\p{N}_])/gu, (wort) => wort.toLowerCase());
+}
+
 const vorschlaege = {
     async provideCompletionItems(dokument, position) {
         const antwort = await untersuche(dokument);
         if (!antwort) {
             return [];
         }
-        const davor = dokument.lineAt(position.line).text.slice(0, position.character).toUpperCase();
+        const zeile = dokument.lineAt(position.line).text.slice(0, position.character);
+        const davor = zeile.toUpperCase();
+        const klein = kleinSchreiben(dokument, /[\p{L}\p{N}_]*$/u.exec(zeile)[0], antwort);
+        const schreib = (text) => (klein ? text.toLowerCase() : text);
+        const bausteinListe = ladeBausteine().map((b) => {
+            const eintrag = new vscode.CompletionItem({ label: schreib(b.name), description: 'Baustein' }, vscode.CompletionItemKind.Snippet);
+            const text = klein ? kleinerBaustein(b.text) : b.text;
+            eintrag.insertText = new vscode.SnippetString(text);
+            eintrag.filterText = b.kuerzel;
+            eintrag.detail = `OIDA-Baustein: ${b.was}`;
+            eintrag.documentation = new vscode.MarkdownString().appendCodeblock(text.replace(/\$\{\d+:([^}]*)\}/g, '$1').replace(/\$\d+/g, ''), 'oida');
+            return eintrag;
+        });
         return antwort.woerter.map((w) => {
-            const eintrag = new vscode.CompletionItem(w.wort, vscode.CompletionItemKind.Keyword);
+            const eintrag = new vscode.CompletionItem(schreib(w.wort), vscode.CompletionItemKind.Keyword);
             eintrag.detail = w.fest === w.wort ? 'OIDA' : `OIDA (${w.fest})`;
             // "SOG A|" soll zu "SOG AU" werden und nicht zu "SOG SOG AU":
             // steht vor dem Cursor schon der Anfang der Wortfolge, wird der ersetzt.
@@ -285,7 +357,7 @@ const vorschlaege = {
                 }
             }
             return eintrag;
-        });
+        }).concat(bausteinListe);
     },
 };
 

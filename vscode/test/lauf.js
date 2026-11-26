@@ -207,6 +207,63 @@ const pruefungen = {
         assert.deepStrictEqual([bereich.start.character, bereich.end.character], [0, 5]);
     },
 
+    async 'Wer klein tippt, bekommt kleine Vorschläge und Bausteine'() {
+        const hole = async (dokument, zeile, spalte) => {
+            const liste = await vscode.commands.executeCommand(
+                'vscode.executeCompletionItemProvider', dokument.uri, new vscode.Position(zeile, spalte));
+            return liste.items.filter((e) => (e.detail || '').startsWith('OIDA'));
+        };
+        // Was eingesetzt würde: der eigene Text, sonst die Beschriftung.
+        const text = (e) => {
+            if (e.insertText) {
+                return typeof e.insertText === 'string' ? e.insertText : e.insertText.value;
+            }
+            return typeof e.label === 'string' ? e.label : e.label.label;
+        };
+        const baustein = (liste, kuerzel) =>
+            liste.find((e) => e.kind === vscode.CompletionItemKind.Snippet && e.filterText === kuerzel);
+
+        // Klein getippt: Wörter und Bausteine kommen klein, Platzhalter wie "Name" bleiben.
+        const klein = await oeffne(schreibe('klein.oida', 'so\nsog a\nwenn\nklasse\n'));
+        const erste = (await hole(klein, 0, 2)).map(text);
+        for (const wort of ['sog au', 'solong', 'passt scho']) {
+            assert.ok(erste.includes(wort), `${wort} fehlt: ${erste.join(', ')}`);
+        }
+        assert.ok(!erste.includes('SOG AU') && !erste.includes('SOLONG'), `groß trotz klein getippt: ${erste.join(', ')}`);
+        const sogAu = (await hole(klein, 1, 5)).find((e) => e.label === 'sog au');
+        assert.ok(sogAu && sogAu.range, 'sog au hat keinen Bereich');
+        const wenn = baustein(await hole(klein, 2, 4), 'wenn');
+        assert.ok(wenn, 'der Baustein wenn fehlt');
+        assert.strictEqual(text(wenn), 'wenn ${1:bedingung} daun\n\t$0\npasst scho');
+        const klasse = text(baustein(await hole(klein, 3, 6), 'klasse'));
+        assert.ok(klasse.startsWith('klasse ${1:Name}\n\t${2:feld} ${3:zoi}'), klasse);
+
+        // Groß getippt: alles wie bisher.
+        const gross = await oeffne(schreibe('gross.oida', 'SO\nWENN\n'));
+        assert.ok((await hole(gross, 0, 2)).map(text).includes('SOG AU'));
+        assert.strictEqual(text(baustein(await hole(gross, 1, 4), 'wenn')), 'WENN ${1:bedingung} DAUN\n\t$0\nPASST SCHO');
+
+        // Noch nichts getippt: Es zählt, wie die Datei bisher geschrieben ist.
+        const leer = await oeffne(schreibe('leer.oida', 'sog au a = 1 oida\nschreib(a) oida\n\n'));
+        const amAnfang = (await hole(leer, 2, 0)).map(text);
+        assert.ok(amAnfang.includes('wenn') && !amAnfang.includes('WENN'), `in einer klein geschriebenen Datei: ${amAnfang.slice(0, 8).join(', ')}`);
+
+        // Die Einstellung geht vor.
+        const einstellungen = vscode.workspace.getConfiguration('oida');
+        await einstellungen.update('schreibweise', 'klein', vscode.ConfigurationTarget.Global);
+        try {
+            assert.ok((await hole(gross, 0, 2)).map(text).includes('sog au'), 'Einstellung klein, aber groß vorgeschlagen');
+        } finally {
+            await einstellungen.update('schreibweise', undefined, vscode.ConfigurationTarget.Global);
+        }
+        await einstellungen.update('schreibweise', 'GROSS', vscode.ConfigurationTarget.Global);
+        try {
+            assert.ok((await hole(klein, 0, 2)).map(text).includes('SOG AU'), 'Einstellung GROSS, aber klein vorgeschlagen');
+        } finally {
+            await einstellungen.update('schreibweise', undefined, vscode.ConfigurationTarget.Global);
+        }
+    },
+
     async 'F5 übersetzt und startet das Programm'() {
         await oeffne(path.join(wurzel, 'beispiele', 'fizzbuzz.oida'));
         const exe = path.join(os.tmpdir(), 'oida-vscode', 'fizzbuzz.exe');
