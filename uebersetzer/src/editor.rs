@@ -216,17 +216,25 @@ pub fn untersuche_datei(quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) 
     aus.push_str("],\"namen\":[");
     for (i, n) in alle_namen(&tokens, quelltext, wb, pfad).iter().enumerate() {
         let komma = if i > 0 { "," } else { "" };
-        let parameter: Vec<String> = n.parameter.iter().map(|p| json_text(p)).collect();
+        let liste = |teile: &[String]| teile.iter().map(|t| json_text(t)).collect::<Vec<String>>().join(",");
         let _ = write!(
             aus,
-            "{komma}{{\"name\":{},\"art\":{},\"text\":{},\"doku\":{},\"aus\":{},\"zu\":{},\"parameter\":[{}]}}",
+            "{komma}{{\"name\":{},\"art\":{},\"text\":{},\"doku\":{},\"aus\":{},\"zu\":{},\"parameter\":[{}],\
+             \"typ\":{},\"eltern\":{},\"kette\":[{}],\"jedes\":{},\"von\":{},\"bis\":{},\"innen\":{}}}",
             json_text(&n.name),
             json_text(n.art),
             json_text(&n.text),
             json_text(&n.doku),
             json_text(&n.aus),
             json_text(&n.zu),
-            parameter.join(",")
+            liste(&n.parameter),
+            json_text(&n.typ),
+            json_text(&n.eltern),
+            liste(&n.kette),
+            n.jedes,
+            n.von,
+            n.bis,
+            n.innen
         );
     }
     aus.push_str("]}");
@@ -236,6 +244,7 @@ pub fn untersuche_datei(quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) 
 // ------------------------------------------------- Namen für die Vorschläge
 
 /// Ein Name aus dem Programm, den der Editor vorschlagen kann.
+#[derive(Default)]
 struct Eintrag {
     name: String,
     /// "funktion", "methode", "typ", "wert" (einer Aufzählung), "feld", "variable" oder "fix"
@@ -250,14 +259,31 @@ struct Eintrag {
     zu: String,
     /// Bei Funktionen und Methoden: die Namen der Parameter.
     parameter: Vec<String>,
+    /// Der Typ, wo er dasteht: bei Feldern, Parametern und Variablen ihrer, bei Funktionen und
+    /// Methoden der, den sie zurückgeben. In der kurzen Schreibweise von [`typ_lesen`].
+    typ: String,
+    /// Bei Klassen: von wem sie erbt.
+    eltern: String,
+    /// Bei Variablen ohne Typ: womit sie anfangen, siehe [`kette_lesen`]. Der Editor rechnet
+    /// den Typ daraus selbst aus.
+    kette: Vec<String>,
+    /// Die Variable ist ein Element von `kette` (FIA JEDE x IN kette).
+    jedes: bool,
+    /// Die Zeilen (ab 0, beide eingeschlossen), in denen eine Variable gilt; bei Funktionen und
+    /// Methoden aus der Datei im Editor die Zeilen, über die sie gehen.
+    von: u32,
+    bis: u32,
+    /// Die Variable gehört zu einer Funktion (sonst zum Hauptprogramm, das Funktionen nicht sehen).
+    innen: bool,
 }
 
 /// Sammelt die Namen aus dem Text im Editor und aus allem, was er mit BRAUCH dazuholt.
 ///
 /// Das geht absichtlich nur über die Wörter (Tokens) und nicht über den Syntaxbaum: Beim
 /// Tippen ist die Zeile unter dem Cursor fast immer unfertig, und genau dann braucht man die
-/// Vorschläge. Was zu einer Klasse, Struktur oder Aufzählung gehört, wird an der Einrückung
-/// erkannt (ihr Inhalt ist eingerückt, das nächste Wort am Zeilenanfang beendet sie).
+/// Vorschläge. Was zu einer Klasse, Struktur, Aufzählung oder Funktion gehört, wird an der
+/// Einrückung erkannt (der Inhalt ist eingerückt; das nächste Wort, das so weit links steht
+/// wie der Anfang, beendet sie).
 fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) -> Vec<Eintrag> {
     let mut liste = Vec::new();
     let ordner = pfad.and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
@@ -296,10 +322,148 @@ fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<
         }
     }
 
-    // Jeder Name nur einmal (eine Variable wird oft mehrmals angelegt).
+    // Jeder Name nur einmal (eine Variable wird oft mehrmals angelegt); dieselbe Variable in
+    // zwei Funktionen sind aber zwei.
     let mut gesehen = std::collections::HashSet::new();
-    liste.retain(|e| gesehen.insert((e.art, e.name.clone(), e.zu.clone())));
+    liste.retain(|e| gesehen.insert((e.art, e.name.clone(), e.zu.clone(), e.innen, e.bis)));
     liste
+}
+
+fn ist_wort(tokens: &[Token], i: usize, schluessel: Schluessel) -> bool {
+    tokens.get(i).is_some_and(|t| t.art == TokenArt::Schluessel(schluessel))
+}
+
+/// `i` steht auf `(` oder `[`: die Stelle hinter der Klammer, die dazu passt.
+fn hinter_klammer(tokens: &[Token], mut i: usize) -> usize {
+    let mut tiefe = 0;
+    while let Some(t) = tokens.get(i) {
+        match t.art {
+            TokenArt::KlammerAuf | TokenArt::EckigAuf => tiefe += 1,
+            TokenArt::KlammerZu | TokenArt::EckigZu => tiefe -= 1,
+            TokenArt::DateiEnde => return i,
+            _ => {}
+        }
+        i += 1;
+        if tiefe == 0 {
+            break;
+        }
+    }
+    i
+}
+
+/// Liest einen Typ ab der Stelle `i` und gibt ihn in einer kurzen Schreibweise zurück, die
+/// nicht vom Wörterbuch abhängt, dazu die Stelle dahinter:
+/// `Punkt` (Struktur, Klasse, Aufzählung), `?T` (VIELLEICHT T), `[T]` (LISTN VON T),
+/// `{K:V}` (VAZEICHNIS VON K UND V), `INT`, `FLOAT`, `BOOLEAN`, `TEXT`, `ERROR`, `FN` (eine
+/// Funktion). Steht dort kein Typ, ist der Text leer.
+fn typ_lesen(tokens: &[Token], i: usize) -> (String, usize) {
+    use Schluessel as S;
+    let Some(token) = tokens.get(i) else { return (String::new(), i) };
+    match &token.art {
+        TokenArt::Schluessel(S::Maybe) => {
+            let (t, n) = typ_lesen(tokens, i + 1);
+            (format!("?{t}"), n)
+        }
+        TokenArt::Schluessel(S::List) if ist_wort(tokens, i + 1, S::From) => {
+            let (t, n) = typ_lesen(tokens, i + 2);
+            (format!("[{t}]"), n)
+        }
+        TokenArt::Schluessel(S::Map) if ist_wort(tokens, i + 1, S::From) => {
+            let (k, n) = typ_lesen(tokens, i + 2);
+            if ist_wort(tokens, n, S::And) {
+                let (v, m) = typ_lesen(tokens, n + 1);
+                (format!("{{{k}:{v}}}"), m)
+            } else {
+                (format!("{{{k}:}}"), n)
+            }
+        }
+        TokenArt::Schluessel(S::Int) => ("INT".to_string(), i + 1),
+        TokenArt::Schluessel(S::Float) => ("FLOAT".to_string(), i + 1),
+        TokenArt::Schluessel(S::Boolean) => ("BOOLEAN".to_string(), i + 1),
+        TokenArt::Schluessel(S::Text) => ("TEXT".to_string(), i + 1),
+        TokenArt::Schluessel(S::Error) => ("ERROR".to_string(), i + 1),
+        // Eine Funktion als Wert: FUNKTIAUN(ZOI) GIBT ZRUCK JONA
+        TokenArt::Schluessel(S::Function) => {
+            let mut n = i + 1;
+            if tokens.get(n).is_some_and(|t| t.art == TokenArt::KlammerAuf) {
+                n = hinter_klammer(tokens, n);
+            }
+            if ist_wort(tokens, n, S::Returns) {
+                n = typ_lesen(tokens, n + 1).1;
+            }
+            ("FN".to_string(), n)
+        }
+        TokenArt::Name(name) => {
+            // Eine Vorlage mit Angabe (Stapl VON ZOI): Für die Vorschläge zählt nur der Name.
+            let mut n = i + 1;
+            if ist_wort(tokens, n, S::From) {
+                n = typ_lesen(tokens, n + 1).1;
+                while ist_wort(tokens, n, S::And) {
+                    n = typ_lesen(tokens, n + 1).1;
+                }
+            }
+            (name.clone(), n)
+        }
+        _ => (String::new(), i),
+    }
+}
+
+/// Liest ab der Stelle `i` eine Kette aus Namen, Punkten, Aufrufen und Stellen in Listen,
+/// also den Anfang eines Ausdrucks wie `spü.gegna[0].nam` oder `Punkt(1, 2)`:
+/// `["spü", "gegna", "[]", "nam"]` bzw. `["Punkt()"]`. `@` steht für MEI. Fängt der Ausdruck
+/// anders an (eine Zahl, ein Text, eine Klammer), ist die Kette leer.
+fn kette_lesen(tokens: &[Token], mut i: usize) -> Vec<String> {
+    let mut kette = Vec::new();
+    match tokens.get(i).map(|t| &t.art) {
+        Some(TokenArt::Name(name)) => kette.push(name.clone()),
+        Some(TokenArt::Schluessel(Schluessel::This)) => kette.push("@".to_string()),
+        _ => return kette,
+    }
+    i += 1;
+    loop {
+        match tokens.get(i).map(|t| &t.art) {
+            Some(TokenArt::KlammerAuf) => {
+                i = hinter_klammer(tokens, i);
+                match kette.last_mut() {
+                    Some(letztes) if letztes != "[]" && !letztes.ends_with(')') => letztes.push_str("()"),
+                    // Ein Aufruf von etwas, das selbst erst ausgerechnet wurde: Was herauskommt, weiß nur der Compiler.
+                    _ => kette.push("?".to_string()),
+                }
+            }
+            Some(TokenArt::EckigAuf) => {
+                i = hinter_klammer(tokens, i);
+                kette.push("[]".to_string());
+            }
+            Some(TokenArt::Punkt) => match tokens.get(i + 1).map(|t| &t.art) {
+                Some(TokenArt::Name(name)) => {
+                    kette.push(name.clone());
+                    i += 2;
+                }
+                _ => break,
+            },
+            _ => break,
+        }
+    }
+    kette
+}
+
+/// Die Zeile, in der der Block endet, der mit dem Token `i` anfängt: die nächste Zeile, deren
+/// erstes Wort so weit links steht wie dieses Token oder weiter (das PASST SCHO dazu). Fehlt
+/// sie noch, reicht der Block bis zum Ende.
+fn ende_des_blocks(tokens: &[Token], i: usize) -> u32 {
+    let anfang = &tokens[i];
+    let mut letzte = anfang.pos.zeile;
+    for j in i + 1..tokens.len() {
+        let t = &tokens[j];
+        if t.art == TokenArt::DateiEnde {
+            break;
+        }
+        letzte = t.pos.zeile;
+        if t.pos.zeile > anfang.pos.zeile && tokens[j - 1].pos.zeile < t.pos.zeile && t.pos.spalte <= anfang.pos.spalte {
+            return t.pos.zeile;
+        }
+    }
+    letzte
 }
 
 /// Die Namen aus einer Datei. `haupt` ist die Datei im Editor: Nur aus ihr kommen die
@@ -307,6 +471,7 @@ fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<
 fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mut Vec<Eintrag>) -> Vec<(bool, String)> {
     use Schluessel as S;
     let zeilen: Vec<&str> = text.split('\n').collect();
+    let letzte_zeile = zeilen.len().max(1) as u32;
     let zeile = |nr: u32| zeilen.get(nr as usize - 1).copied().unwrap_or("").trim_end_matches('\r');
     // Die Zeile ab einem Token, höchstens bis vor ein anderes.
     let ab = |von: &Token, bis: Option<&Token>| -> String {
@@ -330,19 +495,39 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
         Some(TokenArt::Name(name)) => Some(name.clone()),
         _ => None,
     };
-    let mut neu = |name: String, art: &'static str, text: String, doku: String, zu: &str, parameter: Vec<String>| {
-        liste.push(Eintrag { name, art, text, doku, aus: aus.to_string(), zu: zu.to_string(), parameter });
-    };
+    let mut neu = |eintrag: Eintrag| liste.push(Eintrag { aus: aus.to_string(), ..eintrag });
 
     let mut brauch = Vec::new();
     // In welcher Klasse, Struktur oder Aufzählung wir gerade stecken.
     let mut drin: Option<(String, Schluessel)> = None;
+    // Bis zu welcher Zeile die Funktion geht, in der wir gerade stecken.
+    let mut funktion_bis: Option<u32> = None;
     for (i, token) in tokens.iter().enumerate() {
         let am_anfang = token.pos.spalte == 1;
         let erstes_der_zeile = i == 0 || tokens[i - 1].pos.zeile < token.pos.zeile;
         if am_anfang {
             drin = None;
         }
+        if funktion_bis.is_some_and(|bis| token.pos.zeile > bis) {
+            funktion_bis = None;
+        }
+        // Wo eine Variable gilt, die hier angelegt wird: (innen, von, bis), Zeilen ab 0.
+        let gilt = match funktion_bis {
+            Some(bis) => (true, token.pos.zeile - 1, bis - 1),
+            None => (false, token.pos.zeile - 1, letzte_zeile - 1),
+        };
+        let variable = |name: String, text: String, typ: String, kette: Vec<String>, jedes: bool| Eintrag {
+            name,
+            art: "variable",
+            text,
+            typ,
+            kette,
+            jedes,
+            innen: gilt.0,
+            von: gilt.1,
+            bis: gilt.2,
+            ..Eintrag::default()
+        };
         match &token.art {
             TokenArt::Schluessel(S::Import) => match tokens.get(i + 1).map(|t| &t.art) {
                 Some(TokenArt::Name(ziel)) => brauch.push((true, ziel.clone())),
@@ -351,7 +536,20 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
             },
             TokenArt::Schluessel(art @ (S::Struct | S::Class | S::Enum)) => {
                 if let Some(name) = name_bei(i + 1) {
-                    neu(name.clone(), "typ", ab(token, None), doku(token.pos.zeile), "", Vec::new());
+                    // KLASSE Dackl ERBT VON Hund
+                    let eltern = (i + 2..tokens.len())
+                        .take_while(|j| tokens[*j].pos.zeile == token.pos.zeile)
+                        .find(|j| ist_wort(tokens, *j, S::Extends))
+                        .and_then(|j| name_bei(j + 1))
+                        .unwrap_or_default();
+                    neu(Eintrag {
+                        name: name.clone(),
+                        art: "typ",
+                        text: ab(token, None),
+                        doku: doku(token.pos.zeile),
+                        eltern,
+                        ..Eintrag::default()
+                    });
                     drin = Some((name, *art));
                 }
             }
@@ -366,7 +564,7 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
                 if tokens.get(j).is_none_or(|t| t.art != TokenArt::KlammerAuf) {
                     continue;
                 }
-                let mut parameter = Vec::new();
+                let mut parameter: Vec<(String, String)> = Vec::new();
                 let mut tiefe = 0;
                 while let Some(t) = tokens.get(j) {
                     match t.art {
@@ -378,67 +576,127 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
                     if tiefe == 0 {
                         break;
                     }
-                    let davor = &tokens[j].art;
-                    if tiefe == 1 && (*davor == TokenArt::KlammerAuf || *davor == TokenArt::Komma) {
+                    if tiefe == 1 && (t.art == TokenArt::KlammerAuf || t.art == TokenArt::Komma) {
                         if let Some(p) = name_bei(j + 1) {
-                            parameter.push(p);
+                            parameter.push((p, typ_lesen(tokens, j + 2).0));
                         }
                     }
                     j += 1;
                 }
-                // "VON DRAUSSN ..." (Funktionen aus der Laufzeit) gehört nicht zu dem, was man sehen will.
+                // Hinter der Klammer: was sie zurückgibt.
+                let gibt = if ist_wort(tokens, j + 1, S::Returns) { typ_lesen(tokens, j + 2).0 } else { String::new() };
+                // "VON DRAUSSN ..." (Funktionen aus der Laufzeit) gehört nicht zu dem, was man sehen will;
+                // so eine Funktion hat auch keinen Inhalt.
                 let draussen = tokens[i..]
                     .iter()
                     .take_while(|t| t.pos.zeile == token.pos.zeile)
                     .find(|t| t.art == TokenArt::Schluessel(S::Extern));
+                let ende = if draussen.is_some() { token.pos.zeile } else { ende_des_blocks(tokens, i) };
+                funktion_bis = Some(ende);
                 let kopf = ab(&tokens[i + 1], draussen);
                 if haupt {
-                    for p in &parameter {
-                        neu(p.clone(), "variable", format!("Parameter von {name}"), String::new(), "", Vec::new());
+                    for (p, typ) in &parameter {
+                        neu(Eintrag {
+                            name: p.clone(),
+                            art: "variable",
+                            text: format!("Parameter von {name}"),
+                            typ: typ.clone(),
+                            innen: true,
+                            von: token.pos.zeile - 1,
+                            bis: ende - 1,
+                            ..Eintrag::default()
+                        });
                     }
                 }
-                match &drin {
-                    Some((klasse, S::Class)) if !am_anfang => neu(name, "methode", kopf, doku(token.pos.zeile), klasse, parameter),
-                    _ => neu(name, "funktion", kopf, doku(token.pos.zeile), "", parameter),
-                }
+                let (art, zu) = match &drin {
+                    Some((klasse, S::Class)) if !am_anfang => ("methode", klasse.clone()),
+                    _ => ("funktion", String::new()),
+                };
+                neu(Eintrag {
+                    name,
+                    art,
+                    text: kopf,
+                    doku: doku(token.pos.zeile),
+                    zu,
+                    parameter: parameter.into_iter().map(|(p, _)| p).collect(),
+                    typ: gibt,
+                    von: if haupt { token.pos.zeile - 1 } else { 0 },
+                    bis: if haupt { ende - 1 } else { 0 },
+                    ..Eintrag::default()
+                });
             }
             TokenArt::Schluessel(S::Const) if am_anfang || haupt => {
                 if let Some(name) = name_bei(i + 1) {
-                    neu(name, "fix", ab(token, None), doku(token.pos.zeile), "", Vec::new());
+                    neu(Eintrag { name, art: "fix", text: ab(token, None), doku: doku(token.pos.zeile), ..Eintrag::default() });
                 }
             }
+            // SOG AU x = ausdruck   oder   SOG AU x Typ = ausdruck
             TokenArt::Schluessel(S::Declare) if haupt => {
                 if let Some(name) = name_bei(i + 1) {
-                    neu(name, "variable", ab(token, None), String::new(), "", Vec::new());
+                    let (typ, kette) = if tokens.get(i + 2).is_some_and(|t| t.art == TokenArt::Gleich) {
+                        // Fängt es mit einer Zahl, einem Text oder WOAHR/FOISCH an, ist der Typ klar.
+                        let fest = match tokens.get(i + 3).map(|t| &t.art) {
+                            Some(TokenArt::Zoi(_)) => "INT",
+                            Some(TokenArt::Kommazoi(_)) => "FLOAT",
+                            Some(TokenArt::Text(_)) => "TEXT",
+                            Some(TokenArt::Schluessel(S::True | S::False)) => "BOOLEAN",
+                            _ => "",
+                        };
+                        (fest.to_string(), kette_lesen(tokens, i + 3))
+                    } else {
+                        (typ_lesen(tokens, i + 2).0, Vec::new())
+                    };
+                    neu(variable(name, ab(token, None), typ, kette, false));
                 }
             }
+            // FIA i VON 1 BIS 3   oder   FIA JEDE x IN liste
             TokenArt::Schluessel(S::For) if haupt => {
-                let stelle = if tokens.get(i + 1).is_some_and(|t| t.art == TokenArt::Schluessel(S::Each)) { i + 2 } else { i + 1 };
-                if let Some(name) = name_bei(stelle) {
-                    neu(name, "variable", ab(token, None), String::new(), "", Vec::new());
+                if ist_wort(tokens, i + 1, S::Each) {
+                    if let Some(name) = name_bei(i + 2) {
+                        let kette = if ist_wort(tokens, i + 3, S::In) { kette_lesen(tokens, i + 4) } else { Vec::new() };
+                        neu(variable(name, ab(token, None), String::new(), kette, true));
+                    }
+                } else if let Some(name) = name_bei(i + 1) {
+                    neu(variable(name, ab(token, None), "INT".to_string(), Vec::new(), false));
+                }
+            }
+            // PROBIER x = ausdruck
+            TokenArt::Schluessel(S::Try) if haupt => {
+                if let (Some(name), true) = (name_bei(i + 1), tokens.get(i + 2).is_some_and(|t| t.art == TokenArt::Gleich)) {
+                    neu(variable(name, ab(token, None), String::new(), kette_lesen(tokens, i + 3), false));
+                }
+            }
+            // WONNS SCHIEFGEHT f
+            TokenArt::Schluessel(S::Catch) if haupt => {
+                if let Some(name) = name_bei(i + 1) {
+                    neu(variable(name, ab(token, None), "ERROR".to_string(), Vec::new(), false));
                 }
             }
             TokenArt::Name(name) if !am_anfang => match &drin {
                 // Die Werte einer Aufzählung: jeder Name darin (nur nicht ihr eigener).
                 Some((aufzaehlung, S::Enum)) if tokens[i - 1].art != TokenArt::Schluessel(S::Enum) => {
-                    let zu = aufzaehlung.clone();
-                    neu(name.clone(), "wert", format!("{zu}.{name}"), String::new(), &zu, Vec::new());
+                    neu(Eintrag {
+                        name: name.clone(),
+                        art: "wert",
+                        text: format!("{aufzaehlung}.{name}"),
+                        zu: aufzaehlung.clone(),
+                        ..Eintrag::default()
+                    });
                 }
                 // Ein Feld: "name Typ" am Anfang einer Zeile, also ein Name und gleich dahinter ein Typ.
-                Some((besitzer, S::Struct | S::Class)) if erstes_der_zeile => {
-                    let typ_dahinter = tokens.get(i + 1).is_some_and(|t| {
-                        t.pos.zeile == token.pos.zeile
-                            && matches!(
-                                t.art,
-                                TokenArt::Name(_)
-                                    | TokenArt::Schluessel(
-                                        S::Int | S::Float | S::Boolean | S::Text | S::Error | S::List | S::Map | S::Maybe | S::Function
-                                    )
-                            )
-                    });
-                    if typ_dahinter {
-                        let zu = besitzer.clone();
-                        neu(name.clone(), "feld", ab(token, None), doku(token.pos.zeile), &zu, Vec::new());
+                Some((besitzer, S::Struct | S::Class)) if erstes_der_zeile && funktion_bis.is_none() => {
+                    let (typ, dahinter) = typ_lesen(tokens, i + 1);
+                    let selbe_zeile = tokens.get(i + 1).is_some_and(|t| t.pos.zeile == token.pos.zeile);
+                    if selbe_zeile && dahinter > i + 1 {
+                        neu(Eintrag {
+                            name: name.clone(),
+                            art: "feld",
+                            text: ab(token, None),
+                            doku: doku(token.pos.zeile),
+                            zu: besitzer.clone(),
+                            typ,
+                            ..Eintrag::default()
+                        });
                     }
                 }
                 _ => {}
@@ -1000,53 +1258,73 @@ mod tests {
     fn namen_fuer_vorschlaege() {
         // Die letzte Zeile ist unfertig, wie beim Tippen: Die Namen kommen trotzdem.
         let quelle = [
-            "BRAUCH mathe OIDA",
-            "BRAUCH programm OIDA",
-            "",
-            "# Zählt zusammen.",
-            "# Zweite Zeile.",
-            "FUNKTIAUN zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI",
-            "    GIB ZRUCK a OIDA",
-            "PASST SCHO",
-            "",
-            "AUFZÖHLUNG Ampl",
-            "    ROT, GRÜN",
-            "PASST SCHO",
-            "",
-            "KLASSE Hund",
-            "    nam KETTN",
-            "    oita ZOI = 3",
-            "",
-            "    FUNKTIAUN bell(wia_oft ZOI)",
-            "        SOG AU drin = 1 OIDA",
-            "        drin = 2 OIDA",
-            "    PASST SCHO",
-            "PASST SCHO",
-            "",
-            "FIX GRENZE = 3 OIDA",
-            "FIA JEDE viech IN [1] TUA",
-            "PASST SCHO",
-            "SOG AU zöhla = zamm_zöhn(1, ",
+            "BRAUCH mathe OIDA",                                           // 0
+            "BRAUCH programm OIDA",                                        // 1
+            "",                                                            // 2
+            "# Zählt zusammen.",                                           // 3
+            "# Zweite Zeile.",                                             // 4
+            "FUNKTIAUN zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI",  // 5
+            "    GIB ZRUCK a OIDA",                                        // 6
+            "PASST SCHO",                                                  // 7
+            "",                                                            // 8
+            "AUFZÖHLUNG Ampl",                                             // 9
+            "    ROT, GRÜN",                                               // 10
+            "PASST SCHO",                                                  // 11
+            "",                                                            // 12
+            "KLASSE Hund",                                                 // 13
+            "    nam KETTN",                                               // 14
+            "    oita ZOI = 3",                                            // 15
+            "",                                                            // 16
+            "    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK VIELLEICHT Hund",  // 17
+            "        SOG AU drin = MEI.nam OIDA",                          // 18
+            "        drin = 2 OIDA",                                       // 19
+            "    PASST SCHO",                                              // 20
+            "PASST SCHO",                                                  // 21
+            "",                                                            // 22
+            "KLASSE Dackl ERBT VON Hund",                                  // 23
+            "    olle VAZEICHNIS VON KETTN UND LISTN VON Hund",            // 24
+            "PASST SCHO",                                                  // 25
+            "",                                                            // 26
+            "FIX GRENZE = 3 OIDA",                                         // 27
+            "SOG AU d Dackl = Dackl() OIDA",                               // 28
+            "FIA JEDE viech IN d.olle[\"x\"] TUA",                         // 29
+            "    SOG AU freind = viech.bell(1) OIDA",                      // 30
+            "PASST SCHO",                                                  // 31
+            "FIA i VON 1 BIS 3 TUA",                                       // 32
+            "PASST SCHO",                                                  // 33
+            "SOG AU zöhla = zamm_zöhn(1, ",                                // 34
         ]
         .join("\n");
         let json = untersuche(&quelle, &wb());
         let namen = feld(&json, "namen");
         for erwartet in [
-            r#"{"name":"zamm_zöhn","art":"funktion","text":"zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI","doku":"Zählt zusammen.\nZweite Zeile.","aus":"","zu":"","parameter":["a","b"]}"#,
-            r#"{"name":"Ampl","art":"typ","text":"AUFZÖHLUNG Ampl","doku":"","aus":"","zu":"","parameter":[]}"#,
-            r#"{"name":"ROT","art":"wert","text":"Ampl.ROT","doku":"","aus":"","zu":"Ampl","parameter":[]}"#,
-            r#"{"name":"GRÜN","art":"wert","text":"Ampl.GRÜN","doku":"","aus":"","zu":"Ampl","parameter":[]}"#,
-            r#"{"name":"nam","art":"feld","text":"nam KETTN","doku":"","aus":"","zu":"Hund","parameter":[]}"#,
-            r#"{"name":"oita","art":"feld","text":"oita ZOI = 3","doku":"","aus":"","zu":"Hund","parameter":[]}"#,
-            r#"{"name":"bell","art":"methode","text":"bell(wia_oft ZOI)","doku":"","aus":"","zu":"Hund","parameter":["wia_oft"]}"#,
-            r#"{"name":"GRENZE","art":"fix","text":"FIX GRENZE = 3 OIDA","doku":"","aus":"","zu":"","parameter":[]}"#,
-            r#""name":"viech","art":"variable""#,
-            r#""name":"zöhla","art":"variable""#,
-            r#""name":"drin","art":"variable""#,
-            r#""name":"wia_oft","art":"variable","text":"Parameter von bell""#,
+            // Eine Funktion: Kopf, Erklärung, Parameter, was sie zurückgibt und über welche Zeilen sie geht.
+            r#"{"name":"zamm_zöhn","art":"funktion","text":"zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI","doku":"Zählt zusammen.\nZweite Zeile.","aus":"","zu":"","parameter":["a","b"],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":5,"bis":7,"innen":false}"#,
+            // Ihre Parameter gelten nur in ihr.
+            r#"{"name":"a","art":"variable","text":"Parameter von zamm_zöhn","doku":"","aus":"","zu":"","parameter":[],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":5,"bis":7,"innen":true}"#,
+            r#""name":"b","art":"variable","text":"Parameter von zamm_zöhn","doku":"","aus":"","zu":"","parameter":[],"typ":"[INT]""#,
+            r#"{"name":"Ampl","art":"typ","text":"AUFZÖHLUNG Ampl","doku":"","aus":"","zu":"","parameter":[]"#,
+            r#"{"name":"ROT","art":"wert","text":"Ampl.ROT","doku":"","aus":"","zu":"Ampl","parameter":[]"#,
+            r#"{"name":"GRÜN","art":"wert","text":"Ampl.GRÜN","doku":"","aus":"","zu":"Ampl","parameter":[]"#,
+            // Felder mit ihrem Typ.
+            r#"{"name":"nam","art":"feld","text":"nam KETTN","doku":"","aus":"","zu":"Hund","parameter":[],"typ":"TEXT""#,
+            r#"{"name":"oita","art":"feld","text":"oita ZOI = 3","doku":"","aus":"","zu":"Hund","parameter":[],"typ":"INT""#,
+            r#"{"name":"olle","art":"feld","text":"olle VAZEICHNIS VON KETTN UND LISTN VON Hund","doku":"","aus":"","zu":"Dackl","parameter":[],"typ":"{TEXT:[Hund]}""#,
+            // Eine Methode gehört zu ihrer Klasse; eine Klasse weiß, von wem sie erbt.
+            r#"{"name":"bell","art":"methode","text":"bell(wia_oft ZOI) GIBT ZRUCK VIELLEICHT Hund","doku":"","aus":"","zu":"Hund","parameter":["wia_oft"],"typ":"?Hund","eltern":"","kette":[],"jedes":false,"von":17,"bis":20,"innen":false}"#,
+            r#"{"name":"Dackl","art":"typ","text":"KLASSE Dackl ERBT VON Hund","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"Hund""#,
+            r#"{"name":"GRENZE","art":"fix","text":"FIX GRENZE = 3 OIDA""#,
+            // Variablen: in einer Methode (nur dort), mit Typ, als Element einer Liste, aus einem Aufruf.
+            r#"{"name":"drin","art":"variable","text":"SOG AU drin = MEI.nam OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["@","nam"],"jedes":false,"von":18,"bis":20,"innen":true}"#,
+            r#""name":"wia_oft","art":"variable","text":"Parameter von bell","doku":"","aus":"","zu":"","parameter":[],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":17,"bis":20,"innen":true}"#,
+            r#""name":"d","art":"variable","text":"SOG AU d Dackl = Dackl() OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"Dackl","eltern":"","kette":[],"jedes":false,"von":28,"bis":34,"innen":false}"#,
+            r#""name":"viech","art":"variable","text":"FIA JEDE viech IN d.olle[\"x\"] TUA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["d","olle","[]"],"jedes":true,"von":29,"bis":34,"innen":false}"#,
+            r#""name":"freind","art":"variable","text":"SOG AU freind = viech.bell(1) OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["viech","bell()"],"jedes":false"#,
+            r#""name":"i","art":"variable","text":"FIA i VON 1 BIS 3 TUA","doku":"","aus":"","zu":"","parameter":[],"typ":"INT""#,
+            r#""name":"zöhla","art":"variable","text":"SOG AU zöhla = zamm_zöhn(1,","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["zamm_zöhn()"],"jedes":false,"von":34,"bis":34,"innen":false}"#,
             // Aus der Bibliothek, samt Erklärung; "VON DRAUSSN" wird nicht gezeigt.
-            r#"{"name":"klemm","art":"funktion","text":"klemm VON T(wert T, untn T, obn T) GIBT ZRUCK T","doku":"Hält den Wert zwischen `untn` und `obn`: klemm(15, 0, 10) ist 10.\n(Für alles, was man mit < vergleichen kann.)","aus":"mathe","zu":"","parameter":["wert","untn","obn"]}"#,
-            r#""name":"temp_ordna","art":"funktion","text":"temp_ordna() GIBT ZRUCK KETTN""#,
+            r#"{"name":"klemm","art":"funktion","text":"klemm VON T(wert T, untn T, obn T) GIBT ZRUCK T","doku":"Hält den Wert zwischen `untn` und `obn`: klemm(15, 0, 10) ist 10.\n(Für alles, was man mit < vergleichen kann.)","aus":"mathe","zu":"","parameter":["wert","untn","obn"],"typ":"T""#,
+            r#""name":"temp_ordna","art":"funktion","text":"temp_ordna() GIBT ZRUCK KETTN","doku""#,
         ] {
             assert!(namen.contains(erwartet), "{erwartet}\nfehlt in\n{namen}");
         }
@@ -1055,6 +1333,42 @@ mod tests {
         assert_eq!(namen.matches(r#""name":"drin""#).count(), 1);
         // Was nicht dazugeholt ist, kommt auch nicht vor.
         assert!(!namen.contains(r#""name":"sortiert""#));
+    }
+
+    #[test]
+    fn dieselbe_variable_in_zwei_funktionen_sind_zwei() {
+        let quelle = "FUNKTIAUN ans()\n    SOG AU x = 1 OIDA\nPASST SCHO\nFUNKTIAUN zwa()\n    SOG AU x = \"a\" OIDA\n    SOG AU x = \"b\" OIDA\nPASST SCHO\nSOG AU x = 2.5 OIDA\n";
+        let json = untersuche(quelle, &wb());
+        let namen = feld(&json, "namen");
+        assert_eq!(namen.matches(r#""name":"x","art":"variable""#).count(), 3, "{namen}");
+        for bereich in [r#""von":1,"bis":2,"innen":true"#, r#""von":4,"bis":6,"innen":true"#, r#""von":7,"bis":8,"innen":false"#] {
+            assert!(namen.contains(bereich), "{bereich}\nfehlt in\n{namen}");
+        }
+    }
+
+    #[test]
+    fn typen_und_ketten_in_kurzer_schreibweise() {
+        let lies = |text: &str| lexer::zerlegen_nachsichtig(text, &wb()).0;
+        for (text, erwartet) in [
+            ("ZOI", "INT"),
+            ("VIELLEICHT Punkt", "?Punkt"),
+            ("LISTN VON VIELLEICHT KETTN", "[?TEXT]"),
+            ("VAZEICHNIS VON KETTN UND LISTN VON Punkt", "{TEXT:[Punkt]}"),
+            ("Stapl VON ZOI", "Stapl"),
+            ("FUNKTIAUN(ZOI, KETTN) GIBT ZRUCK JONA", "FN"),
+            ("+ 3", ""),
+        ] {
+            assert_eq!(typ_lesen(&lies(text), 0).0, erwartet, "{text}");
+        }
+        for (text, erwartet) in [
+            ("spü.gegna[0].nam OIDA", vec!["spü", "gegna", "[]", "nam"]),
+            ("Punkt(1, [2, 3]) OIDA", vec!["Punkt()"]),
+            ("MEI.hund.bell(3).nam + 1", vec!["@", "hund", "bell()", "nam"]),
+            ("liste[0](1) OIDA", vec!["liste", "[]", "?"]),
+            ("3 + a", vec![]),
+        ] {
+            assert_eq!(kette_lesen(&lies(text), 0), erwartet, "{text}");
+        }
     }
 
     #[test]

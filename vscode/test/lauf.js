@@ -331,6 +331,106 @@ const pruefungen = {
         assert.strictEqual(eingesetzt, 'zamm_zöhn', 'trotz vorhandener Klammer kommen noch einmal Klammern');
     },
 
+    async 'Hinter dem Punkt kommt nur, was zu dem Ding davor gehört'() {
+        const zeilen = [
+            'STRUKTUR Punkt',
+            '    links ZOI',
+            '    obn ZOI',
+            'PASST SCHO',
+            '',
+            'KLASSE Viech',
+            '    nam KETTN',
+            '    ort Punkt',
+            '',
+            '    FUNKTIAUN laut() GIBT ZRUCK KETTN',
+            '        SOG AU innen = MEI.',
+            '        GIB ZRUCK "?" OIDA',
+            '    PASST SCHO',
+            'PASST SCHO',
+            '',
+            'KLASSE Hund ERBT VON Viech',
+            '    freind VIELLEICHT Hund',
+            '',
+            '    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK LISTN VON Punkt',
+            '        SOG AU nur_do = 1 OIDA',
+            '        ',
+            '        GIB ZRUCK [] OIDA',
+            '    PASST SCHO',
+            'PASST SCHO',
+            '',
+            'FUNKTIAUN such(viecha LISTN VON Hund) GIBT ZRUCK VIELLEICHT Hund',
+            '    FIA JEDE ans IN viecha TUA',
+            '        ans.',
+            '    PASST SCHO',
+            '    GIB ZRUCK NIX OIDA',
+            'PASST SCHO',
+            '',
+            'SOG AU rex = Hund("Rex", Punkt(1, 2), NIX) OIDA',
+            'SOG AU draussn = 5 OIDA',
+            'rex.',
+            'rex.ort.',
+            'rex . freind.bell(2)[0].',
+            'such([rex]).',
+            'draussn = 1 OIDA',
+            'PROBIER glück = such([rex])',
+            '    glück.',
+            '    draussn = 2 OIDA',
+            'WONNS SCHIEFGEHT f',
+            '    f.',
+            '    draussn = 3 OIDA',
+            'PASST SCHO',
+            'draussn.',
+            '',
+        ];
+        // (Hinter einem Punkt am Zeilenende nimmt der Compiler das nächste Wort als Namen. Darum steht
+        // nach einer unfertigen Zeile hier nie gleich ein Wort der Sprache, das für eine Probe zählt.)
+        const dokument = await oeffne(schreibe('punkt.oida', zeilen.join('\n')));
+        const name = (e) => (typeof e.label === 'string' ? e.label : e.label.label);
+        const hole = async (zeile, spalte) => {
+            const liste = await vscode.commands.executeCommand(
+                'vscode.executeCompletionItemProvider', dokument.uri, new vscode.Position(zeile, spalte));
+            return liste.items.filter((e) => e.kind !== vscode.CompletionItemKind.Text).map(name).sort();
+        };
+        // Am Ende der Zeile, die so aussieht (ohne die Einrückung).
+        const hinter = (text) => {
+            const zeile = zeilen.findIndex((z) => z.trim() === text);
+            assert.ok(zeile >= 0, `die Zeile "${text}" gibt es nicht`);
+            return hole(zeile, zeilen[zeile].length);
+        };
+        const hund = ['bell', 'freind', 'laut', 'nam', 'ort'];
+
+        // Eine Variable aus einem Aufruf, der das Ding baut: Felder und Methoden, auch die geerbten.
+        assert.deepStrictEqual(await hinter('rex.'), hund);
+        // Ein Feld davon: nur die Felder des Punkts, nicht die vom Hund.
+        assert.deepStrictEqual(await hinter('rex.ort.'), ['links', 'obn']);
+        // Eine ganze Kette: VIELLEICHT Hund, eine Methode, die eine Liste zurückgibt, eine Stelle darin.
+        assert.deepStrictEqual(await hinter('rex . freind.bell(2)[0].'), ['links', 'obn']);
+        // Was eine Funktion zurückgibt.
+        assert.deepStrictEqual(await hinter('such([rex]).'), hund);
+        // MEI in einer Methode: die eigene Klasse, ohne die Kinder.
+        assert.deepStrictEqual(await hinter('SOG AU innen = MEI.'), ['laut', 'nam', 'ort']);
+        // Ein Element aus FIA JEDE über einen Parameter mit Typ.
+        assert.deepStrictEqual(await hinter('ans.'), hund);
+        // PROBIER und der Fehler dazu.
+        assert.deepStrictEqual(await hinter('glück.'), hund);
+        assert.deepStrictEqual(await hinter('f.'), ['meldung']);
+        // Eine Zahl hat nichts hinter dem Punkt.
+        assert.deepStrictEqual(await hinter('draussn.'), []);
+
+        // Variablen gibt es nur dort, wo sie gelten.
+        const variablen = async (zeile, spalte) => {
+            const liste = await hole(zeile, spalte);
+            return ['wia_oft', 'nur_do', 'innen', 'viecha', 'ans', 'rex', 'draussn'].filter((v) => liste.includes(v));
+        };
+        const inBell = zeilen.findIndex((z) => z.trim() === 'SOG AU nur_do = 1 OIDA') + 1;
+        assert.deepStrictEqual(await variablen(inBell, 8), ['wia_oft', 'nur_do']);
+        const inSuch = zeilen.findIndex((z) => z.trim() === 'GIB ZRUCK NIX OIDA');
+        assert.deepStrictEqual(await variablen(inSuch, 4), ['viecha', 'ans']);
+        // Im Hauptprogramm: seine eigenen, aber keine aus den Funktionen; und erst, wenn sie angelegt sind.
+        assert.deepStrictEqual(await variablen(zeilen.length - 1, 0), ['rex', 'draussn']);
+        assert.deepStrictEqual(await variablen(zeilen.findIndex((z) => z.startsWith('SOG AU rex')) - 1, 0), []);
+    },
+
     async 'F5 übersetzt und startet das Programm'() {
         await oeffne(path.join(wurzel, 'beispiele', 'fizzbuzz.oida'));
         const exe = path.join(os.tmpdir(), 'oida-vscode', 'fizzbuzz.exe');

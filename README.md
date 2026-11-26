@@ -247,8 +247,9 @@ doppelklicken, das baut sie und installiert sie. Danach in VS Code eine `.oida`-
 - **Strg+Umschalt+B** legt die `.exe` neben die Datei.
 - Beim Tippen kommen Vorschläge für die Wörter der Sprache, dazu Schnipsel wie `wenn` und `solong`.
 - Vorgeschlagen werden auch die eigenen Funktionen (samt Parametern), Klassen, Strukturen, Aufzählungen und
-  Variablen, und alles aus Dateien und Bibliotheken, die mit `BRAUCH` dazugeholt sind. Hinter einem Punkt
-  kommen Felder und Methoden, hinter `Ampl.` die Werte der Aufzählung.
+  Variablen (nur dort, wo sie gelten), und alles aus Dateien und Bibliotheken, die mit `BRAUCH` dazugeholt
+  sind. Hinter einem Punkt kommen die Felder und Methoden von dem, was davor steht (`hund.ort.` zeigt die
+  Felder des Punkts), hinter `Ampl.` die Werte der Aufzählung.
   Wer lieber klein schreibt (`wenn x > 3 daun ... passt scho`, der Compiler nimmt beides), bekommt
   sie auch klein; die Einstellung `oida.schreibweise` legt es auf Wunsch fest.
 

@@ -372,6 +372,242 @@ function ohneDoppelte(namen) {
     return [...nachName.values()];
 }
 
+// ------------------------------------------- Was für ein Ding steht vor dem Punkt?
+//
+// Der Compiler meldet zu Feldern, Parametern und Funktionen den Typ, der dasteht, in kurzer
+// Schreibweise (siehe `typ_lesen` in uebersetzer/src/editor.rs): Punkt, ?T (VIELLEICHT T),
+// [T] (LISTN VON T), {K:V} (VAZEICHNIS), INT, FLOAT, BOOLEAN, TEXT, ERROR, FN. Zu Variablen
+// ohne Typ meldet er, womit sie anfangen (eine "Kette" wie ["spü", "gegna", "[]"]). Daraus
+// wird hier ausgerechnet, was vor einem Punkt steht.
+
+/** Zum Nachschlagen: Typen, Felder, Methoden und Funktionen nach Namen. */
+function wissenAus(namen) {
+    const w = { namen, typen: new Map(), felder: new Map(), methoden: new Map(), funktionen: new Map() };
+    for (const n of namen) {
+        if (n.art === 'typ') {
+            w.typen.set(n.name, n);
+        } else if (n.art === 'feld') {
+            w.felder.set(`${n.zu}.${n.name}`, n);
+        } else if (n.art === 'methode') {
+            w.methoden.set(`${n.zu}.${n.name}`, n);
+        } else if (n.art === 'funktion') {
+            w.funktionen.set(n.name, n);
+        }
+    }
+    return w;
+}
+
+/** Eine Klasse und alle, von denen sie erbt (sie selbst zuerst). */
+function ahnen(w, name) {
+    const aus = [];
+    let jetzt = name;
+    while (jetzt && w.typen.has(jetzt) && !aus.includes(jetzt)) {
+        aus.push(jetzt);
+        jetzt = w.typen.get(jetzt).eltern;
+    }
+    return aus;
+}
+
+/** VIELLEICHT T zählt für die Vorschläge wie T. */
+function ohneVielleicht(typ) {
+    return typ.replace(/^\?+/, '');
+}
+
+/** Was in einer Liste oder einem Verzeichnis steckt: aus [T] wird T, aus {K:V} wird V. */
+function elementVon(typ) {
+    const t = ohneVielleicht(typ);
+    if (t.startsWith('[') && t.endsWith(']')) {
+        return t.slice(1, -1) || null;
+    }
+    if (t.startsWith('{') && t.endsWith('}') && t.includes(':')) {
+        return t.slice(t.indexOf(':') + 1, -1) || null;
+    }
+    return null;
+}
+
+/** Die Funktion oder Methode dieser Datei, in der die Zeile liegt. */
+function funktionUm(w, zeile) {
+    return w.namen.find((n) => (n.art === 'funktion' || n.art === 'methode') && n.aus === '' && n.von <= zeile && zeile <= n.bis);
+}
+
+/**
+ * Gilt die Variable in dieser Zeile? Eine aus einer Funktion nur dort, eine aus dem
+ * Hauptprogramm nur außerhalb der Funktionen (die sehen sie nicht) und erst, wenn sie angelegt ist.
+ */
+function giltHier(n, zeile, drin) {
+    return n.innen ? n.von <= zeile && zeile <= n.bis : !drin && n.von <= zeile;
+}
+
+/** Die Variable mit diesem Namen, die in der Zeile gilt (die zuletzt angelegte). */
+function variableHier(w, name, zeile, ohne) {
+    const drin = funktionUm(w, zeile);
+    let beste;
+    for (const n of w.namen) {
+        if (n.art === 'variable' && n.name === name && n !== ohne && giltHier(n, zeile, drin) && (!beste || n.von >= beste.von)) {
+            beste = n;
+        }
+    }
+    return beste;
+}
+
+function typDerVariable(w, v, tiefe) {
+    if (v.typ) {
+        return v.typ;
+    }
+    const typ = typVonKette(w, v.kette, v.von, tiefe + 1, v);
+    return v.jedes ? typ && elementVon(typ) : typ;
+}
+
+/** Der Typ einer Kette wie ["spü", "gegna", "[]", "nam"] in dieser Zeile, oder null, wenn er sich nicht ausrechnen lässt. */
+function typVonKette(w, kette, zeile, tiefe = 0, ohne = undefined) {
+    if (!kette || kette.length === 0 || tiefe > 12) {
+        return null;
+    }
+    let typ = null;
+    const erstes = kette[0];
+    if (erstes === '@') {
+        // MEI: die Klasse der Methode, in der wir stehen.
+        const drin = funktionUm(w, zeile);
+        typ = drin && drin.art === 'methode' ? drin.zu : null;
+    } else if (erstes.endsWith('()')) {
+        const name = erstes.slice(0, -2);
+        if (w.typen.has(name)) {
+            typ = name; // Punkt(1, 2) baut einen Punkt
+        } else if (w.funktionen.has(name)) {
+            typ = w.funktionen.get(name).typ || null;
+        }
+    } else {
+        const v = variableHier(w, erstes, zeile, ohne);
+        typ = v ? typDerVariable(w, v, tiefe) : null;
+    }
+    for (const schritt of kette.slice(1)) {
+        if (!typ || schritt === '?') {
+            return null;
+        }
+        if (schritt === '[]') {
+            typ = elementVon(typ);
+            continue;
+        }
+        const ruf = schritt.endsWith('()');
+        const name = ruf ? schritt.slice(0, -2) : schritt;
+        let gefunden;
+        for (const klasse of ahnen(w, ohneVielleicht(typ))) {
+            gefunden = (ruf ? w.methoden : w.felder).get(`${klasse}.${name}`);
+            if (gefunden) {
+                break;
+            }
+        }
+        typ = gefunden ? gefunden.typ || null : null;
+    }
+    return typ;
+}
+
+/**
+ * Liest den Text vor einem Punkt von hinten als Kette: "  spü.gegna[i].such(1)" wird zu
+ * ["spü", "gegna", "[]", "such()"]. `selbst` sind die Wörter für MEI (groß geschrieben).
+ * Gibt null zurück, wenn dort etwas anderes steht (eine Klammer, eine Zahl).
+ */
+function ketteVorDemPunkt(text, selbst) {
+    const kette = [];
+    let i = text.length;
+    for (;;) {
+        while (i > 0 && /\s/.test(text[i - 1])) {
+            i--;
+        }
+        // Von hinten: zuerst die Klammern eines Aufrufs oder einer Stelle, dann der Name.
+        const hinten = [];
+        while (i > 0 && (text[i - 1] === ')' || text[i - 1] === ']')) {
+            const zu = text[i - 1];
+            const auf = zu === ')' ? '(' : '[';
+            let tiefe = 0;
+            let j = i;
+            while (j > 0) {
+                j--;
+                if (text[j] === ')' || text[j] === ']') {
+                    tiefe++;
+                } else if (text[j] === '(' || text[j] === '[') {
+                    tiefe--;
+                    if (tiefe === 0) {
+                        break;
+                    }
+                }
+            }
+            if (tiefe !== 0 || text[j] !== auf) {
+                return null;
+            }
+            hinten.unshift(zu === ')' ? '()' : '[]');
+            i = j;
+            while (i > 0 && /\s/.test(text[i - 1])) {
+                i--;
+            }
+        }
+        const name = /[\p{L}\p{N}_]+$/u.exec(text.slice(0, i));
+        if (!name || /^\p{N}/u.test(name[0])) {
+            return null;
+        }
+        i -= name[0].length;
+        const teile = [selbst.includes(name[0].toUpperCase()) ? '@' : name[0]];
+        for (const h of hinten) {
+            if (h === '[]') {
+                teile.push('[]');
+            } else if (teile.length === 1 && teile[0] !== '@') {
+                teile[0] += '()';
+            } else {
+                teile.push('?');
+            }
+        }
+        kette.unshift(...teile);
+        while (i > 0 && /\s/.test(text[i - 1])) {
+            i--;
+        }
+        if (i > 0 && text[i - 1] === '.') {
+            i--;
+            continue;
+        }
+        return kette;
+    }
+}
+
+/** Was hinter dem Punkt vorgeschlagen wird. `vor` ist der Text der Zeile bis vor den Punkt. */
+function gliederHinterPunkt(antwort, vor, zeile) {
+    const namen = antwort.namen || [];
+    const selbst = (antwort.woerter || []).filter((x) => x.fest === 'THIS').map((x) => x.wort.toUpperCase());
+    const kette = ketteVorDemPunkt(vor, selbst);
+    if (!kette) {
+        return [];
+    }
+    const w = wissenAus(namen);
+    // Hinter dem Namen einer Aufzählung: ihre Werte (Ampl.ROT).
+    if (kette.length === 1 && !variableHier(w, kette[0], zeile)) {
+        const werte = namen.filter((n) => n.art === 'wert' && n.zu === kette[0]);
+        if (werte.length > 0) {
+            return werte;
+        }
+    }
+    const alle = namen.filter((n) => n.art === 'feld' || n.art === 'methode');
+    const typ = typVonKette(w, kette, zeile);
+    if (!typ) {
+        // Nicht auszurechnen (zum Beispiel ein Wert aus einer Vorlage): dann lieber alles als nichts.
+        return ohneDoppelte(alle);
+    }
+    const klasse = ohneVielleicht(typ);
+    if (klasse === 'ERROR') {
+        return [{ name: 'meldung', art: 'feld', text: 'meldung KETTN', doku: 'Was schiefgegangen ist.', aus: '', zu: 'FEHLA', parameter: [] }];
+    }
+    // Die Felder und Methoden der Klasse und derer, von denen sie erbt; die eigene zuerst
+    // (so gewinnt eine Methode, die eine geerbte ersetzt).
+    const kreis = ahnen(w, klasse);
+    const gefunden = [];
+    for (const k of kreis) {
+        for (const n of alle) {
+            if (n.zu === k && !gefunden.some((g) => g.art === n.art && g.name === n.name)) {
+                gefunden.push(n);
+            }
+        }
+    }
+    return gefunden;
+}
+
 const vorschlaege = {
     async provideCompletionItems(dokument, position) {
         const antwort = await untersuche(dokument);
@@ -382,16 +618,17 @@ const vorschlaege = {
         const zeile = ganzeZeile.slice(0, position.character);
         const namen = antwort.namen || [];
         const klammerDa = ganzeZeile.slice(position.character).startsWith('(');
-        // Hinter einem Punkt gibt es nur, was zu etwas gehört: hinter dem Namen einer Aufzählung
-        // ihre Werte (Ampl.ROT), sonst die Felder und Methoden.
-        const punkt = /([\p{L}\p{N}_]+)\s*\.\s*[\p{L}\p{N}_]*$/u.exec(zeile);
-        if (punkt && !/^\p{N}+$/u.test(punkt[1])) {
-            const werte = namen.filter((n) => n.art === 'wert' && n.zu === punkt[1]);
-            const glieder = werte.length > 0 ? werte : namen.filter((n) => n.art === 'feld' || n.art === 'methode');
-            return ohneDoppelte(glieder).map((n) => nameAlsVorschlag(n, klammerDa));
+        // Hinter einem Punkt gibt es nur, was zu dem gehört, was davor steht: hinter dem Namen
+        // einer Aufzählung ihre Werte (Ampl.ROT), sonst die Felder und Methoden dieses Dings.
+        const punkt = /\.\s*[\p{L}\p{N}_]*$/u.exec(zeile);
+        if (punkt) {
+            return gliederHinterPunkt(antwort, zeile.slice(0, punkt.index), position.line).map((n) => nameAlsVorschlag(n, klammerDa));
         }
-        const namensListe = ohneDoppelte(namen.filter((n) => ['funktion', 'typ', 'variable', 'fix'].includes(n.art)))
-            .map((n) => nameAlsVorschlag(n, klammerDa));
+        // Variablen nur dort, wo sie gelten.
+        const drin = funktionUm({ namen }, position.line);
+        const hier = namen.filter((n) =>
+            ['funktion', 'typ', 'fix'].includes(n.art) || (n.art === 'variable' && giltHier(n, position.line, drin)));
+        const namensListe = ohneDoppelte(hier).map((n) => nameAlsVorschlag(n, klammerDa));
         const davor = zeile.toUpperCase();
         const klein = kleinSchreiben(dokument, /[\p{L}\p{N}_]*$/u.exec(zeile)[0], antwort);
         const schreib = (text) => (klein ? text.toLowerCase() : text);
