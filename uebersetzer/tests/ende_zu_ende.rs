@@ -10,6 +10,8 @@
 //!   der `.erwartet`-Datei muss in der Fehlermeldung vorkommen.
 //! - `tests/laufzeitfehler/*.oida`: lassen sich übersetzen, brechen aber beim
 //!   Laufen ab; `.erwartet` ist die Ausgabe davor, `.fehler` die Meldung.
+//! - `tests/zoinpruefung/*.oida`: brechen nur ab, wenn mit `--mit-zoinprüfung`
+//!   übersetzt wird (eine ganze Zahl wird zu groß); sonst laufen sie durch.
 //!
 //! Liegt neben einem Programm eine `.eingabe`-Datei, bekommt es deren Inhalt
 //! als Eingabe (für `LIES`). Der Zufall startet in allen Tests mit demselben
@@ -190,23 +192,39 @@ fn fehlermeldung_zeigt_die_stelle() {
 }
 
 #[test]
-fn ohne_zoinpruefung_laeuft_eine_zahl_still_ueber() {
-    // Der Schalter für enge Rechenschleifen: Was sonst mit einer Meldung abbricht, rechnet falsch weiter.
-    let arbeit = arbeitsordner("ohne_zoinpruefung");
-    let quelle = tests().join("laufzeitfehler").join("ueberlauf_plus.oida");
-    for schalter in ["--ohne-zoinprüfung", "--ohne-zoinpruefung"] {
-        let exe = arbeit.join("ueberlauf.exe");
-        uebersetze(&quelle, &exe, &[schalter]);
+fn zu_grosse_zahlen_laufen_still_ueber_und_melden_sich_nur_mit_schalter() {
+    let arbeit = arbeitsordner("zoinpruefung");
+    for quelle in oida_dateien(&tests().join("zoinpruefung")) {
+        // Mit dem Schalter: eine Meldung samt Zeile, und was davor geschrieben wurde, ist da.
+        for schalter in ["--mit-zoinprüfung", "--mit-zoinpruefung"] {
+            for (art, optionen) in [("optimiert", vec![schalter]), ("ohne-optimierung", vec![schalter, "--ohne-optimierung"])] {
+                let exe = arbeit.join(format!("{}-{art}.exe", name(&quelle)));
+                uebersetze(&quelle, &exe, &optionen);
+                let lauf = befehl(&exe, Some(&quelle)).output().unwrap();
+                assert_eq!(lauf.status.code(), Some(1), "{} ({art})", quelle.display());
+                assert_eq!(text(&lauf.stdout), lies(&quelle.with_extension("erwartet")), "{} ({art})", quelle.display());
+                assert_eq!(text(&lauf.stderr), lies(&quelle.with_extension("fehler")), "{} ({art})", quelle.display());
+            }
+        }
+        // Ohne Schalter (die Vorgabe): Das Programm läuft durch und rechnet mit der übergelaufenen Zahl weiter.
+        let exe = arbeit.join(format!("{}-ohne.exe", name(&quelle)));
+        uebersetze(&quelle, &exe, &[]);
         let lauf = starte(&exe);
-        assert_eq!(lauf.status.code(), Some(0), "{schalter}: {}", text(&lauf.stderr));
-        assert_eq!(text(&lauf.stdout), "vorher\n-9223372036854775808\nnachher\n", "{schalter}");
+        assert_eq!(lauf.status.code(), Some(0), "{}: {}", quelle.display(), text(&lauf.stderr));
+        assert!(text(&lauf.stdout).ends_with("nachher\n"), "{}: {}", quelle.display(), text(&lauf.stdout));
     }
-    // Teilen durch 0 wird auch dann noch gemeldet.
-    let exe = arbeit.join("durch_null.exe");
-    uebersetze(&tests().join("laufzeitfehler").join("durch_null.oida"), &exe, &["--ohne-zoinprüfung"]);
-    let lauf = starte(&exe);
-    assert_eq!(lauf.status.code(), Some(1));
-    assert_eq!(text(&lauf.stderr), "Heast! Zeile 3: Durch nix kaun ma ned teilen.\n");
+    // Was dabei herauskommt: die größte Zahl plus 1 ist die kleinste.
+    let exe = arbeit.join("plus.exe");
+    uebersetze(&tests().join("zoinpruefung").join("ueberlauf_plus.oida"), &exe, &[]);
+    assert_eq!(text(&starte(&exe).stdout), "vorher\n-9223372036854775808\nnachher\n");
+    // Teilen durch 0 wird immer gemeldet, mit und ohne Schalter.
+    for optionen in [&[][..], &["--mit-zoinprüfung"][..]] {
+        let exe = arbeit.join("durch_null.exe");
+        uebersetze(&tests().join("laufzeitfehler").join("durch_null.oida"), &exe, optionen);
+        let lauf = starte(&exe);
+        assert_eq!(lauf.status.code(), Some(1));
+        assert_eq!(text(&lauf.stderr), "Heast! Zeile 3: Durch nix kaun ma ned teilen.\n");
+    }
 }
 
 #[test]

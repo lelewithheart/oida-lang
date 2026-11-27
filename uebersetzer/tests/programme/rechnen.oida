@@ -4,11 +4,10 @@ SCHREIB(1 + 2 * 3, (1 + 2) * 3, 10 - 4 - 3, -7 / 2, -7 % 2, 7 % -2) OIDA
 SCHREIB(1.5 + 1, 10 / 4.0, 2.0 * 3, 1.0 / 3.0, 5.5 % 2, -(1.5)) OIDA
 SCHREIB(1 / 0.0, -1 / 0.0) OIDA
 
-# Die größte und die kleinste ganze Zahl. (Darüber hinaus bricht das Programm mit einer Meldung
-# ab, statt falsch weiterzurechnen: siehe tests/laufzeitfehler/ueberlauf_*.oida.)
+# Ganze Zahlen laufen über, ohne dass das Programm abstürzt.
 SOG AU gross = 9223372036854775807 OIDA
-SOG AU klein = -gross - 1 OIDA
-SCHREIB(klein, klein % -1, gross - 1 + 1, klein + 1 - 1) OIDA
+SOG AU klein = gross + 1 OIDA
+SCHREIB(klein, klein / -1, klein % -1) OIDA
 
 SCHREIB(ZOI(3.99), ZOI(-3.99), ZOI(WOAHR), ZOI(FOISCH), ZOI("  42 "), ZOI(7)) OIDA
 SCHREIB(KOMMAZOI(7), KOMMAZOI("2.5") * 2, KOMMAZOI(gross)) OIDA

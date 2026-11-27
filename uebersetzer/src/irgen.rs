@@ -2821,9 +2821,10 @@ fn baue_funktion(modul: &mut Modul, f: &Funktion, art: FunktionsArt) -> String {
 }
 
 /// Erzeugt das LLVM-IR für ein Programm, das die Typprüfung bestanden hat.
-/// Macht aus dem fertigen IR eines ohne Überlaufprüfung (für `--ohne-zoinprüfung`): Plus, Minus
-/// und Mal mit ganzen Zahlen rechnen dann wie der Prozessor, und eine Zahl, die nicht mehr in
-/// 64 Bit passt, läuft still über. Das ist in engen Rechenschleifen spürbar schneller.
+/// Macht aus dem fertigen IR eines ohne Überlaufprüfung. Das ist die Vorgabe (geprüft wird nur
+/// mit `--mit-zoinprüfung`): Plus, Minus und Mal mit ganzen Zahlen rechnen dann wie der
+/// Prozessor, und eine Zahl, die nicht mehr in 64 Bit passt, läuft still über. Die Prüfung
+/// kostet in engen Rechenschleifen bis zu 75 % (siehe README, "Wie schnell ist das?").
 ///
 /// Geändert werden nur die drei kleinen Funktionen `@oida.plus`, `@oida.minus` und `@oida.mal`,
 /// die der Compiler überall einsetzt; Teilen durch 0 und Listenstellen werden weiter geprüft.

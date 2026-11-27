@@ -1942,15 +1942,14 @@ An Strichpunkt brauchst do ned. Bei uns haaßt des OIDA.
 
 Fehler bei den Typen werden alle auf einmal gemeldet, sonst hört der Compiler beim ersten auf.
 Beim Laufen bricht das Programm mit einer Meldung ab, wenn es nicht mehr richtig weitergehen
-kann: beim Teilen durch 0, bei einer Stelle, die es in der Liste nicht gibt, wenn `ZOI("...")`
-keine Zahl bekommt, und wenn eine ganze Zahl beim Rechnen nicht mehr in 64 Bit passt:
+kann: beim Teilen durch 0, bei einer Stelle, die es in der Liste nicht gibt, und wenn
+`ZOI("...")` keine Zahl bekommt:
 
 ```
 Heast! Zeile 3: Durch nix kaun ma ned teilen.
-Heast! Zeile 9: De Zoi is z'groß wuan, de geht si in ana ZOI nimma aus (mehr ois 64 Bit).
 ```
 
-Für alle vier gibt es eine Form, die nie abbricht, weil man sagt, was stattdessen gelten soll:
+Für alle drei gibt es eine Form, die nie abbricht, weil man sagt, was stattdessen gelten soll:
 
 | Statt | schreibt man | und bekommt |
 |---|---|---|
@@ -1974,8 +1973,18 @@ SCHREIB(1 + (100 / leit ODA HOID 0)) OIDA                   # mitten in einer Re
   dort liegt `NIX`.
 - Kommazahlen brauchen das nicht: `1.0 / 0.0` ist `inf`, und sie laufen nicht über.
 - Steht beim Teilen eine `0` schon im Programm (`a / 0`), meldet es der Compiler.
-- Dass ganze Zahlen beim Überlaufen abbrechen statt still falsch weiterzurechnen, kostet beim
-  Rechnen ein wenig Zeit (siehe [Wie schnell ist das?](#wie-schnell-ist-das)).
+
+**Zu große Zahlen.** Eine ganze Zahl hat 64 Bit (bis rund 9 Trillionen). Wird sie beim Rechnen
+größer, läuft sie still über und das Programm rechnet falsch weiter, wie in C und C#. Wer das
+bemerken will, übersetzt mit `--mit-zoinprüfung`: Dann bricht das Programm an der Stelle ab.
+
+```
+oida programm.oida --mit-zoinprüfung
+Heast! Zeile 9: De Zoi is z'groß wuan, de geht si in ana ZOI nimma aus (mehr ois 64 Bit).
+```
+
+Das ist nicht die Vorgabe, weil es Zeit kostet, wo ein Programm fast nur mit ganzen Zahlen
+rechnet (siehe [Wie schnell ist das?](#wie-schnell-ist-das)). Zum Ausprobieren und Testen lohnt es sich.
 
 
 ## Wie schnell ist das?
@@ -1988,10 +1997,10 @@ Programmen gegen C, Rust, C#, Java, JavaScript und Python:
 Die Programme kommen mit dem aus, was OIDA schon kann; was der Vergleich zeigt und was nicht,
 steht samt Messweise und Speicher-Grafik in [`leistung/`](leistung/README.md).
 
-**Die Messung stammt von v0.4.** Seit v0.19 prüft OIDA bei jedem Plus, Minus und Mal mit ganzen
-Zahlen, ob das Ergebnis noch in 64 Bit passt, und bricht sonst mit einer Meldung ab, statt still
-falsch weiterzurechnen. Das kostet dort Zeit, wo ein Programm fast nur mit ganzen Zahlen rechnet.
-An denselben neun Programmen gemessen (v0.19 gegen den Stand direkt davor, bester von sieben Läufen):
+**Mit `--mit-zoinprüfung`** prüft OIDA bei jedem Plus, Minus und Mal mit ganzen Zahlen, ob das
+Ergebnis noch in 64 Bit passt, und bricht sonst mit einer Meldung ab. Das kostet dort Zeit, wo
+ein Programm fast nur mit ganzen Zahlen rechnet. An denselben neun Programmen gemessen (mit
+gegen ohne Prüfung, bester von sieben Läufen):
 
 | Programm | mit Prüfung |
 |---|---|
@@ -1999,10 +2008,7 @@ An denselben neun Programmen gemessen (v0.19 gegen den Stand direkt davor, beste
 | `collatz` (enge Schleife mit Mal und Plus) | um rund 50 % langsamer |
 | die anderen sieben | zwischen 3 % schneller und 6 % langsamer, also im Rahmen der Messung gleich |
 
-Wer das Tempo braucht und weiß, dass seine Zahlen klein bleiben, stellt die Prüfung für ein
-Programm ab: `oida programm.oida --ohne-zoinprüfung`. Dann rechnet es wie in der Tabelle oben
-(und wie C und C#): Eine zu große Zahl läuft still über. Teilen durch 0 und Listenstellen werden
-auch dann geprüft.
+Darum ist die Prüfung nicht die Vorgabe. Die Grafik oben ist ohne sie gemessen (mit v0.4).
 
 
 ## Aufbau
@@ -2073,9 +2079,10 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 - Als JSON gehen Strukturen, aber keine Klassen; die Felder heißen im JSON immer wie in der `STRUKTUR`.
 - Eine Funktion ohne Namen bekommt von Variablen nur eine Kopie; ändern kann sie sie nicht.
 - Bei einem Verzeichnis geht als Schlüssel nur `ZOI` oder `KETTN`.
-- Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0, `ZOI("abc")` und eine ganze Zahl,
-  die nicht mehr in 64 Bit passt, brechen das Programm mit einer Meldung ab, wenn man keine der
-  [sicheren Formen](#fehlermeldungen) nimmt. Dass man sie nimmt, verlangt der Compiler nicht.
+- Eine Stelle, die es in der Liste nicht gibt, Teilen durch 0 und `ZOI("abc")` brechen das
+  Programm mit einer Meldung ab, wenn man keine der [sicheren Formen](#fehlermeldungen) nimmt.
+  Dass man sie nimmt, verlangt der Compiler nicht.
+- Ganze Zahlen laufen bei mehr als 64 Bit still über, außer man übersetzt mit `--mit-zoinprüfung`.
 - Für eine Stelle mitten in einer Kette (`spü.gegna[3].nam ODA HOID "?"`) gilt der Ersatz noch
   nicht; dort schreibt man `(spü.gegna[3] ODA HOID ersatz).nam`.
 - Die Meldungen beim Laufen (`Durch nix kaun ma ned teilen`) richten sich nicht nach dem Wörterbuch.
@@ -2119,7 +2126,7 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 12 | Die Sprache selbst, Teil 1: [Texte mit eingesetzten Werten](#texte-mit-eingesetzten-werten), Kommastellen, Zahlen wie `1_000`, `0xFF`, `1e9`; `==` für Strukturen, Listen und Verzeichnisse | fertig |
 | 13 | [Netzwerk](#netzwerk): HTTP und HTTPS als Client, dazu TCP-Verbindungen in beide Richtungen | fertig |
 | 14 | Die Sprache selbst, Teil 2: [Aufzählungen](#aufzählungen), [`JE NOCHDEM`](#nach-fällen-je-nochdem) mit Prüfung, dass kein Fall fehlt; fragen, was ein Objekt wirklich ist (`OIS`, `IS A`) | fertig |
-| 15 | Weniger Abstürze: `liste[i] ODA HOID ersatz` und `a / b ODA HOID ersatz` brechen nie ab; ganze Zahlen, die überlaufen, melden sich, statt falsch weiterzurechnen; `a / 0` meldet schon der Compiler | fertig |
+| 15 | Weniger Abstürze: `liste[i] ODA HOID ersatz` und `a / b ODA HOID ersatz` brechen nie ab; `a / 0` meldet schon der Compiler; mit `--mit-zoinprüfung` melden sich ganze Zahlen, die überlaufen | fertig |
 | 16 | Ordnung für große Programme: privat, Namensräume (`BRAUCH "datei" OIS name`), Schnittstellen, Pakete aus dem Netz holen | offen |
 | 17 | Threads ohne geteilte Daten: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 
