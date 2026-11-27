@@ -1,0 +1,19 @@
+KLASSE Konto
+    inhaba KETTN
+    GHEIM stand ZOI = 0
+
+    GHEIM FUNKTIAUN prüf(betrog ZOI) GIBT ZRUCK ZOI
+        GIB ZRUCK betrog OIDA
+    PASST SCHO
+PASST SCHO
+
+# Auch wer von der Klasse erbt, kommt nicht an das GHEIME.
+KLASSE Kind ERBT VON Konto
+    FUNKTIAUN schau() GIBT ZRUCK ZOI
+        GIB ZRUCK MEI.stand + MEI.prüf(1) OIDA
+    PASST SCHO
+PASST SCHO
+
+GHEIM STRUKTUR Zettl
+    text KETTN
+PASST SCHO

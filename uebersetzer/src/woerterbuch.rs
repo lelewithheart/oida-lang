@@ -90,6 +90,9 @@ pub enum Schluessel {
     Case,
     As,
     Is,
+    Private,
+    Interface,
+    Implements,
     // JSON
     ToJson,
     ToJsonPretty,
@@ -106,7 +109,7 @@ pub enum Schluessel {
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 81] = [
+    pub const ALLE: [(Schluessel, &'static str); 84] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -181,6 +184,9 @@ impl Schluessel {
         (Schluessel::Case, "CASE"),
         (Schluessel::As, "AS"),
         (Schluessel::Is, "IS"),
+        (Schluessel::Private, "PRIVATE"),
+        (Schluessel::Interface, "INTERFACE"),
+        (Schluessel::Implements, "IMPLEMENTS"),
         (Schluessel::ToJson, "TOJSON"),
         (Schluessel::ToJsonPretty, "TOJSONPRETTY"),
         (Schluessel::FromJson, "FROMJSON"),

@@ -173,3 +173,12 @@ CASE      = BEI
 #     viech IS A Hund     WOAHR oder FOISCH
 AS        = OIS
 IS        = IS A, IS AN
+
+# --- Ordnung in großen Programmen ---------------------------------------------
+#     GHEIM FUNKTIAUN hüf()      gilt nur in dieser Datei
+#     GHEIM lebn ZOI             ein Feld (oder eine Methode) nur für die Klasse selbst
+#     SCHNITTSTÖ Bella ...       was eine Klasse können muss
+#     KLASSE Hund KAUN Bella     die Klasse kann es
+PRIVATE   = GHEIM, PRIVAT
+INTERFACE = SCHNITTSTÖ, SCHNITTSTELLE
+IMPLEMENTS = KAUN

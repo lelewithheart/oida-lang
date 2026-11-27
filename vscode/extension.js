@@ -382,8 +382,11 @@ function ohneDoppelte(namen) {
 
 /** Zum Nachschlagen: Typen, Felder, Methoden und Funktionen nach Namen. */
 function wissenAus(namen) {
-    const w = { namen, typen: new Map(), felder: new Map(), methoden: new Map(), funktionen: new Map() };
+    const w = { namen, typen: new Map(), felder: new Map(), methoden: new Map(), funktionen: new Map(), raeume: new Set() };
     for (const n of namen) {
+        if (n.raum) {
+            w.raeume.add(n.raum);
+        }
         if (n.art === 'typ') {
             w.typen.set(n.name, n);
         } else if (n.art === 'feld') {
@@ -391,7 +394,8 @@ function wissenAus(namen) {
         } else if (n.art === 'methode') {
             w.methoden.set(`${n.zu}.${n.name}`, n);
         } else if (n.art === 'funktion') {
-            w.funktionen.set(n.name, n);
+            // Eine Funktion aus einem Namensraum (BRAUCH ... OIS w) steht unter "w.name", die anderen unter ".name".
+            w.funktionen.set(`${n.raum || ''}.${n.name}`, n);
         }
     }
     return w;
@@ -464,6 +468,12 @@ function typVonKette(w, kette, zeile, tiefe = 0, ohne = undefined) {
         return null;
     }
     let typ = null;
+    // w.mehrmois(3): Der Name des Raums zählt nicht als Schritt, er sagt nur, wo die Funktion steht.
+    let raum = '';
+    if (kette.length >= 2 && w.raeume.has(kette[0]) && !variableHier(w, kette[0], zeile, ohne)) {
+        raum = kette[0];
+        kette = kette.slice(1);
+    }
     const erstes = kette[0];
     if (erstes === '@') {
         // MEI: die Klasse der Methode, in der wir stehen.
@@ -473,8 +483,8 @@ function typVonKette(w, kette, zeile, tiefe = 0, ohne = undefined) {
         const name = erstes.slice(0, -2);
         if (w.typen.has(name)) {
             typ = name; // Punkt(1, 2) baut einen Punkt
-        } else if (w.funktionen.has(name)) {
-            typ = w.funktionen.get(name).typ || null;
+        } else if (w.funktionen.has(`${raum}.${name}`)) {
+            typ = w.funktionen.get(`${raum}.${name}`).typ || null;
         }
     } else {
         const v = variableHier(w, erstes, zeile, ohne);
@@ -577,14 +587,28 @@ function gliederHinterPunkt(antwort, vor, zeile) {
         return [];
     }
     const w = wissenAus(namen);
-    // Hinter dem Namen einer Aufzählung: ihre Werte (Ampl.ROT).
-    if (kette.length === 1 && !variableHier(w, kette[0], zeile)) {
-        const werte = namen.filter((n) => n.art === 'wert' && n.zu === kette[0]);
+    const istRaum = w.raeume.has(kette[0]) && !variableHier(w, kette[0], zeile);
+    // Hinter dem Namen eines Raums (BRAUCH ... OIS w): was es dort gibt.
+    if (kette.length === 1 && istRaum) {
+        return namen.filter((n) => n.raum === kette[0] && ['funktion', 'typ', 'fix'].includes(n.art));
+    }
+    // Hinter dem Namen einer Aufzählung: ihre Werte (Ampl.ROT, w.Ampl.ROT).
+    if (kette.length === 2 && istRaum) {
+        const werte = namen.filter((n) => n.art === 'wert' && n.zu === kette[1] && n.raum === kette[0]);
         if (werte.length > 0) {
             return werte;
         }
     }
-    const alle = namen.filter((n) => n.art === 'feld' || n.art === 'methode');
+    if (kette.length === 1 && !variableHier(w, kette[0], zeile)) {
+        const werte = namen.filter((n) => n.art === 'wert' && n.zu === kette[0] && !n.raum);
+        if (werte.length > 0) {
+            return werte;
+        }
+    }
+    // Was GHEIM ist, gibt es nur in den Methoden der Klasse selbst.
+    const drin = funktionUm(w, zeile);
+    const hier = drin && drin.art === 'methode' ? drin.zu : '';
+    const alle = namen.filter((n) => (n.art === 'feld' || n.art === 'methode') && (!n.gheim || n.zu === hier));
     const typ = typVonKette(w, kette, zeile);
     if (!typ) {
         // Nicht auszurechnen (zum Beispiel ein Wert aus einer Vorlage): dann lieber alles als nichts.
@@ -627,8 +651,13 @@ const vorschlaege = {
         // Variablen nur dort, wo sie gelten.
         const drin = funktionUm({ namen }, position.line);
         const hier = namen.filter((n) =>
-            ['funktion', 'typ', 'fix'].includes(n.art) || (n.art === 'variable' && giltHier(n, position.line, drin)));
+            (['funktion', 'typ', 'fix'].includes(n.art) && !n.raum) || (n.art === 'variable' && giltHier(n, position.line, drin)));
         const namensListe = ohneDoppelte(hier).map((n) => nameAlsVorschlag(n, klammerDa));
+        for (const raum of new Set(namen.map((n) => n.raum).filter(Boolean))) {
+            const eintrag = new vscode.CompletionItem({ label: raum, description: 'Namensraum' }, vscode.CompletionItemKind.Module);
+            eintrag.detail = `${raum}.name: was aus der Datei kommt, die mit OIS ${raum} dazugeholt ist`;
+            namensListe.push(eintrag);
+        }
         const davor = zeile.toUpperCase();
         const klein = kleinSchreiben(dokument, /[\p{L}\p{N}_]*$/u.exec(zeile)[0], antwort);
         const schreib = (text) => (klein ? text.toLowerCase() : text);

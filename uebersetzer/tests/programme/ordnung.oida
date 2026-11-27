@@ -1,0 +1,82 @@
+# Ordnung in großen Programmen: GHEIM (nur in der Datei, nur in der Klasse) und
+# Namensräume (BRAUCH ... OIS name). Die Dateien dazu liegen im Ordner "ordnung".
+
+BRAUCH "ordnung/wüafl.oida" OIS w OIDA
+BRAUCH "ordnung/kortn" OIS k OIDA
+BRAUCH "ordnung/gemeinsam.oida" OIDA
+BRAUCH mathe OIS m OIDA
+
+# Dieselben Namen noch einmal, hier in der Hauptdatei: kein Streit.
+GHEIM FIX SEITN = 100 OIDA
+
+FUNKTIAUN wuaf() GIBT ZRUCK KETTN
+    GIB ZRUCK "mei eigana Wuaf" OIDA
+PASST SCHO
+
+GHEIM FUNKTIAUN ecke() GIBT ZRUCK ZOI
+    GIB ZRUCK 4 OIDA
+PASST SCHO
+
+KLASSE Konto
+    inhaba KETTN
+    GHEIM stand ZOI = 0
+
+    FUNKTIAUN zoih_ei(betrog ZOI)
+        MEI.stand += MEI.prüf(betrog) OIDA
+    PASST SCHO
+
+    FUNKTIAUN wia_vü() GIBT ZRUCK ZOI
+        GIB ZRUCK MEI.stand OIDA
+    PASST SCHO
+
+    # An das GHEIME eines anderen Kontos kommt die Klasse selbst auch.
+    FUNKTIAUN mehr_ois(aundas Konto) GIBT ZRUCK JONA
+        GIB ZRUCK MEI.stand > aundas.stand OIDA
+    PASST SCHO
+
+    GHEIM FUNKTIAUN prüf(betrog ZOI) GIBT ZRUCK ZOI
+        WENN betrog < 0 DAUN
+            GIB ZRUCK 0 OIDA
+        PASST SCHO
+        GIB ZRUCK betrog OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Sparbuach ERBT VON Konto
+    FUNKTIAUN zinsn()
+        MEI.zoih_ei(MEI.wia_vü() / 10) OIDA
+    PASST SCHO
+PASST SCHO
+
+SCHREIB("--- drei Moi wuaf, drei Moi SEITN") OIDA
+SCHREIB(wuaf(), SEITN, ecke()) OIDA
+SCHREIB(k.wuaf()) OIDA
+SOG AU gwürflt = w.wuaf() OIDA
+SCHREIB(gwürflt >= 1 UND gwürflt <= w.GRÖSSTA_WUAF, w.GRÖSSTA_WUAF) OIDA
+
+SCHREIB("--- Typn aus an Namensraum") OIDA
+SOG AU e = w.mehrmois(3) OIDA
+SCHREIB(e.wia_oft, e.summe >= 3, w.wia_woas(w.Ergebnis(3, 3)), w.wia_woas(w.Ergebnis(18, 3)) == w.Glück.GLÜCK) OIDA
+SOG AU no_ans w.Ergebnis = w.Ergebnis(7, 2) OIDA
+SCHREIB(no_ans, w.wia_woas(no_ans)) OIDA
+SOG AU becha = w.Becha() OIDA
+becha.schüttl() OIDA
+becha.schüttl() OIDA
+SCHREIB(becha.wia_oft(), becha.wuaf >= 1) OIDA
+SOG AU stapl k.Stapl VON ZOI = k.Stapl VON ZOI([3, 5, 8]) OIDA
+SCHREIB(k.obastes(stapl, 0), k.obastes(k.Stapl VON KETTN([]), "laar")) OIDA
+
+SCHREIB("--- übaroi und im Raum is desöwe") OIDA
+SCHREIB(rahmen("do"), w.gruass()) OIDA
+
+SCHREIB("--- de Bibliothek ois Raum") OIDA
+SCHREIB(m.klemm(15, 0, 10), m.quadrat(3.0)) OIDA
+
+SCHREIB("--- GHEIM in ana Klass") OIDA
+SOG AU franz = Konto("Franz") OIDA
+franz.zoih_ei(50) OIDA
+franz.zoih_ei(-20) OIDA
+SOG AU resi = Sparbuach("Resi") OIDA
+resi.zoih_ei(200) OIDA
+resi.zinsn() OIDA
+SCHREIB(franz.inhaba, franz.wia_vü(), resi.wia_vü(), resi.mehr_ois(franz), franz) OIDA

@@ -1,0 +1,16 @@
+BRAUCH "ordnung/wüafl.oida" OIS w OIDA
+BRAUCH "ordnung/konto.oida" OIDA
+SCHREIB(w.ans(6)) OIDA
+SCHREIB(w.SEITN) OIDA
+SCHREIB(mehrmois(2)) OIDA
+SCHREIB(w.gibts_ned()) OIDA
+SOG AU e Ergebnis = w.mehrmois(1) OIDA
+SOG AU f w.Ergebnis = 5 OIDA
+SOG AU k = Konto("Franz") OIDA
+SCHREIB(k.stand) OIDA
+k.stand = 5 OIDA
+SCHREIB(k.prüf(3)) OIDA
+SOG AU z = Zettl("x") OIDA
+SCHREIB(ecke()) OIDA
+SOG AU b = w.Becha() OIDA
+SCHREIB(b.gschüttlt) OIDA

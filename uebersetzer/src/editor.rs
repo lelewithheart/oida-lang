@@ -220,7 +220,8 @@ pub fn untersuche_datei(quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) 
         let _ = write!(
             aus,
             "{komma}{{\"name\":{},\"art\":{},\"text\":{},\"doku\":{},\"aus\":{},\"zu\":{},\"parameter\":[{}],\
-             \"typ\":{},\"eltern\":{},\"kette\":[{}],\"jedes\":{},\"von\":{},\"bis\":{},\"innen\":{}}}",
+             \"typ\":{},\"eltern\":{},\"kette\":[{}],\"jedes\":{},\"von\":{},\"bis\":{},\"innen\":{},\
+             \"raum\":{},\"gheim\":{}}}",
             json_text(&n.name),
             json_text(n.art),
             json_text(&n.text),
@@ -234,7 +235,9 @@ pub fn untersuche_datei(quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) 
             n.jedes,
             n.von,
             n.bis,
-            n.innen
+            n.innen,
+            json_text(&n.raum),
+            n.gheim
         );
     }
     aus.push_str("]}");
@@ -275,6 +278,11 @@ struct Eintrag {
     bis: u32,
     /// Die Variable gehört zu einer Funktion (sonst zum Hauptprogramm, das Funktionen nicht sehen).
     innen: bool,
+    /// Kommt der Name aus einer Datei, die mit `BRAUCH ... OIS w` dazugeholt ist: `w`. Dann
+    /// heißt er im Programm `w.name`.
+    raum: String,
+    /// Ein Feld oder eine Methode mit GHEIM: nur für die Methoden der eigenen Klasse.
+    gheim: bool,
 }
 
 /// Sammelt die Namen aus dem Text im Editor und aus allem, was er mit BRAUCH dazuholt.
@@ -287,13 +295,17 @@ struct Eintrag {
 fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) -> Vec<Eintrag> {
     let mut liste = Vec::new();
     let ordner = pfad.and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
-    let mut offen: std::collections::VecDeque<(bool, String, std::path::PathBuf)> =
-        sammle_namen(tokens, quelltext, "", true, &mut liste).into_iter().map(|(b, ziel)| (b, ziel, ordner.clone())).collect();
+    // Was noch zu holen ist: (aus der Bibliothek?, Ziel, Ordner, der Name hinter OIS oder leer).
+    let mut offen: std::collections::VecDeque<(bool, String, std::path::PathBuf, String)> =
+        sammle_namen(tokens, quelltext, "", "", true, &mut liste)
+            .into_iter()
+            .map(|(b, ziel, raum)| (b, ziel, ordner.clone(), raum.unwrap_or_default()))
+            .collect();
     let kennung = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()).to_string_lossy().to_lowercase();
     let mut geladen: std::collections::HashSet<String> = pfad.map(kennung).into_iter().collect();
     let eingebaut = Woerterbuch::eingebaut();
 
-    while let Some((bibliothek, ziel, ordner)) = offen.pop_front() {
+    while let Some((bibliothek, ziel, ordner, raum)) = offen.pop_front() {
         if geladen.len() > 200 {
             break;
         }
@@ -317,8 +329,12 @@ fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<
         };
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
         let (tokens, _) = lexer::zerlegen_nachsichtig(text, woerter);
-        for (b, ziel) in sammle_namen(&tokens, text, &name, false, &mut liste) {
-            offen.push_back((b, ziel, daneben.clone()));
+        for (b, ziel, innen_raum) in sammle_namen(&tokens, text, &name, &raum, false, &mut liste) {
+            // Was eine dazugeholte Datei selbst ohne OIS dazuholt, gilt überall. Was sie mit OIS
+            // dazuholt, ist nur dort unter diesem Namen zu haben, also nicht in der Datei im Editor.
+            if innen_raum.is_none() {
+                offen.push_back((b, ziel, daneben.clone(), String::new()));
+            }
         }
     }
 
@@ -468,7 +484,14 @@ fn ende_des_blocks(tokens: &[Token], i: usize) -> u32 {
 
 /// Die Namen aus einer Datei. `haupt` ist die Datei im Editor: Nur aus ihr kommen die
 /// Variablen. Gibt zurück, was die Datei mit BRAUCH dazuholt: (aus der Bibliothek?, Ziel).
-fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mut Vec<Eintrag>) -> Vec<(bool, String)> {
+fn sammle_namen(
+    tokens: &[Token],
+    text: &str,
+    aus: &str,
+    raum: &str,
+    haupt: bool,
+    liste: &mut Vec<Eintrag>,
+) -> Vec<(bool, String, Option<String>)> {
     use Schluessel as S;
     let zeilen: Vec<&str> = text.split('\n').collect();
     let letzte_zeile = zeilen.len().max(1) as u32;
@@ -495,18 +518,35 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
         Some(TokenArt::Name(name)) => Some(name.clone()),
         _ => None,
     };
-    let mut neu = |eintrag: Eintrag| liste.push(Eintrag { aus: aus.to_string(), ..eintrag });
+    let mut neu = |eintrag: Eintrag| liste.push(Eintrag { aus: aus.to_string(), raum: raum.to_string(), ..eintrag });
 
+    // BRAUCH ... OIS raum: der Name hinter OIS, wenn dort einer steht.
+    let raum_hinter = |i: usize| if ist_wort(tokens, i, S::As) { name_bei(i + 1) } else { None };
     let mut brauch = Vec::new();
+    // Steckt, was gerade kommt, in etwas mit GHEIM aus einer anderen Datei? Dann geht es die Datei im Editor nichts an.
+    let mut versteckt = false;
     // In welcher Klasse, Struktur oder Aufzählung wir gerade stecken.
     let mut drin: Option<(String, Schluessel)> = None;
     // Bis zu welcher Zeile die Funktion geht, in der wir gerade stecken.
     let mut funktion_bis: Option<u32> = None;
     for (i, token) in tokens.iter().enumerate() {
         let am_anfang = token.pos.spalte == 1;
-        let erstes_der_zeile = i == 0 || tokens[i - 1].pos.zeile < token.pos.zeile;
+        // GHEIM vor dem Wort: Dann fängt die Zeile mit GHEIM an, und dort beginnt auch der Block.
+        let gheim = i > 0 && ist_wort(tokens, i - 1, S::Private) && tokens[i - 1].pos.zeile == token.pos.zeile;
+        let anfang = if gheim { i - 1 } else { i };
+        let erstes_der_zeile = anfang == 0 || tokens[anfang - 1].pos.zeile < tokens[anfang].pos.zeile;
         if am_anfang {
             drin = None;
+            versteckt = false;
+        }
+        if versteckt && !matches!(token.art, TokenArt::Schluessel(S::Import)) {
+            continue;
+        }
+        // Was in einer anderen Datei ganz außen GHEIM ist, gibt es hier nicht.
+        let ganz_aussen_gheim = gheim && tokens[anfang].pos.spalte == 1;
+        if ganz_aussen_gheim && !haupt {
+            versteckt = true;
+            continue;
         }
         if funktion_bis.is_some_and(|bis| token.pos.zeile > bis) {
             funktion_bis = None;
@@ -530,8 +570,8 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
         };
         match &token.art {
             TokenArt::Schluessel(S::Import) => match tokens.get(i + 1).map(|t| &t.art) {
-                Some(TokenArt::Name(ziel)) => brauch.push((true, ziel.clone())),
-                Some(TokenArt::Text(ziel)) => brauch.push((false, ziel.clone())),
+                Some(TokenArt::Name(ziel)) => brauch.push((true, ziel.clone(), raum_hinter(i + 2))),
+                Some(TokenArt::Text(ziel)) => brauch.push((false, ziel.clone(), raum_hinter(i + 2))),
                 _ => {}
             },
             TokenArt::Schluessel(art @ (S::Struct | S::Class | S::Enum)) => {
@@ -591,7 +631,7 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
                     .iter()
                     .take_while(|t| t.pos.zeile == token.pos.zeile)
                     .find(|t| t.art == TokenArt::Schluessel(S::Extern));
-                let ende = if draussen.is_some() { token.pos.zeile } else { ende_des_blocks(tokens, i) };
+                let ende = if draussen.is_some() { token.pos.zeile } else { ende_des_blocks(tokens, anfang) };
                 funktion_bis = Some(ende);
                 let kopf = ab(&tokens[i + 1], draussen);
                 if haupt {
@@ -609,11 +649,12 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
                     }
                 }
                 let (art, zu) = match &drin {
-                    Some((klasse, S::Class)) if !am_anfang => ("methode", klasse.clone()),
+                    Some((klasse, S::Class)) if !am_anfang && !ganz_aussen_gheim => ("methode", klasse.clone()),
                     _ => ("funktion", String::new()),
                 };
                 neu(Eintrag {
                     name,
+                    gheim: gheim && art == "methode",
                     art,
                     text: kopf,
                     doku: doku(token.pos.zeile),
@@ -691,6 +732,7 @@ fn sammle_namen(tokens: &[Token], text: &str, aus: &str, haupt: bool, liste: &mu
                         neu(Eintrag {
                             name: name.clone(),
                             art: "feld",
+                            gheim,
                             text: ab(token, None),
                             doku: doku(token.pos.zeile),
                             zu: besitzer.clone(),
@@ -1299,9 +1341,9 @@ mod tests {
         let namen = feld(&json, "namen");
         for erwartet in [
             // Eine Funktion: Kopf, Erklärung, Parameter, was sie zurückgibt und über welche Zeilen sie geht.
-            r#"{"name":"zamm_zöhn","art":"funktion","text":"zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI","doku":"Zählt zusammen.\nZweite Zeile.","aus":"","zu":"","parameter":["a","b"],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":5,"bis":7,"innen":false}"#,
+            r#"{"name":"zamm_zöhn","art":"funktion","text":"zamm_zöhn(a ZOI, b LISTN VON ZOI) GIBT ZRUCK ZOI","doku":"Zählt zusammen.\nZweite Zeile.","aus":"","zu":"","parameter":["a","b"],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":5,"bis":7,"innen":false,"raum":"","gheim":false}"#,
             // Ihre Parameter gelten nur in ihr.
-            r#"{"name":"a","art":"variable","text":"Parameter von zamm_zöhn","doku":"","aus":"","zu":"","parameter":[],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":5,"bis":7,"innen":true}"#,
+            r#"{"name":"a","art":"variable","text":"Parameter von zamm_zöhn","doku":"","aus":"","zu":"","parameter":[],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":5,"bis":7,"innen":true,"raum":"","gheim":false}"#,
             r#""name":"b","art":"variable","text":"Parameter von zamm_zöhn","doku":"","aus":"","zu":"","parameter":[],"typ":"[INT]""#,
             r#"{"name":"Ampl","art":"typ","text":"AUFZÖHLUNG Ampl","doku":"","aus":"","zu":"","parameter":[]"#,
             r#"{"name":"ROT","art":"wert","text":"Ampl.ROT","doku":"","aus":"","zu":"Ampl","parameter":[]"#,
@@ -1311,17 +1353,17 @@ mod tests {
             r#"{"name":"oita","art":"feld","text":"oita ZOI = 3","doku":"","aus":"","zu":"Hund","parameter":[],"typ":"INT""#,
             r#"{"name":"olle","art":"feld","text":"olle VAZEICHNIS VON KETTN UND LISTN VON Hund","doku":"","aus":"","zu":"Dackl","parameter":[],"typ":"{TEXT:[Hund]}""#,
             // Eine Methode gehört zu ihrer Klasse; eine Klasse weiß, von wem sie erbt.
-            r#"{"name":"bell","art":"methode","text":"bell(wia_oft ZOI) GIBT ZRUCK VIELLEICHT Hund","doku":"","aus":"","zu":"Hund","parameter":["wia_oft"],"typ":"?Hund","eltern":"","kette":[],"jedes":false,"von":17,"bis":20,"innen":false}"#,
+            r#"{"name":"bell","art":"methode","text":"bell(wia_oft ZOI) GIBT ZRUCK VIELLEICHT Hund","doku":"","aus":"","zu":"Hund","parameter":["wia_oft"],"typ":"?Hund","eltern":"","kette":[],"jedes":false,"von":17,"bis":20,"innen":false,"raum":"","gheim":false}"#,
             r#"{"name":"Dackl","art":"typ","text":"KLASSE Dackl ERBT VON Hund","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"Hund""#,
             r#"{"name":"GRENZE","art":"fix","text":"FIX GRENZE = 3 OIDA""#,
             // Variablen: in einer Methode (nur dort), mit Typ, als Element einer Liste, aus einem Aufruf.
-            r#"{"name":"drin","art":"variable","text":"SOG AU drin = MEI.nam OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["@","nam"],"jedes":false,"von":18,"bis":20,"innen":true}"#,
-            r#""name":"wia_oft","art":"variable","text":"Parameter von bell","doku":"","aus":"","zu":"","parameter":[],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":17,"bis":20,"innen":true}"#,
-            r#""name":"d","art":"variable","text":"SOG AU d Dackl = Dackl() OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"Dackl","eltern":"","kette":[],"jedes":false,"von":28,"bis":34,"innen":false}"#,
-            r#""name":"viech","art":"variable","text":"FIA JEDE viech IN d.olle[\"x\"] TUA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["d","olle","[]"],"jedes":true,"von":29,"bis":34,"innen":false}"#,
+            r#"{"name":"drin","art":"variable","text":"SOG AU drin = MEI.nam OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["@","nam"],"jedes":false,"von":18,"bis":20,"innen":true,"raum":"","gheim":false}"#,
+            r#""name":"wia_oft","art":"variable","text":"Parameter von bell","doku":"","aus":"","zu":"","parameter":[],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":17,"bis":20,"innen":true,"raum":"","gheim":false}"#,
+            r#""name":"d","art":"variable","text":"SOG AU d Dackl = Dackl() OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"Dackl","eltern":"","kette":[],"jedes":false,"von":28,"bis":34,"innen":false,"raum":"","gheim":false}"#,
+            r#""name":"viech","art":"variable","text":"FIA JEDE viech IN d.olle[\"x\"] TUA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["d","olle","[]"],"jedes":true,"von":29,"bis":34,"innen":false,"raum":"","gheim":false}"#,
             r#""name":"freind","art":"variable","text":"SOG AU freind = viech.bell(1) OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["viech","bell()"],"jedes":false"#,
             r#""name":"i","art":"variable","text":"FIA i VON 1 BIS 3 TUA","doku":"","aus":"","zu":"","parameter":[],"typ":"INT""#,
-            r#""name":"zöhla","art":"variable","text":"SOG AU zöhla = zamm_zöhn(1,","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["zamm_zöhn()"],"jedes":false,"von":34,"bis":34,"innen":false}"#,
+            r#""name":"zöhla","art":"variable","text":"SOG AU zöhla = zamm_zöhn(1,","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["zamm_zöhn()"],"jedes":false,"von":34,"bis":34,"innen":false,"raum":"","gheim":false}"#,
             // Aus der Bibliothek, samt Erklärung; "VON DRAUSSN" wird nicht gezeigt.
             r#"{"name":"klemm","art":"funktion","text":"klemm VON T(wert T, untn T, obn T) GIBT ZRUCK T","doku":"Hält den Wert zwischen `untn` und `obn`: klemm(15, 0, 10) ist 10.\n(Für alles, was man mit < vergleichen kann.)","aus":"mathe","zu":"","parameter":["wert","untn","obn"],"typ":"T""#,
             r#""name":"temp_ordna","art":"funktion","text":"temp_ordna() GIBT ZRUCK KETTN","doku""#,
@@ -1333,6 +1375,42 @@ mod tests {
         assert_eq!(namen.matches(r#""name":"drin""#).count(), 1);
         // Was nicht dazugeholt ist, kommt auch nicht vor.
         assert!(!namen.contains(r#""name":"sortiert""#));
+    }
+
+    #[test]
+    fn namen_kennen_gheim() {
+        let quelle = [
+            "GHEIM FUNKTIAUN hüf(a ZOI) GIBT ZRUCK ZOI", // 0
+            "    SOG AU drin = a OIDA",                   // 1
+            "    GIB ZRUCK drin OIDA",                    // 2
+            "PASST SCHO",                                 // 3
+            "KLASSE Konto",                               // 4
+            "    inhaba KETTN",                           // 5
+            "    GHEIM stand ZOI = 0",                    // 6
+            "    GHEIM FUNKTIAUN prüf(b ZOI)",            // 7
+            "        SOG AU innen = b OIDA",              // 8
+            "    PASST SCHO",                             // 9
+            "PASST SCHO",                                 // 10
+            "BRAUCH mathe OIS m OIDA",                    // 11
+        ]
+        .join("\n");
+        let json = untersuche(&quelle, &wb());
+        let namen = feld(&json, "namen");
+        for erwartet in [
+            // In der eigenen Datei gibt es auch das GHEIME; die Funktion geht über die richtigen Zeilen.
+            r#""name":"hüf","art":"funktion","text":"hüf(a ZOI) GIBT ZRUCK ZOI","doku":"","aus":"","zu":"","parameter":["a"],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":0,"bis":3,"innen":false,"raum":"","gheim":false}"#,
+            r#""name":"drin","art":"variable","text":"SOG AU drin = a OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["a"],"jedes":false,"von":1,"bis":3,"innen":true"#,
+            // Felder und Methoden merken sich, ob sie GHEIM sind.
+            r#""name":"inhaba","art":"feld","text":"inhaba KETTN","doku":"","aus":"","zu":"Konto","parameter":[],"typ":"TEXT","eltern":"","kette":[],"jedes":false,"von":0,"bis":0,"innen":false,"raum":"","gheim":false}"#,
+            r#""name":"stand","art":"feld","text":"stand ZOI = 0","doku":"","aus":"","zu":"Konto","parameter":[],"typ":"INT","eltern":"","kette":[],"jedes":false,"von":0,"bis":0,"innen":false,"raum":"","gheim":true}"#,
+            r#""name":"prüf","art":"methode","text":"prüf(b ZOI)","doku":"","aus":"","zu":"Konto","parameter":["b"],"typ":"","eltern":"","kette":[],"jedes":false,"von":7,"bis":9,"innen":false,"raum":"","gheim":true}"#,
+            r#""name":"innen","art":"variable","text":"SOG AU innen = b OIDA","doku":"","aus":"","zu":"","parameter":[],"typ":"","eltern":"","kette":["b"],"jedes":false,"von":8,"bis":9,"innen":true"#,
+            // Was mit OIS dazugeholt ist, trägt den Namen des Raums.
+            r#""name":"klemm","art":"funktion","text":"klemm VON T(wert T, untn T, obn T) GIBT ZRUCK T","#,
+            r#""aus":"mathe","zu":"","parameter":["wert","untn","obn"],"typ":"T","eltern":"","kette":[],"jedes":false,"von":0,"bis":0,"innen":false,"raum":"m","gheim":false}"#,
+        ] {
+            assert!(namen.contains(erwartet), "{erwartet}\nfehlt in\n{namen}");
+        }
     }
 
     #[test]

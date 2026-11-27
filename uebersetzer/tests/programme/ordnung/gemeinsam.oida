@@ -1,0 +1,9 @@
+# Wird von der Hauptdatei ohne OIS dazugeholt und von wüafl.oida mit OIS: Dann gilt es überall,
+# und g.rahmen ist dasselbe wie rahmen.
+FUNKTIAUN rahmen(text KETTN) GIBT ZRUCK KETTN
+    GIB ZRUCK "[" + ecke() + text + ecke() + "]" OIDA
+PASST SCHO
+
+GHEIM FUNKTIAUN ecke() GIBT ZRUCK KETTN
+    GIB ZRUCK "*" OIDA
+PASST SCHO

@@ -1,0 +1,18 @@
+# Karten. Dieselben Namen wie in wüafl.oida (wuaf, ans, SEITN), aber etwas ganz anderes.
+GHEIM FIX SEITN = 2 OIDA
+
+GHEIM FUNKTIAUN ans(n ZOI) GIBT ZRUCK KETTN
+    GIB ZRUCK "Kortn Numma " + KETTN(n) OIDA
+PASST SCHO
+
+FUNKTIAUN wuaf() GIBT ZRUCK KETTN
+    GIB ZRUCK ans(SEITN) OIDA
+PASST SCHO
+
+STRUKTUR Stapl VON T
+    drin LISTN VON T
+PASST SCHO
+
+FUNKTIAUN obastes VON T(s Stapl VON T, ersotz T) GIBT ZRUCK T
+    GIB ZRUCK s.drin[LÄNGN(s.drin) - 1] ODA HOID ersotz OIDA
+PASST SCHO

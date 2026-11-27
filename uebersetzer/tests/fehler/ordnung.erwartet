@@ -1,0 +1,15 @@
+:3:9: De FUNKTIAUN 'wüafl.ans' kenn i ned. In wüafl.oida gibt's 'ans', oba des is durt GHEIM.
+:4:9: 'wüafl.SEITN' kenn i ned. In wüafl.oida gibt's 'SEITN', oba des is durt GHEIM.
+:5:9: De FUNKTIAUN 'mehrmois' kenn i ned. In wüafl.oida gibt's 'mehrmois'; de Datei is mit OIS dazuaghoit, drum ghört der Nom von durt davua: x.mehrmois.
+:6:9: De FUNKTIAUN 'wüafl.gibts_ned' kenn i ned.
+:7:10: An Typ 'Ergebnis' kenn i ned. In wüafl.oida gibt's 'Ergebnis'; de Datei is mit OIS dazuaghoit, drum ghört der Nom von durt davua: x.Ergebnis. Gibt's a STRUKTUR oda a KLASSE mit dem Nom?
+:8:23: 'f' soll a wüafl.Ergebnis sei, oba des do is a ZOI.
+:10:11: Des Föd 'stand' is GHEIM: Do kumman nur de Methodn von 'Konto' söwa dazua.
+:11:3: Des Föd 'stand' is GHEIM: Do kumman nur de Methodn von 'Konto' söwa dazua.
+:12:11: De Methode 'prüf' is GHEIM: De kennan nur de Methodn von 'Konto' söwa aufruafn.
+:13:12: De FUNKTIAUN 'Zettl' kenn i ned. In konto.oida gibt's 'Zettl', oba des is durt GHEIM.
+:14:9: De FUNKTIAUN 'ecke' kenn i ned.
+:16:11: Des Föd 'gschüttlt' is GHEIM: Do kumman nur de Methodn von 'wüafl.Becha' söwa dazua.
+ordnung/konto.oida:13:23: Des Föd 'stand' is GHEIM: Do kumman nur de Methodn von 'Konto' söwa dazua.
+ordnung/konto.oida:13:35: De Methode 'prüf' is GHEIM: De kennan nur de Methodn von 'Konto' söwa aufruafn.
+Na, des wird nix: 14 Fehler.

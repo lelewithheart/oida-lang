@@ -431,6 +431,66 @@ const pruefungen = {
         assert.deepStrictEqual(await variablen(zeilen.findIndex((z) => z.startsWith('SOG AU rex')) - 1, 0), []);
     },
 
+    async 'Namensräume und GHEIM in den Vorschlägen'() {
+        schreibe('raum_bib.oida', [
+            'GHEIM FUNKTIAUN vasteckt() GIBT ZRUCK ZOI',
+            '    GIB ZRUCK 1 OIDA',
+            'PASST SCHO',
+            'FUNKTIAUN wuaf() GIBT ZRUCK ZOI',
+            '    GIB ZRUCK vasteckt() OIDA',
+            'PASST SCHO',
+            'STRUKTUR Ergebnis',
+            '    summe ZOI',
+            'PASST SCHO',
+            'AUFZÖHLUNG Glück',
+            '    PECH, GLÜCK',
+            'PASST SCHO',
+            'FUNKTIAUN mehrmois() GIBT ZRUCK Ergebnis',
+            '    GIB ZRUCK Ergebnis(wuaf()) OIDA',
+            'PASST SCHO',
+            '',
+        ].join('\n'));
+        const zeilen = [
+            'BRAUCH "raum_bib.oida" OIS w OIDA',
+            'KLASSE Konto',
+            '    inhaba KETTN',
+            '    GHEIM stand ZOI = 0',
+            '    FUNKTIAUN wia_vü() GIBT ZRUCK ZOI',
+            '        GIB ZRUCK MEI.',
+            '    PASST SCHO',
+            'PASST SCHO',
+            'SOG AU k = Konto("x") OIDA',
+            'SOG AU e = w.mehrmois() OIDA',
+            'w.',
+            'w.Glück.',
+            'k.',
+            'e.',
+            'wu',
+            '',
+        ];
+        const dokument = await oeffne(schreibe('raum.oida', zeilen.join('\n')));
+        const name = (e) => (typeof e.label === 'string' ? e.label : e.label.label);
+        const hinter = async (text) => {
+            const zeile = zeilen.findIndex((z) => z.trim() === text);
+            assert.ok(zeile >= 0, `die Zeile "${text}" gibt es nicht`);
+            const liste = await vscode.commands.executeCommand(
+                'vscode.executeCompletionItemProvider', dokument.uri, new vscode.Position(zeile, zeilen[zeile].length));
+            return liste.items.filter((e) => e.kind !== vscode.CompletionItemKind.Text).map(name).sort();
+        };
+        // Hinter dem Namen des Raums: was die Datei für andere hat, also nicht das GHEIME.
+        assert.deepStrictEqual(await hinter('w.'), ['Ergebnis', 'Glück', 'mehrmois', 'wuaf']);
+        assert.deepStrictEqual(await hinter('w.Glück.'), ['GLÜCK', 'PECH']);
+        // Was eine Funktion aus dem Raum zurückgibt.
+        assert.deepStrictEqual(await hinter('e.'), ['summe']);
+        // Ein GHEIMES Feld gibt es nur in den Methoden der Klasse selbst.
+        assert.deepStrictEqual(await hinter('k.'), ['inhaba', 'wia_vü']);
+        assert.deepStrictEqual(await hinter('GIB ZRUCK MEI.'), ['inhaba', 'stand', 'wia_vü']);
+        // Mitten im Programm: der Raum selbst, aber nicht, was in ihm steckt.
+        const frei = await hinter('wu');
+        assert.ok(frei.includes('w') && frei.includes('Konto'), frei.slice(0, 20).join(', '));
+        assert.ok(!frei.includes('wuaf') && !frei.includes('mehrmois') && !frei.includes('vasteckt'), 'Namen aus dem Raum ohne "w." davor');
+    },
+
     async 'F5 übersetzt und startet das Programm'() {
         await oeffne(path.join(wurzel, 'beispiele', 'fizzbuzz.oida'));
         const exe = path.join(os.tmpdir(), 'oida-vscode', 'fizzbuzz.exe');

@@ -1,0 +1,60 @@
+# Würfeln. Wird nur als Namensraum dazugeholt (BRAUCH ... OIS w): Alles hier heißt draußen w.name.
+BRAUCH "gemeinsam.oida" OIS g OIDA
+
+GHEIM FIX SEITN = 6 OIDA
+FIX GRÖSSTA_WUAF = SEITN OIDA
+
+AUFZÖHLUNG Glück
+    PECH, GEHT_SO, GLÜCK
+PASST SCHO
+
+STRUKTUR Ergebnis
+    summe ZOI
+    wia_oft ZOI
+PASST SCHO
+
+# GHEIM: Das gibt es nur in dieser Datei. Eine andere Datei kann ihr eigenes "ans" haben.
+GHEIM FUNKTIAUN ans(seitn ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK ZUFOI(1, seitn) OIDA
+PASST SCHO
+
+FUNKTIAUN wuaf() GIBT ZRUCK ZOI
+    GIB ZRUCK ans(SEITN) OIDA
+PASST SCHO
+
+FUNKTIAUN mehrmois(wia_oft ZOI) GIBT ZRUCK Ergebnis
+    SOG AU summe = 0 OIDA
+    FIA i VON 1 BIS wia_oft TUA
+        summe += wuaf() OIDA
+    PASST SCHO
+    GIB ZRUCK Ergebnis(summe, wia_oft) OIDA
+PASST SCHO
+
+FUNKTIAUN wia_woas(e Ergebnis) GIBT ZRUCK Glück
+    WENN e.summe == e.wia_oft DAUN
+        GIB ZRUCK Glück.PECH OIDA
+    PASST SCHO
+    WENN e.summe == e.wia_oft * SEITN DAUN
+        GIB ZRUCK Glück.GLÜCK OIDA
+    PASST SCHO
+    GIB ZRUCK Glück.GEHT_SO OIDA
+PASST SCHO
+
+# Ein Feld, das so heißt wie eine Funktion von ganz außen (wuaf): Das verträgt sich.
+KLASSE Becha
+    wuaf ZOI = 0
+    GHEIM gschüttlt ZOI = 0
+
+    FUNKTIAUN schüttl()
+        MEI.gschüttlt += 1 OIDA
+        MEI.wuaf = wuaf() OIDA
+    PASST SCHO
+
+    FUNKTIAUN wia_oft() GIBT ZRUCK ZOI
+        GIB ZRUCK MEI.gschüttlt OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN gruass() GIBT ZRUCK KETTN
+    GIB ZRUCK g.rahmen("wüafl") OIDA
+PASST SCHO

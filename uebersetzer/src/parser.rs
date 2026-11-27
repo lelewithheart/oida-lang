@@ -46,12 +46,14 @@ struct Parser<'a> {
     tokens: Vec<Token>,
     i: usize,
     wb: &'a Woerterbuch,
+    /// Vor dem, was ganz außen als Nächstes kommt, stand GHEIM.
+    gheim_als_naechstes: bool,
 }
 
 /// Macht aus den Tokens (von [`crate::lexer::zerlegen`]) den Syntaxbaum.
 pub fn parsen(tokens: Vec<Token>, wb: &Woerterbuch) -> Result<Programm, Fehler> {
     assert!(matches!(tokens.last().map(|t| &t.art), Some(TokenArt::DateiEnde)));
-    Parser { tokens, i: 0, wb }.programm()
+    Parser { tokens, i: 0, wb, gheim_als_naechstes: false }.programm()
 }
 
 impl Parser<'_> {
@@ -336,6 +338,7 @@ impl Parser<'_> {
             selbst_id: 0,
             typ_parameter: Vec::new(),
             aussen: None,
+            gheim: false,
         };
         if self.aktuell().art == TokenArt::Pfeil {
             let pfeil = self.weiter().pos;
@@ -400,6 +403,33 @@ impl Parser<'_> {
     fn programm(mut self) -> Result<Programm, Fehler> {
         let mut programm = Programm::default();
         loop {
+            // GHEIM vor FUNKTIAUN, KLASSE, STRUKTUR, AUFZÖHLUNG oder FIX: gilt nur in dieser Datei.
+            if self.ist(Schluessel::Private) {
+                let pos = self.weiter().pos;
+                let passt = matches!(
+                    self.aktuell().art,
+                    TokenArt::Schluessel(
+                        Schluessel::Function | Schluessel::Struct | Schluessel::Enum | Schluessel::Class | Schluessel::Const
+                    )
+                );
+                if !passt {
+                    return Err(Fehler::neu(
+                        pos,
+                        format!(
+                            "{} ghört vua {}, {}, {}, {} oda {} (und in ana {} vua a Föd oda a {}).",
+                            self.wort(Schluessel::Private),
+                            self.wort(Schluessel::Function),
+                            self.wort(Schluessel::Class),
+                            self.wort(Schluessel::Struct),
+                            self.wort(Schluessel::Enum),
+                            self.wort(Schluessel::Const),
+                            self.wort(Schluessel::Class),
+                            self.wort(Schluessel::Function)
+                        ),
+                    ));
+                }
+                self.gheim_als_naechstes = true;
+            }
             let token = self.aktuell();
             match token.art {
                 TokenArt::DateiEnde => return Ok(programm),
@@ -417,8 +447,10 @@ impl Parser<'_> {
                         }
                     };
                     self.weiter();
+                    // BRAUCH "wüafl.oida" OIS w: Was von dort kommt, heißt hier w.name.
+                    let raum = if self.nimm(Schluessel::As) { Some(self.name("den Nom, unter dem des do haaßn soll")?.0) } else { None };
                     self.erwarte_oida()?;
-                    programm.importe.push(Import { ziel, bibliothek, pos });
+                    programm.importe.push(Import { ziel, bibliothek, pos, raum });
                 }
                 TokenArt::Schluessel(Schluessel::Const) => {
                     // FIX name [typ] = wert OIDA
@@ -432,23 +464,28 @@ impl Parser<'_> {
                     self.erwarte(TokenArt::Gleich, "a '='")?;
                     let wert = self.ausdruck()?;
                     self.erwarte_oida()?;
-                    programm.konstanten.push(Konstante { name, angabe, wert, pos });
+                    let gheim = std::mem::take(&mut self.gheim_als_naechstes);
+                    programm.konstanten.push(Konstante { name, angabe, wert, pos, gheim });
                 }
                 TokenArt::Schluessel(Schluessel::Function) => {
+                    let gheim = std::mem::take(&mut self.gheim_als_naechstes);
                     let funktion = self.funktion()?;
-                    programm.funktionen.push(funktion);
+                    programm.funktionen.push(Funktion { gheim, ..funktion });
                 }
                 TokenArt::Schluessel(Schluessel::Struct) => {
+                    let gheim = std::mem::take(&mut self.gheim_als_naechstes);
                     let struktur = self.struktur()?;
-                    programm.strukturen.push(struktur);
+                    programm.strukturen.push(StrukturDef { gheim, ..struktur });
                 }
                 TokenArt::Schluessel(Schluessel::Enum) => {
+                    let gheim = std::mem::take(&mut self.gheim_als_naechstes);
                     let aufzaehlung = self.aufzaehlung()?;
-                    programm.strukturen.push(aufzaehlung);
+                    programm.strukturen.push(StrukturDef { gheim, ..aufzaehlung });
                 }
                 TokenArt::Schluessel(Schluessel::Class) => {
+                    let gheim = std::mem::take(&mut self.gheim_als_naechstes);
                     let klasse = self.klasse()?;
-                    programm.klassen.push(klasse);
+                    programm.klassen.push(KlassenDef { gheim, ..klasse });
                 }
                 TokenArt::Schluessel(Schluessel::End) => {
                     return Err(Fehler::neu(
@@ -490,7 +527,7 @@ impl Parser<'_> {
             felder.push(FeldDef { name: feld, angabe, pos: feld_pos });
         }
         self.erwarte_end(pos, Schluessel::Struct)?;
-        Ok(StrukturDef { name, typ_parameter, felder, werte: Vec::new(), pos })
+        Ok(StrukturDef { name, typ_parameter, felder, werte: Vec::new(), pos, gheim: false })
     }
 
     /// `AUFZÖHLUNG Foab ROT, GRÜN, BLAU PASST SCHO`: ein eigener Typ mit genau diesen Werten.
@@ -520,7 +557,7 @@ impl Parser<'_> {
         // Im Speicher ist ein Wert die Nummer seiner Stelle, verpackt in eine Struktur mit einem
         // Feld. Dessen Name lässt sich im Programm nicht hinschreiben.
         let felder = vec![FeldDef { name: "#wert".to_string(), angabe: TypAngabe::Einfach(Typ::Zoi), pos }];
-        Ok(StrukturDef { name, typ_parameter: Vec::new(), felder, werte, pos })
+        Ok(StrukturDef { name, typ_parameter: Vec::new(), felder, werte, pos, gheim: false })
     }
 
     /// Das JE NOCHDEM ist schon gelesen:
@@ -579,8 +616,11 @@ impl Parser<'_> {
         let mut felder = Vec::new();
         let mut methoden = Vec::new();
         while !self.ist(Schluessel::End) && self.aktuell().art != TokenArt::DateiEnde {
+            // GHEIM: nur die Methoden dieser Klasse kommen an das Feld oder die Methode.
+            let gheim = self.nimm(Schluessel::Private);
             if self.ist(Schluessel::Function) {
-                methoden.push(self.funktion()?);
+                let methode = self.funktion()?;
+                methoden.push(Funktion { gheim, ..methode });
                 continue;
             }
             let (feld, feld_pos) = self.name("des Föd")?;
@@ -593,10 +633,10 @@ impl Parser<'_> {
             };
             // Ein OIDA hinter dem Feld darf sein, muss aber nicht.
             self.nimm(Schluessel::Oida);
-            felder.push(KlassenFeldDef { name: feld, angabe, standard, pos: feld_pos });
+            felder.push(KlassenFeldDef { name: feld, angabe, standard, pos: feld_pos, gheim });
         }
         self.erwarte_end(pos, Schluessel::Class)?;
-        Ok(KlassenDef { name, typ_parameter, eltern, felder, methoden, pos })
+        Ok(KlassenDef { name, typ_parameter, eltern, felder, methoden, pos, gheim: false })
     }
 
     fn funktion(&mut self) -> Result<Funktion, Fehler> {
@@ -623,7 +663,7 @@ impl Parser<'_> {
             rumpf = self.block()?;
             self.erwarte_end(pos, Schluessel::Function)?;
         }
-        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0, typ_parameter, aussen })
+        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0, typ_parameter, aussen, gheim: false })
     }
 
     /// Anweisungen bis PASST SCHO, SUNST oder zum Ende der Datei.

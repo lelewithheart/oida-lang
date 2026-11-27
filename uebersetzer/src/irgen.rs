@@ -458,6 +458,13 @@ fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
 
 /// Der Name einer OIDA-Funktion im IR. Der Vorsatz verhindert, dass sich
 /// eine OIDA-Funktion mit einer aus C (`main`, `printf` ...) verwechselt.
+/// Wie eine Struktur oder Klasse heißt, wenn das Programm sie ausgibt: so, wie sie in ihrer
+/// Datei dasteht, also ohne den Namensraum davor (`wüafl.Ergebnis`) und ohne die Marke für GHEIM.
+fn anzeige_name(name: &str) -> String {
+    let ohne = crate::treiber::ohne_marken(name);
+    ohne.rsplit('.').next().unwrap_or(&ohne).to_string()
+}
+
 fn funktions_name(name: &str) -> String {
     ir_name("f", &[name])
 }
@@ -825,8 +832,8 @@ impl Modul<'_> {
             }
 
             // Ausgeben: Name(feld, feld, ...), zu tief drinnen nur <Name>.
-            let kurz = self.text(&format!("<{}>", k.name));
-            let anfang = self.text(&format!("{}(", k.name));
+            let kurz = self.text(&format!("<{}>", anzeige_name(&k.name)));
+            let anfang = self.text(&format!("{}(", anzeige_name(&k.name)));
             let (komma, ende) = (self.text(", "), self.text(")"));
             let _ = writeln!(
                 aus,
@@ -903,7 +910,7 @@ impl Modul<'_> {
                 continue;
             }
             // Ausgeben: Name(feld, feld, ...)
-            let anfang = self.text(&format!("{}(", s.name));
+            let anfang = self.text(&format!("{}(", anzeige_name(&s.name)));
             let (komma, ende) = (self.text(", "), self.text(")"));
             let _ = writeln!(aus, "define internal void @oida.schreib.s{n}(%s{n} %w) {{\nstart:");
             let _ = writeln!(aus, "  call void @oida_schreib_text(ptr {anfang})");

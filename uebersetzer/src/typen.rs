@@ -82,6 +82,9 @@ struct Pruefer<'a> {
     /// Die `VIELLEICHT`-Variablen (ihre Nummern), von denen an dieser Stelle
     /// feststeht, dass sie nicht NIX sind.
     sicher: HashSet<usize>,
+    /// Was die Meldung zu einem unbekannten Namen dazusagt, wenn es ihn woanders gibt
+    /// (siehe [`Programm::hinweise`]).
+    hinweise: HashMap<String, String>,
     /// Darf der Ausdruck, der als nächster geprüft wird, mit PROBIER beginnen?
     /// Das geht nur ganz vorne in einer Anweisung: Dort hängt noch kein
     /// Zwischenwert in der Luft, wenn die Funktion mittendrin aufhört.
@@ -221,6 +224,7 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         methoden_klasse: None,
         selbst: None,
         sicher: HashSet::new(),
+        hinweise: std::mem::take(&mut programm.hinweise),
         probier_erlaubt: false,
         lambdas: Vec::new(),
         naechste_lambda: 0,
@@ -360,6 +364,10 @@ pub fn pruefen(programm: &mut Programm, wb: &Woerterbuch) -> Result<(), Vec<Fehl
         Ok(())
     } else {
         p.fehler.sort_by_key(|f| (f.pos.datei, f.pos.zeile, f.pos.spalte));
+        // Namen, die nur in einer Datei gelten (GHEIM), tragen intern die Nummer der Datei: In Meldungen nicht.
+        for f in &mut p.fehler {
+            f.meldung = crate::treiber::ohne_marken(&f.meldung);
+        }
         // Derselbe Fehler in mehreren Fassungen einer Vorlage wird nur einmal gezeigt.
         p.fehler.dedup_by(|a, b| a.pos == b.pos && a.meldung == b.meldung);
         Err(p.fehler)
@@ -432,6 +440,7 @@ impl Pruefer<'_> {
                 klasse: nummer,
                 stelle,
                 hat_standard: feld.standard.is_some(),
+                gheim: feld.gheim,
             });
         }
         let mut methoden: Vec<MethodenInfo> = Vec::new();
@@ -456,6 +465,7 @@ impl Pruefer<'_> {
                 rueckgabe: m.rueckgabe,
                 klasse: nummer,
                 platz: None,
+                gheim: m.gheim,
             });
         }
         self.typ_umgebung = aussen;
@@ -1005,7 +1015,8 @@ impl Pruefer<'_> {
                         self.wort(Schluessel::From)
                     ),
                     None => format!(
-                        "An Typ '{name}' kenn i ned. Gibt's a {} oda a {} mit dem Nom?",
+                        "An Typ '{name}' kenn i ned.{} Gibt's a {} oda a {} mit dem Nom?",
+                        self.hinweis(name),
                         self.wort(Schluessel::Struct),
                         self.wort(Schluessel::Class)
                     ),
@@ -1358,6 +1369,7 @@ impl Pruefer<'_> {
                     klasse: n as u32,
                     stelle,
                     hat_standard: feld.standard.is_some(),
+                    gheim: feld.gheim,
                 });
             }
             let mut eigene: Vec<String> = Vec::new();
@@ -1386,6 +1398,7 @@ impl Pruefer<'_> {
                     rueckgabe: m.rueckgabe,
                     klasse: n as u32,
                     platz: None,
+                    gheim: m.gheim,
                 };
                 match methoden.iter_mut().find(|alt| alt.name == m.name) {
                     Some(alt) => {
@@ -1537,6 +1550,14 @@ impl Pruefer<'_> {
             return None;
         };
         let methode = &klasse.methoden[stelle];
+        if methode.gheim && self.methoden_klasse != Some(methode.klasse) {
+            let meldung = format!(
+                "De Methode '{name}' is {}: De kennan nur de Methodn von '{}' söwa aufruafn.",
+                self.wort(Schluessel::Private),
+                self.typen.klassen[methode.klasse as usize].name
+            );
+            self.melde(pos, meldung);
+        }
         if typen.contains(&Typ::Fehler) {
             return Some((stelle, methode.rueckgabe));
         }
@@ -1867,7 +1888,10 @@ impl Pruefer<'_> {
 
     fn unbekannte_variable(&mut self, name: &str, pos: Position) {
         let meldung =
-            format!("'{name}' kenn i ned. Host des mit {} augsogt?", self.wort(Schluessel::Declare));
+            match self.hinweise.get(name) {
+                Some(hinweis) => format!("'{name}' kenn i ned. {hinweis}"),
+                None => format!("'{name}' kenn i ned. Host des mit {} augsogt?", self.wort(Schluessel::Declare)),
+            };
         self.melde(pos, meldung);
     }
 
@@ -2425,6 +2449,11 @@ impl Pruefer<'_> {
         ergebnis
     }
 
+    /// Der Zusatz zur Meldung "kenn i ned", wenn es den Namen woanders gibt (mit Leerzeichen davor).
+    fn hinweis(&self, name: &str) -> String {
+        self.hinweise.get(name).map(|h| format!(" {h}")).unwrap_or_default()
+    }
+
     // --------------------------------------------------------- Ausdrücke
 
     /// Passt der Ausdruck dorthin, wo `ziel` verlangt wird? Aus einer ZOI
@@ -2758,6 +2787,15 @@ impl Pruefer<'_> {
                     match klasse.felder.iter().position(|feld| feld.name == *name) {
                         Some(stelle) => {
                             *nummer = stelle;
+                            let feld = &klasse.felder[stelle];
+                            if feld.gheim && self.methoden_klasse != Some(feld.klasse) {
+                                let meldung = format!(
+                                    "Des Föd '{name}' is {}: Do kumman nur de Methodn von '{}' söwa dazua.",
+                                    self.wort(Schluessel::Private),
+                                    self.typen.klassen[feld.klasse as usize].name
+                                );
+                                self.melde(pos, meldung);
+                            }
                             klasse.felder[stelle].typ
                         }
                         None => {
@@ -3445,7 +3483,7 @@ impl Pruefer<'_> {
         let Some(signatur) = self.signaturen.get(name) else {
             let meldung = match self.wb.festes_wort(name) {
                 Some(schluessel) => format!("Des haaßt {}, ned {}!", self.wort(schluessel), name),
-                None => format!("De {} '{name}' kenn i ned.", self.wort(Schluessel::Function)),
+                None => format!("De {} '{name}' kenn i ned.{}", self.wort(Schluessel::Function), self.hinweis(name)),
             };
             self.melde(pos, meldung);
             return Typ::Fehler;

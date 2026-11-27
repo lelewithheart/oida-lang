@@ -582,6 +582,39 @@ einer falschen Umwandlung in anderen Sprachen ist so nicht möglich. Es gilt auc
 von der Klasse erbt (ein `Dackl` ist ein `Hund`). Bei zwei Klassen, die nichts miteinander zu
 tun haben, sagt schon der Compiler, dass das nie zutreffen kann.
 
+**`GHEIM` in einer Klasse:** Ein Feld oder eine Methode mit `GHEIM` davor gehört nur der Klasse
+selbst. Von außen und auch aus einer Klasse, die von ihr erbt, kommt man nicht dazu.
+
+```
+KLASSE Konto
+    inhaba KETTN
+    GHEIM stand ZOI = 0
+
+    FUNKTIAUN zoih_ei(betrog ZOI)
+        MEI.stand += MEI.prüf(betrog) OIDA
+    PASST SCHO
+
+    FUNKTIAUN wia_vü() GIBT ZRUCK ZOI
+        GIB ZRUCK MEI.stand OIDA
+    PASST SCHO
+
+    GHEIM FUNKTIAUN prüf(betrog ZOI) GIBT ZRUCK ZOI     # negative Beträge zählen nicht
+        WENN betrog < 0 DAUN
+            GIB ZRUCK 0 OIDA
+        PASST SCHO
+        GIB ZRUCK betrog OIDA
+    PASST SCHO
+PASST SCHO
+
+SOG AU k = Konto("Franz") OIDA
+k.zoih_ei(50) OIDA
+SCHREIB(k.wia_vü()) OIDA        # 50
+k.stand = 1000000 OIDA          # Des Föd 'stand' is GHEIM: Do kumman nur de Methodn von 'Konto' söwa dazua.
+```
+
+So kann niemand den Kontostand ändern, ohne dass `prüf` gefragt wird. Die Methoden der Klasse
+kommen auch an das `GHEIME` eines anderen Objekts derselben Klasse (`aundas.stand`).
+
 Ein größeres Beispiel steht in [`beispiele/arena.oida`](beispiele/arena.oida).
 
 **Struktur oder Klasse?** Eine Struktur für kleine Werte, die man kopiert (ein Punkt, eine Farbe);
@@ -981,6 +1014,50 @@ kommt wie immer eine einzige `.exe`.
   verschiedenen Dateien.
 - Jede Datei zählt nur einmal, auch wenn mehrere sie brauchen oder zwei sich gegenseitig.
 - Steckt ein Fehler in einer dazugeholten Datei, nennt die Meldung diese Datei und die Zeile dort.
+
+#### Ordnung halten: GHEIM und Namensräume
+
+Je größer ein Programm wird, desto eher kommen sich Namen in die Quere. Dagegen gibt es zwei Dinge.
+
+**`GHEIM`** vor `FUNKTIAUN`, `KLASSE`, `STRUKTUR`, `AUFZÖHLUNG` oder `FIX` heißt: Das gilt nur in
+dieser Datei. Eine andere Datei sieht es nicht und kann denselben Namen für etwas Eigenes nehmen.
+
+```
+# wüafl.oida
+GHEIM FIX SEITN = 6 OIDA
+
+GHEIM FUNKTIAUN ans(seitn ZOI) GIBT ZRUCK ZOI      # nur für diese Datei
+    GIB ZRUCK ZUFOI(1, seitn) OIDA
+PASST SCHO
+
+FUNKTIAUN wuaf() GIBT ZRUCK ZOI                    # für alle
+    GIB ZRUCK ans(SEITN) OIDA
+PASST SCHO
+```
+
+**Ein Namensraum:** `BRAUCH "datei.oida" OIS name` holt eine Datei so dazu, dass alles von dort
+den Namen davor braucht:
+
+```
+BRAUCH "wüafl.oida" OIS w OIDA
+BRAUCH mathe OIS m OIDA                 # geht auch mit der Bibliothek
+
+FUNKTIAUN wuaf() GIBT ZRUCK KETTN       # eine eigene Funktion mit demselben Namen: kein Streit
+    GIB ZRUCK "mei eigana Wuaf" OIDA
+PASST SCHO
+
+SCHREIB(wuaf(), w.wuaf(), m.klemm(15, 0, 10)) OIDA
+SOG AU e w.Ergebnis = w.mehrmois(3) OIDA           # auch Typen: w.Ergebnis, w.Glück.PECH
+```
+
+- Der Name hinter `OIS` gilt nur in der Datei, in der das `BRAUCH` steht. Jede Datei kann sich
+  ihren eigenen aussuchen.
+- Wird dieselbe Datei irgendwo im Programm auch ohne `OIS` dazugeholt, gelten ihre Namen wie
+  bisher überall; `w.wuaf()` und `wuaf()` sind dann dasselbe.
+- An das `GHEIME` einer Datei kommt man auch mit dem Namen davor nicht:
+  `In wüafl.oida gibt's 'ans', oba des is durt GHEIM.`
+- Vergisst man den Namen davor, sagt die Meldung, wo es die Funktion gibt.
+- Ein Namensraum sollte nicht so heißen wie eine Variable in derselben Datei.
 
 ### Die Bibliothek
 
@@ -2069,7 +2146,8 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
   und keine eigenen Bedingungen. Die Werte einer Aufzählung tragen keine eigenen Daten.
 - Im Netz: Ein Server bedient einen Gast nach dem anderen (Threads fehlen noch); kein Server für
   `https`, kein UDP, keine WebSockets, kein gzip; unter Linux kein Proxy.
-- Alle Namen gelten im ganzen Programm; Dateien haben keinen eigenen Namensraum.
+- Namen aus Dateien, die ohne `OIS` dazugeholt sind, gelten im ganzen Programm. In einem Feld
+  mit `GHEIM` steht beim Ausgeben eines Objekts (`SCHREIB(konto)`) trotzdem der Wert.
 - Im Fenster fehlen noch: getippter Text als Eingabe, Gamepad, Vollbild und mehr als ein Fenster.
   Leuchten gibt es nur beim Zeichnen ins Fenster, nicht in ein Bild.
 - Tasten heißen nach dem, was auf ihnen steht, nicht nach ihrem Platz: Auf einer französischen

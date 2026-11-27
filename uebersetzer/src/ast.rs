@@ -69,6 +69,8 @@ pub struct KlassenFeldInfo {
     /// Hat das Feld einen Wert dabeistehen (`lebn ZOI = 100`)? Dann gibt man
     /// es beim Anlegen eines Objekts nicht an.
     pub hat_standard: bool,
+    /// `GHEIM`: Nur die Methoden der Klasse, in der es angesagt ist, kommen an das Feld.
+    pub gheim: bool,
 }
 
 /// Eine Methode, wie man sie an einem Objekt aufrufen kann.
@@ -82,6 +84,8 @@ pub struct MethodenInfo {
     /// Die Stelle in der Sprungtabelle, wenn die Methode irgendwo in der
     /// Familie überschrieben wird. Sonst wird sie direkt aufgerufen.
     pub platz: Option<usize>,
+    /// `GHEIM`: Nur die Methoden der Klasse, in der sie steht, können sie aufrufen.
+    pub gheim: bool,
 }
 
 /// Der Typ einer Funktion als Wert: was sie nimmt und was sie zurückgibt.
@@ -598,6 +602,8 @@ pub struct Funktion {
     /// `... VON DRAUSSN "oida_x" OIDA`: Die Funktion hat keinen Rumpf, sie
     /// steckt unter diesem Namen in der Laufzeit. Nur in der mitgelieferten Bibliothek.
     pub aussen: Option<String>,
+    /// `GHEIM FUNKTIAUN ...`: gilt nur in ihrer Datei, als Methode nur in ihrer Klasse.
+    pub gheim: bool,
 }
 
 /// Ein Feld in `STRUKTUR ... PASST SCHO`.
@@ -617,6 +623,8 @@ pub struct StrukturDef {
     /// `AUFZÖHLUNG Foab ... PASST SCHO`: die Werte, wie sie dastehen (sonst leer).
     pub werte: Vec<(String, Position)>,
     pub pos: Position,
+    /// `GHEIM STRUKTUR ...`: gilt nur in ihrer Datei.
+    pub gheim: bool,
 }
 
 /// Ein Fall in `JE NOCHDEM`: `BEI wert, wert DAUN ...`.
@@ -642,6 +650,8 @@ pub struct KlassenFeldDef {
     /// Der Wert, mit dem das Feld beginnt, wenn einer dabeisteht (`lebn ZOI = 100`).
     pub standard: Option<Ausdruck>,
     pub pos: Position,
+    /// `GHEIM lebn ZOI`: nur die Methoden der Klasse selbst kommen an das Feld.
+    pub gheim: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -654,6 +664,8 @@ pub struct KlassenDef {
     pub felder: Vec<KlassenFeldDef>,
     pub methoden: Vec<Funktion>,
     pub pos: Position,
+    /// `GHEIM KLASSE ...`: gilt nur in ihrer Datei.
+    pub gheim: bool,
 }
 
 /// `BRAUCH listen OIDA` oder `BRAUCH "gegner.oida" OIDA`: Die Funktionen,
@@ -665,6 +677,8 @@ pub struct Import {
     /// Ohne Anführungszeichen: eine mitgelieferte Bibliothek.
     pub bibliothek: bool,
     pub pos: Position,
+    /// `BRAUCH "wüafl.oida" OIS w`: Was von dort kommt, heißt hier `w.name`.
+    pub raum: Option<String>,
 }
 
 /// `FIX SCHWERKRAFT = 9.81 OIDA`: ein fester Wert, der überall gilt, auch in
@@ -676,6 +690,8 @@ pub struct Konstante {
     pub angabe: Option<TypAngabe>,
     pub wert: Ausdruck,
     pub pos: Position,
+    /// `GHEIM FIX ...`: gilt nur in seiner Datei.
+    pub gheim: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -690,6 +706,9 @@ pub struct Programm {
     pub funktionen: Vec<Funktion>,
     /// Die Anweisungen außerhalb von Funktionen: das Hauptprogramm.
     pub haupt: Vec<Anweisung>,
+    /// Namen, die es gibt, aber nicht so oder nicht hier (GHEIM in einer anderen Datei, oder nur
+    /// in einem Namensraum): der Name, wie er fälschlich dasteht, und was die Meldung dazu sagt.
+    pub hinweise: std::collections::HashMap<String, String>,
     /// Alle Strukturen und Listentypen; die Typprüfung füllt die Tabelle.
     pub typen: Typen,
 }

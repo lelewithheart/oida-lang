@@ -10,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::ast::{Import, Programm};
 use crate::fehler::{Fehler, Position};
 use crate::woerterbuch::Woerterbuch;
+use crate::lexer::{Token, TokenArt};
 use crate::{irgen, lexer, parser, typen};
 
 /// Die Laufzeitbibliothek, beim Bauen des Compilers fertig übersetzt
@@ -84,6 +85,46 @@ pub fn lade(pfad: Option<&Path>, quelltext: &str, wb: &Woerterbuch) -> (Vec<Quel
     (quellen, ergebnis)
 }
 
+/// Eine geladene Datei, bevor alles zusammengesetzt wird.
+struct Geladen {
+    /// Ihre Nummer in der Liste der Quellen (und in jeder `Position`).
+    nummer: u16,
+    tokens: Vec<Token>,
+    /// Der Syntaxbaum, so wie die Datei dasteht.
+    teil: Programm,
+    /// Ein Teil der mitgelieferten Bibliothek (mit den Wörtern, die beim Bauen des Compilers galten).
+    bibliothek: bool,
+    /// Wie die Datei als Namensraum heißt: `wüafl` für `wüafl.oida`.
+    stamm: String,
+    /// Wird sie irgendwo ohne OIS dazugeholt (oder ist es die Datei, die übersetzt wird)?
+    /// Dann gelten ihre Namen im ganzen Programm.
+    ueberall: bool,
+    /// Die Namen hinter OIS in dieser Datei und welche Datei damit gemeint ist.
+    raeume: Vec<(String, usize)>,
+}
+
+/// Hängt an einen Namen an, dass er nur in der Datei mit dieser Nummer gilt. Das `#` kann in
+/// einem Programm nicht in einem Namen stehen; für Meldungen nimmt [`ohne_marken`] es wieder weg.
+fn gheimer_name(name: &str, nummer: u16) -> String {
+    format!("{name}#{nummer}")
+}
+
+/// Macht aus Namen wie `hüf#3` (ein GHEIM-Name samt der Nummer seiner Datei) wieder `hüf`.
+pub fn ohne_marken(text: &str) -> String {
+    let mut aus = String::with_capacity(text.len());
+    let mut zeichen = text.chars().peekable();
+    while let Some(c) = zeichen.next() {
+        if c == '#' && zeichen.peek().is_some_and(char::is_ascii_digit) && aus.chars().last().is_some_and(|d| d.is_alphanumeric() || d == '_') {
+            while zeichen.peek().is_some_and(char::is_ascii_digit) {
+                zeichen.next();
+            }
+        } else {
+            aus.push(c);
+        }
+    }
+    aus
+}
+
 fn lade_alles(
     pfad: Option<&Path>,
     quelltext: &str,
@@ -91,28 +132,31 @@ fn lade_alles(
     quellen: &mut Vec<Quelle>,
 ) -> Result<Programm, Vec<Fehler>> {
     let tokens = lexer::zerlegen(quelltext, wb).map_err(|f| vec![f])?;
-    let mut programm = parser::parsen(tokens, wb).map_err(|f| vec![f])?;
-    ohne_draussen(&programm, wb)?;
-    if programm.importe.is_empty() {
-        return Ok(programm);
+    let teil = parser::parsen(vorlaeufig(&tokens), wb).map_err(|f| vec![f])?;
+    ohne_draussen(&teil, wb)?;
+    if teil.importe.is_empty() && !hat_gheimes(&teil) {
+        return Ok(teil);
     }
 
-    let mut geladen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // ------------------------------------------------ 1. Alles laden, was dazugeholt wird.
+    let mut geladen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     if let Some(pfad) = pfad {
-        geladen.insert(kennung(pfad));
+        geladen.insert(kennung(pfad), 0);
     }
     let ordner = pfad.and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
-    // Was noch zu holen ist: das BRAUCH, der Ordner der Datei, in der es steht,
+    // Was noch zu holen ist: wer es holt, das BRAUCH, der Ordner der Datei, in der es steht,
     // und die Stelle in der ersten Datei, über die es hereinkommt.
-    let mut offen: std::collections::VecDeque<(Import, PathBuf, Position)> =
-        programm.importe.iter().map(|i| (i.clone(), ordner.clone(), i.pos)).collect();
+    let mut offen: std::collections::VecDeque<(usize, Import, PathBuf, Position)> =
+        teil.importe.iter().map(|i| (0, i.clone(), ordner.clone(), i.pos)).collect();
+    let mut dateien =
+        vec![Geladen { nummer: 0, tokens, teil, bibliothek: false, stamm: String::new(), ueberall: true, raeume: Vec::new() }];
     // Die Bibliothek ist mit den Wörtern geschrieben, die beim Bauen des
     // Compilers galten, auch wenn hier ein eigenes Wörterbuch verwendet wird.
     let eingebaut = Woerterbuch::eingebaut();
 
-    while let Some((import, ordner, von)) = offen.pop_front() {
+    while let Some((wer, import, ordner, von)) = offen.pop_front() {
         let melde = |meldung: String| vec![Fehler::neu(import.pos, meldung)];
-        let (wieder, name, text, woerter, naechster_ordner) = if import.bibliothek {
+        let (wieder, name, text, stamm, naechster_ordner) = if import.bibliothek {
             let Some((teil, text)) = BIBLIOTHEK.iter().find(|(teil, _)| *teil == import.ziel) else {
                 let namen: Vec<&str> = BIBLIOTHEK.iter().map(|(teil, _)| *teil).collect();
                 return Err(melde(format!(
@@ -126,7 +170,7 @@ fn lade_alles(
                     "De Bibliothek '{teil}' gibt's derweil nur unter Windows: Fensta und Ton san fia Linux no ned baut."
                 )));
             }
-            (format!("oida:{teil}"), format!("bibliothek/{teil}.oida"), text.to_string(), &eingebaut, PathBuf::new())
+            (format!("oida:{teil}"), format!("bibliothek/{teil}.oida"), text.to_string(), teil.to_string(), PathBuf::new())
         } else {
             let mut datei = ordner.join(&import.ziel);
             if datei.extension().is_none() {
@@ -143,44 +187,172 @@ fn lade_alles(
             let text = String::from_utf8(bytes)
                 .map_err(|_| melde(format!("{anzeige} is ka UTF-8. Speicher de Datei im Editor ois UTF-8 o.")))?;
             let daneben = datei.parent().map(Path::to_path_buf).unwrap_or_default();
-            (kennung(&datei), anzeige, text, wb, daneben)
+            let stamm = datei.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            (kennung(&datei), anzeige, text, stamm, daneben)
         };
-        if !geladen.insert(wieder) {
-            continue; // schon da: Jede Datei zählt nur einmal, auch im Kreis.
+        let stelle = match geladen.get(&wieder) {
+            Some(stelle) => *stelle, // schon da: Jede Datei zählt nur einmal, auch im Kreis.
+            None => {
+                let nummer = quellen.len() as u16;
+                quellen.push(Quelle { name, text: text.clone(), von });
+                let woerter = if import.bibliothek { &eingebaut } else { wb };
+                let hier = |mut f: Fehler| {
+                    f.pos.datei = nummer;
+                    vec![f]
+                };
+                let mut tokens = lexer::zerlegen(&text, woerter).map_err(hier)?;
+                for token in &mut tokens {
+                    token.pos.datei = nummer;
+                    token.ende.datei = nummer;
+                }
+                let teil = parser::parsen(vorlaeufig(&tokens), woerter).map_err(hier)?;
+                if !import.bibliothek {
+                    ohne_draussen(&teil, wb)?;
+                }
+                if let Some(erste) = teil.haupt.first() {
+                    use crate::woerterbuch::Schluessel as S;
+                    return Err(vec![Fehler::neu(
+                        erste.pos,
+                        format!(
+                            "In ana Datei, de mit {} dazuaghoit wird, derfn nur {}, {}, {} und {} stehn. \
+                             Wos glei laufn soll, ghört in de Datei, de übersetzt wird.",
+                            wb.wort(S::Import),
+                            wb.wort(S::Function),
+                            wb.wort(S::Class),
+                            wb.wort(S::Struct),
+                            wb.wort(S::Const)
+                        ),
+                    )]);
+                }
+                let stelle = dateien.len();
+                for weiter in &teil.importe {
+                    offen.push_back((stelle, weiter.clone(), naechster_ordner.clone(), von));
+                }
+                dateien.push(Geladen {
+                    nummer,
+                    tokens,
+                    teil,
+                    bibliothek: import.bibliothek,
+                    stamm,
+                    ueberall: false,
+                    raeume: Vec::new(),
+                });
+                geladen.insert(wieder, stelle);
+                stelle
+            }
+        };
+        match &import.raum {
+            // BRAUCH "x.oida" OIS x: Was von dort kommt, heißt hier x.name.
+            Some(raum) => {
+                if dateien[wer].raeume.iter().any(|(r, s)| r == raum && *s != stelle) {
+                    return Err(melde(format!("Den Nom '{raum}' host do scho fia a aundare Datei gnumma.")));
+                }
+                if stelle == 0 {
+                    return Err(melde("De Datei, de übersetzt wird, kaunst ned söwa dazuahoin.".to_string()));
+                }
+                dateien[wer].raeume.push((raum.clone(), stelle));
+            }
+            None => dateien[stelle].ueberall = true,
         }
-        let nummer = quellen.len() as u16;
-        quellen.push(Quelle { name, text: text.clone(), von });
+    }
 
-        let hier = |mut f: Fehler| {
-            f.pos.datei = nummer;
-            vec![f]
+    // ------------------------------------- 2. Namensräume: Jeder braucht einen eigenen Namen.
+    let mut vergeben: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for datei in dateien.iter_mut().filter(|d| !d.ueberall) {
+        let mut stamm = datei.stamm.clone();
+        let mut n = 2;
+        while !vergeben.insert(stamm.clone()) {
+            stamm = format!("{}{n}", datei.stamm);
+            n += 1;
+        }
+        datei.stamm = stamm;
+    }
+    let kurz: Vec<(bool, String)> = dateien.iter().map(|d| (d.ueberall, d.stamm.clone())).collect();
+
+    // ------------- 3. In jeder Datei die Namen einsetzen, unter denen etwas wirklich zu finden ist.
+    let mut programm = Programm::default();
+    for (stelle, datei) in dateien.into_iter().enumerate() {
+        let Geladen { nummer, tokens, teil, bibliothek, stamm, ueberall, raeume } = datei;
+        // Was in dieser Datei anders heißt, als es dasteht: GHEIM-Namen (gelten nur hier) und,
+        // wenn die Datei nur als Namensraum dazugeholt wird, alle ihre Namen.
+        let mut um: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let namen = teil
+            .konstanten
+            .iter()
+            .map(|k| (&k.name, k.gheim))
+            .chain(teil.strukturen.iter().map(|s| (&s.name, s.gheim)))
+            .chain(teil.klassen.iter().map(|k| (&k.name, k.gheim)))
+            .chain(teil.funktionen.iter().map(|f| (&f.name, f.gheim)));
+        let datei_name = quellen[nummer as usize].name.rsplit('/').next().unwrap_or_default().to_string();
+        for (name, gheim) in namen {
+            let voll = if ueberall { name.clone() } else { format!("{stamm}.{name}") };
+            if gheim {
+                um.insert(name.clone(), gheimer_name(&voll, nummer));
+                // Wer den Namen von außen verwendet: Es gibt ihn, aber nicht für andere.
+                programm.hinweise.entry(voll).or_insert_with(|| {
+                    format!("In {datei_name} gibt's '{name}', oba des is durt {}.", wb.wort(crate::woerterbuch::Schluessel::Private))
+                });
+            } else if !ueberall {
+                um.insert(name.clone(), voll);
+                // Wer den Namen ohne den Raum davor verwendet.
+                programm.hinweise.entry(name.clone()).or_insert_with(|| {
+                    format!(
+                        "In {datei_name} gibt's '{name}'; de Datei is mit {} dazuaghoit, drum ghört der Nom von durt davua: x.{name}.",
+                        wb.wort(crate::woerterbuch::Schluessel::As)
+                    )
+                });
+            }
+        }
+        let teil = if um.is_empty() && raeume.is_empty() {
+            teil
+        } else {
+            // Felder, Methoden und die Werte von Aufzählungen heißen weiter so, wie sie dastehen,
+            // auch wenn es ganz außen etwas mit demselben Namen gibt: An sie kommt man über einen Punkt.
+            let mut bleibt: Vec<Position> = Vec::new();
+            for s in &teil.strukturen {
+                bleibt.extend(s.felder.iter().map(|f| f.pos));
+                bleibt.extend(s.werte.iter().map(|(_, pos)| *pos));
+            }
+            for k in &teil.klassen {
+                bleibt.extend(k.felder.iter().map(|f| f.pos));
+                for m in &k.methoden {
+                    // Der Name der Methode steht gleich hinter dem Wort FUNKTIAUN.
+                    if let Some(i) = tokens.iter().position(|t| t.pos == m.pos) {
+                        bleibt.extend(tokens.get(i + 1).map(|t| t.pos));
+                    }
+                }
+            }
+            let mut neu: Vec<Token> = Vec::with_capacity(tokens.len());
+            let mut i = 0;
+            while i < tokens.len() {
+                let token = &tokens[i];
+                let nach_punkt = i > 0 && tokens[i - 1].art == TokenArt::Punkt;
+                if let (TokenArt::Name(name), false) = (&token.art, nach_punkt) {
+                    // raum.name: Das ist ein einziger Name aus der anderen Datei.
+                    let raum = raeume.iter().find(|(r, _)| r == name).map(|(_, ziel)| *ziel);
+                    if let (Some(ziel), Some(TokenArt::Punkt), Some(TokenArt::Name(innen))) =
+                        (raum, tokens.get(i + 1).map(|t| &t.art), tokens.get(i + 2).map(|t| &t.art))
+                    {
+                        let (ziel_ueberall, ziel_stamm) = &kurz[ziel];
+                        let voll = if *ziel_ueberall { innen.clone() } else { format!("{ziel_stamm}.{innen}") };
+                        neu.push(Token { art: TokenArt::Name(voll), pos: token.pos, ende: tokens[i + 2].ende });
+                        i += 3;
+                        continue;
+                    }
+                    if let (Some(anders), false) = (um.get(name), bleibt.contains(&token.pos)) {
+                        neu.push(Token { art: TokenArt::Name(anders.clone()), pos: token.pos, ende: token.ende });
+                        i += 1;
+                        continue;
+                    }
+                }
+                neu.push(token.clone());
+                i += 1;
+            }
+            let woerter = if bibliothek { &eingebaut } else { wb };
+            parser::parsen(neu, woerter).map_err(|f| vec![f])?
         };
-        let mut tokens = lexer::zerlegen(&text, woerter).map_err(hier)?;
-        for token in &mut tokens {
-            token.pos.datei = nummer;
-            token.ende.datei = nummer;
-        }
-        let teil = parser::parsen(tokens, woerter).map_err(hier)?;
-        if !import.bibliothek {
-            ohne_draussen(&teil, wb)?;
-        }
-        if let Some(erste) = teil.haupt.first() {
-            use crate::woerterbuch::Schluessel as S;
-            return Err(vec![Fehler::neu(
-                erste.pos,
-                format!(
-                    "In ana Datei, de mit {} dazuaghoit wird, derfn nur {}, {}, {} und {} stehn. \
-                     Wos glei laufn soll, ghört in de Datei, de übersetzt wird.",
-                    wb.wort(S::Import),
-                    wb.wort(S::Function),
-                    wb.wort(S::Class),
-                    wb.wort(S::Struct),
-                    wb.wort(S::Const)
-                ),
-            )]);
-        }
-        for weiter in teil.importe {
-            offen.push_back((weiter, naechster_ordner.clone(), von));
+        if stelle == 0 {
+            programm.haupt = teil.haupt;
         }
         programm.konstanten.extend(teil.konstanten);
         programm.strukturen.extend(teil.strukturen);
@@ -188,6 +360,48 @@ fn lade_alles(
         programm.funktionen.extend(teil.funktionen);
     }
     Ok(programm)
+}
+
+/// Die Tokens einer Datei für den ersten Durchgang durch den Parser (der herausfindet, was die
+/// Datei dazuholt und was in ihr steht): Aus `raum.name` wird schon hier ein einziger Name,
+/// damit der Parser nicht über den Punkt stolpert (zum Beispiel in `x raum.Typ`). Welche Namen
+/// Räume sind, steht in den BRAUCH-Zeilen: `BRAUCH ... OIS raum`.
+fn vorlaeufig(tokens: &[Token]) -> Vec<Token> {
+    use crate::woerterbuch::Schluessel as S;
+    let raeume: Vec<&String> = tokens
+        .windows(4)
+        .filter_map(|t| match (&t[0].art, &t[2].art, &t[3].art) {
+            (TokenArt::Schluessel(S::Import), TokenArt::Schluessel(S::As), TokenArt::Name(raum)) => Some(raum),
+            _ => None,
+        })
+        .collect();
+    if raeume.is_empty() {
+        return tokens.to_vec();
+    }
+    let mut neu = Vec::with_capacity(tokens.len());
+    let mut i = 0;
+    while i < tokens.len() {
+        let nach_punkt = i > 0 && tokens[i - 1].art == TokenArt::Punkt;
+        if let (TokenArt::Name(name), false, Some(TokenArt::Punkt), Some(TokenArt::Name(innen))) =
+            (&tokens[i].art, nach_punkt, tokens.get(i + 1).map(|t| &t.art), tokens.get(i + 2).map(|t| &t.art))
+            && raeume.contains(&name)
+        {
+            neu.push(Token { art: TokenArt::Name(format!("{name}.{innen}")), pos: tokens[i].pos, ende: tokens[i + 2].ende });
+            i += 3;
+            continue;
+        }
+        neu.push(tokens[i].clone());
+        i += 1;
+    }
+    neu
+}
+
+/// Steht in der Datei etwas mit GHEIM ganz außen?
+fn hat_gheimes(teil: &Programm) -> bool {
+    teil.konstanten.iter().any(|k| k.gheim)
+        || teil.strukturen.iter().any(|s| s.gheim)
+        || teil.klassen.iter().any(|k| k.gheim)
+        || teil.funktionen.iter().any(|f| f.gheim)
 }
 
 /// Lexer, Parser, Typprüfung und IR-Erzeugung hintereinander, samt allem,
