@@ -227,6 +227,133 @@ fn zu_grosse_zahlen_laufen_still_ueber_und_melden_sich_nur_mit_schalter() {
     }
 }
 
+/// Legt ein Paket so ab, wie GitHub es ausliefert: `<basis>/<wer>/<repo>/archive/<stand>.tar.gz`,
+/// darin ein Ordner `<repo>-<stand>` mit den Dateien.
+fn paket_ablegen(basis: &Path, wer: &str, repo: &str, stand: &str, dateien: &[(&str, &str)]) {
+    let bau = basis.join("bau");
+    let _ = fs::remove_dir_all(&bau);
+    let oben = format!("{repo}-{stand}");
+    for (name, inhalt) in dateien {
+        let datei = bau.join(&oben).join(name);
+        fs::create_dir_all(datei.parent().unwrap()).unwrap();
+        fs::write(datei, inhalt).unwrap();
+    }
+    let ziel = basis.join(wer).join(repo).join("archive");
+    fs::create_dir_all(&ziel).unwrap();
+    let lauf = Command::new("tar")
+        .arg("-czf")
+        .arg(ziel.join(format!("{stand}.tar.gz")))
+        .arg("-C")
+        .arg(&bau)
+        .arg(&oben)
+        .output()
+        .expect("tar gibt es unter Windows 10/11 und unter Linux");
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+}
+
+#[test]
+fn pakete_holen_und_brauchen() {
+    let arbeit = arbeitsordner("pakete");
+    let (basis, projekt) = (arbeit.join("netz"), arbeit.join("projekt"));
+    fs::create_dir_all(&projekt).unwrap();
+    // "Das Netz": zwei Pakete. wuerfel braucht selbst kortn (seine eigene pakete.txt).
+    paket_ablegen(&basis, "franz", "kortn", "HEAD", &[("paket.oida", "FUNKTIAUN ziag() GIBT ZRUCK KETTN\n    GIB ZRUCK \"Herz Ass\" OIDA\nPASST SCHO\n")]);
+    // Erst einmal ohne die Liste holen, um die Prüfsumme von kortn zu erfahren.
+    let hol = |argumente: &[&str]| {
+        let quelle = format!("file:///{}", basis.display().to_string().replace('\\', "/").trim_start_matches('/'));
+        oida().arg("hol").args(argumente).current_dir(&projekt).env("OIDA_PAKET_QUELLE", quelle).output().unwrap()
+    };
+    let lauf = hol(&["franz/kortn"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    let liste = lies(&projekt.join("pakete.txt"));
+    let zeile_kortn = liste.lines().find(|z| z.starts_with("kortn = ")).expect("kortn steht in der Liste").to_string();
+    assert!(zeile_kortn.starts_with("kortn = franz/kortn sha256:") && zeile_kortn.len() == "kortn = franz/kortn sha256:".len() + 64, "{liste}");
+    fs::remove_dir_all(projekt.join("pakete")).unwrap();
+    fs::remove_file(projekt.join("pakete.txt")).unwrap();
+
+    paket_ablegen(
+        &basis,
+        "franz",
+        "wuerfel",
+        "HEAD",
+        &[
+            ("wuerfel.oida", "BRAUCH \"teile/hilfe.oida\" OIDA\nBRAUCH \"kortn\" OIS k OIDA\nFUNKTIAUN wuaf() GIBT ZRUCK KETTN\n    GIB ZRUCK rahmen(\"6\") + \" \" + k.ziag() OIDA\nPASST SCHO\n"),
+            ("teile/hilfe.oida", "FUNKTIAUN rahmen(t KETTN) GIBT ZRUCK KETTN\n    GIB ZRUCK \"[\" + t + \"]\" OIDA\nPASST SCHO\n"),
+            ("pakete.txt", &format!("# was dieses Paket braucht\n{zeile_kortn}\n")),
+        ],
+    );
+
+    // Holen: das Paket und was es selbst braucht.
+    let lauf = hol(&["franz/wuerfel"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(text(&lauf.stdout).contains("Passt! 'wuerfel' liegt in pakete/wuerfel. Im Programm: BRAUCH \"wuerfel\" OIS wuerfel OIDA"), "{}", text(&lauf.stdout));
+    for datei in ["pakete/wuerfel/wuerfel.oida", "pakete/wuerfel/teile/hilfe.oida", "pakete/kortn/paket.oida"] {
+        assert!(projekt.join(datei).is_file(), "{datei} fehlt");
+    }
+    let liste = lies(&projekt.join("pakete.txt"));
+    assert!(liste.contains(&zeile_kortn) && liste.contains("wuerfel = franz/wuerfel sha256:"), "{liste}");
+
+    // Brauchen: nur der Name, mit OIS. Das Paket holt seine eigenen Dateien und sein eigenes Paket.
+    fs::write(projekt.join("spui.oida"), "BRAUCH \"wuerfel\" OIS w OIDA\nBRAUCH \"kortn\" OIS kortn OIDA\nSCHREIB(w.wuaf(), kortn.ziag()) OIDA\n").unwrap();
+    let exe = projekt.join("spui.exe");
+    uebersetze(&projekt.join("spui.oida"), &exe, &[]);
+    assert_eq!(text(&starte(&exe).stdout), "[6] Herz Ass Herz Ass\n");
+
+    // Ein Paket, das es (noch) nicht gibt: Die Meldung sagt, wie man es holt.
+    fs::write(projekt.join("fehlt.oida"), "BRAUCH \"gibtsned\" OIS g OIDA\n").unwrap();
+    let ergebnis = oida().arg(projekt.join("fehlt.oida")).output().unwrap();
+    assert!(text(&ergebnis.stderr).contains("und a ka Paket 'gibtsned' (in pakete/gibtsned). A Paket hoit ma mit: oida hol wer/gibtsned"), "{}", text(&ergebnis.stderr));
+
+    // Alles wieder holen (wie auf einem anderen Rechner): Es kommt dasselbe.
+    fs::remove_dir_all(projekt.join("pakete")).unwrap();
+    let lauf = hol(&[]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(projekt.join("pakete/wuerfel/wuerfel.oida").is_file() && projekt.join("pakete/kortn/paket.oida").is_file());
+    assert_eq!(lies(&projekt.join("pakete.txt")), liste);
+
+    // Jemand hat das Paket geändert: Ohne --neich wird es nicht genommen, und das alte bleibt liegen.
+    paket_ablegen(&basis, "franz", "kortn", "HEAD", &[("paket.oida", "FUNKTIAUN ziag() GIBT ZRUCK KETTN\n    GIB ZRUCK \"Pik Bua\" OIDA\nPASST SCHO\n")]);
+    let lauf = hol(&[]);
+    assert_eq!(lauf.status.code(), Some(2));
+    assert!(text(&lauf.stderr).contains("Des Paket 'kortn' is nimma desöwe wia beim letztn Moi"), "{}", text(&lauf.stderr));
+    assert!(lies(&projekt.join("pakete/kortn/paket.oida")).contains("Herz Ass"));
+    assert_eq!(lies(&projekt.join("pakete.txt")), liste);
+    let lauf = hol(&["--neich"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(lies(&projekt.join("pakete/kortn/paket.oida")).contains("Pik Bua"));
+    assert_ne!(lies(&projekt.join("pakete.txt")), liste);
+
+    // Ein bestimmter Stand, unter einem anderen Namen.
+    paket_ablegen(&basis, "franz", "kortn", "v1", &[("kortn.oida", "FUNKTIAUN ziag() GIBT ZRUCK KETTN\n    GIB ZRUCK \"oide Kortn\" OIDA\nPASST SCHO\n")]);
+    let lauf = hol(&["franz/kortn@v1", "--ois", "oide"]);
+    assert_eq!(lauf.status.code(), Some(2), "kortn.oida passt nicht zum Namen 'oide'");
+    assert!(text(&lauf.stderr).contains("Do drin gibt's ka 'oide.oida' und ka 'paket.oida'"), "{}", text(&lauf.stderr));
+    paket_ablegen(&basis, "franz", "kortn", "v1", &[("paket.oida", "FUNKTIAUN ziag() GIBT ZRUCK KETTN\n    GIB ZRUCK \"oide Kortn\" OIDA\nPASST SCHO\n")]);
+    let lauf = hol(&["franz/kortn@v1", "--ois", "oide"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(lies(&projekt.join("pakete.txt")).contains("oide = franz/kortn@v1 sha256:"));
+
+    // Ein Ordner am eigenen Rechner als Paket.
+    let lokal = arbeit.join("mei-paket");
+    fs::create_dir_all(lokal.join(".git")).unwrap();
+    fs::write(lokal.join("paket.oida"), "FUNKTIAUN servas() GIBT ZRUCK KETTN\n    GIB ZRUCK \"vo daham\" OIDA\nPASST SCHO\n").unwrap();
+    fs::write(lokal.join(".git").join("HEAD"), "gehört nicht zum Paket").unwrap();
+    let lauf = hol(&["../mei-paket", "--ois", "daham"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(projekt.join("pakete/daham/paket.oida").is_file() && !projekt.join("pakete/daham/.git").exists());
+    fs::write(projekt.join("zwa.oida"), "BRAUCH \"daham\" OIS d OIDA\nBRAUCH \"oide\" OIS o OIDA\nSCHREIB(d.servas(), o.ziag()) OIDA\n").unwrap();
+    let exe = projekt.join("zwa.exe");
+    uebersetze(&projekt.join("zwa.oida"), &exe, &[]);
+    assert_eq!(text(&starte(&exe).stdout), "vo daham oide Kortn\n");
+
+    // Was es nicht gibt, und was keine Adresse ist.
+    let lauf = hol(&["franz/gibtsned"]);
+    assert_eq!(lauf.status.code(), Some(2));
+    assert!(text(&lauf.stderr).contains("franz/gibtsned/archive/HEAD.tar.gz"), "{}", text(&lauf.stderr));
+    let lauf = hol(&["irgendwos"]);
+    assert!(text(&lauf.stderr).contains("'irgendwos' vasteh i ned. So geht's: oida hol wer/paket"), "{}", text(&lauf.stderr));
+}
+
 #[test]
 fn fehler_beim_laufen_werden_gemeldet() {
     let arbeit = arbeitsordner("laufzeitfehler");

@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.20.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.21.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -258,7 +258,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.20)
+## Die Sprache (v0.21)
 
 ### Typen
 
@@ -1102,6 +1102,46 @@ SOG AU e w.Ergebnis = w.mehrmois(3) OIDA           # auch Typen: w.Ergebnis, w.G
   `In wüafl.oida gibt's 'ans', oba des is durt GHEIM.`
 - Vergisst man den Namen davor, sagt die Meldung, wo es die Funktion gibt.
 - Ein Namensraum sollte nicht so heißen wie eine Variable in derselben Datei.
+
+#### Pakete: Bibliotheken von anderen holen
+
+Ein Paket ist eine Bibliothek, die jemand auf GitHub gelegt hat. `oida hol` holt sie in den
+Ordner `pakete` neben dem eigenen Programm:
+
+```
+oida hol franz/wüafl              # das ist github.com/franz/wüafl
+```
+
+```
+BRAUCH "wüafl" OIS w OIDA         # nur der Name, kein Pfad
+SCHREIB(w.wuaf()) OIDA
+```
+
+| Befehl | was er tut |
+|---|---|
+| `oida hol wer/paket` | holt das Paket nach `pakete/paket` und trägt es in `pakete.txt` ein |
+| `oida hol wer/paket@v1.2` | einen bestimmten Stand: eine Marke, einen Zweig oder einen Commit |
+| `oida hol wer/paket --ois nom` | legt es unter einem anderen Namen ab |
+| `oida hol ../ordner` | nimmt einen Ordner am eigenen Rechner als Paket (zum Ausprobieren) |
+| `oida hol` | holt alles aus `pakete.txt` wieder, zum Beispiel auf einem anderen Rechner |
+| `oida hol --neich` | dasselbe, aber mit dem neuesten Stand |
+
+- **Was ein Paket ist:** ein Ordner (auf GitHub: ein Repository), in dem `paket.oida` liegt oder
+  eine Datei, die so heißt wie das Paket (`wüafl.oida`). Mit dieser Datei fängt es an; weitere
+  Dateien holt sie selbst mit `BRAUCH` dazu. Wer ein eigenes Paket machen will, braucht also
+  nur ein öffentliches Repository mit so einer Datei.
+- **`pakete.txt`** ist die Liste der Pakete eines Programms, mit einer Prüfsumme über den
+  Inhalt. Wer das Programm weitergibt, gibt die Liste mit (der Ordner `pakete` muss nicht mit);
+  `oida hol` ohne etwas dahinter holt genau diese Pakete wieder. Hat sich ein Paket seither
+  geändert, wird es nicht genommen: `Des Paket 'wüafl' is nimma desöwe wia beim letztn Moi.`
+  Erst `oida hol --neich` nimmt den neuen Stand.
+- Braucht ein Paket selbst andere Pakete (es hat eine eigene `pakete.txt`), werden die mitgeholt.
+- `BRAUCH "name"` sucht zuerst eine Datei `name.oida` daneben, dann einen Ordner `name`, dann
+  das Paket `pakete/name`.
+- Zum Holen werden `curl` und `tar` verwendet, die bei Windows 10 und 11 und bei Linux dabei sind.
+
+**Vorsicht:** Ein Paket ist fremder Code, der Teil des eigenen Programms wird und alles darf,
+was das Programm darf. Hol nur Pakete von Leuten, denen du traust, und schau hinein.
 
 ### Die Bibliothek
 
@@ -2193,6 +2233,9 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
   und keine eigenen Bedingungen. Die Werte einer Aufzählung tragen keine eigenen Daten.
 - Im Netz: Ein Server bedient einen Gast nach dem anderen (Threads fehlen noch); kein Server für
   `https`, kein UDP, keine WebSockets, kein gzip; unter Linux kein Proxy.
+- Pakete: Es gibt kein Verzeichnis zum Suchen und keine Versionsnummern mit Regeln ("mindestens
+  1.2"); ein Paket ist ein Repository auf GitHub, sein Stand eine Marke oder ein Commit. Brauchen
+  zwei Pakete dasselbe dritte in verschiedenen Ständen, gilt, was zuerst geholt wurde.
 - Namen aus Dateien, die ohne `OIS` dazugeholt sind, gelten im ganzen Programm. In einem Feld
   mit `GHEIM` steht beim Ausgeben eines Objekts (`SCHREIB(konto)`) trotzdem der Wert.
 - Im Fenster fehlen noch: getippter Text als Eingabe, Gamepad, Vollbild und mehr als ein Fenster.
@@ -2253,7 +2296,7 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 14 | Die Sprache selbst, Teil 2: [Aufzählungen](#aufzählungen), [`JE NOCHDEM`](#nach-fällen-je-nochdem) mit Prüfung, dass kein Fall fehlt; fragen, was ein Objekt wirklich ist (`OIS`, `IS A`) | fertig |
 | 15 | Weniger Abstürze: `liste[i] ODA HOID ersatz` und `a / b ODA HOID ersatz` brechen nie ab; `a / 0` meldet schon der Compiler; mit `--mit-zoinprüfung` melden sich ganze Zahlen, die überlaufen | fertig |
 | 16 | Ordnung für große Programme: [`GHEIM` und Namensräume](#ordnung-halten-gheim-und-namensräume) (`BRAUCH "datei" OIS name`), [Schnittstellen](#schnittstellen) (`SCHNITTSTÖ`, `KAUN`) | fertig |
-| 16b | Pakete aus dem Netz holen | offen |
+| 16b | [Pakete](#pakete-bibliotheken-von-anderen-holen): `oida hol wer/paket` holt eine Bibliothek von GitHub, `pakete.txt` merkt sich Stand und Prüfsumme | fertig |
 | 17 | Threads ohne geteilte Daten: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind

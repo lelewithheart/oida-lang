@@ -295,6 +295,8 @@ struct Eintrag {
 fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<&Path>) -> Vec<Eintrag> {
     let mut liste = Vec::new();
     let ordner = pfad.and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
+    // Neben der Datei im Editor liegen die Pakete (pakete/...).
+    let haupt_ordner = ordner.clone();
     // Was noch zu holen ist: (aus der Bibliothek?, Ziel, Ordner, der Name hinter OIS oder leer).
     let mut offen: std::collections::VecDeque<(bool, String, std::path::PathBuf, String)> =
         sammle_namen(tokens, quelltext, "", "", true, &mut liste)
@@ -316,10 +318,7 @@ fn alle_namen(tokens: &[Token], quelltext: &str, wb: &Woerterbuch, pfad: Option<
             }
             (text.to_string(), &eingebaut, teil.to_string(), std::path::PathBuf::new())
         } else {
-            let mut datei = ordner.join(&ziel);
-            if datei.extension().is_none() {
-                datei.set_extension("oida");
-            }
+            let datei = treiber::finde_brauch(&ordner, &ziel, &haupt_ordner);
             if !geladen.insert(kennung(&datei)) {
                 continue;
             }

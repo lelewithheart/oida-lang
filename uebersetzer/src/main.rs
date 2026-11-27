@@ -27,6 +27,14 @@ Optionen:
   --hilfe                 des do auzagn
   --version               de Version auzagn
 
+Pakete (Bibliothekn von aundare Leit, de auf GitHub liegn):
+  oida hol wer/paket      des Paket von github.com/wer/paket hoin; es liegt daun in pakete/paket
+                          und steht in pakete.txt. Im Programm: BRAUCH \"paket\" OIS paket OIDA
+  oida hol wer/paket@v1.2 an bestimmtn Staund hoin (Marke, Zweig oda Commit)
+  oida hol ../ordner      an Ordner am eiganen Rechna ois Paket nehma
+  oida hol                ollas aus pakete.txt wieda hoin (--neich: den neichstn Staund)
+  --ois <nom>             des Paket unta an aundan Nom oblegn
+
 Fia Editoren (so redt de VS-Code-Erweiterung mit'm Compiler):
   --editor [datei]        Programm von da Eingabe lesn, Fehler und Wortoatn ois JSON ausgebn
                           (de Datei sogt nur, wo des Programm liegt, fia BRAUCH)
@@ -106,6 +114,11 @@ fn hauptprogramm() -> Result<ExitCode, String> {
     }
     if argumente.iter().any(|a| a == "--version") {
         println!("oida {}", env!("CARGO_PKG_VERSION"));
+        return Ok(ExitCode::SUCCESS);
+    }
+    // oida hol ...: ein Paket holen (siehe pakete.rs).
+    if argumente[0] == "hol" {
+        oida_uebersetzer::pakete::hol(&argumente[1..])?;
         return Ok(ExitCode::SUCCESS);
     }
     let optionen = optionen_lesen(&argumente)?;

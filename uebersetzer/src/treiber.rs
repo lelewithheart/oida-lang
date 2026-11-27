@@ -85,6 +85,33 @@ pub fn lade(pfad: Option<&Path>, quelltext: &str, wb: &Woerterbuch) -> (Vec<Quel
     (quellen, ergebnis)
 }
 
+/// Welche Datei mit `BRAUCH "ziel"` gemeint ist, von einer Datei im Ordner `ordner` aus:
+///
+/// 1. die Datei `ziel` (die Endung `.oida` darf fehlen),
+/// 2. ein Ordner `ziel` daneben: dort `<name>.oida`, sonst `paket.oida`,
+/// 3. ein Paket, das mit `oida hol` geholt wurde: der Ordner `pakete/ziel` neben dem Programm,
+///    das übersetzt wird (`haupt_ordner`).
+///
+/// Gibt es nichts davon, kommt der Pfad aus 1. zurück: Den nennt dann die Meldung.
+pub fn finde_brauch(ordner: &Path, ziel: &str, haupt_ordner: &Path) -> PathBuf {
+    let mut datei = ordner.join(ziel);
+    if datei.extension().is_none() {
+        datei.set_extension("oida");
+    }
+    if datei.is_file() {
+        return datei;
+    }
+    let name = Path::new(ziel).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    for kandidat in [ordner.join(ziel), haupt_ordner.join(crate::pakete::ORDNER).join(ziel)] {
+        if kandidat.is_dir()
+            && let Some(eingang) = crate::pakete::eingang(&kandidat, &name)
+        {
+            return eingang;
+        }
+    }
+    datei
+}
+
 /// Eine geladene Datei, bevor alles zusammengesetzt wird.
 struct Geladen {
     /// Ihre Nummer in der Liste der Quellen (und in jeder `Position`).
@@ -144,6 +171,8 @@ fn lade_alles(
         geladen.insert(kennung(pfad), 0);
     }
     let ordner = pfad.and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
+    // Neben dem Programm, das übersetzt wird, liegen die Pakete (pakete/...).
+    let haupt_ordner = ordner.clone();
     // Was noch zu holen ist: wer es holt, das BRAUCH, der Ordner der Datei, in der es steht,
     // und die Stelle in der ersten Datei, über die es hereinkommt.
     let mut offen: std::collections::VecDeque<(usize, Import, PathBuf, Position)> =
@@ -172,14 +201,19 @@ fn lade_alles(
             }
             (format!("oida:{teil}"), format!("bibliothek/{teil}.oida"), text.to_string(), teil.to_string(), PathBuf::new())
         } else {
-            let mut datei = ordner.join(&import.ziel);
-            if datei.extension().is_none() {
-                datei.set_extension("oida");
-            }
+            let datei = finde_brauch(&ordner, &import.ziel, &haupt_ordner);
             // In Meldungen überall derselbe Schrägstrich, egal wie der Pfad zusammengesetzt wurde.
             let anzeige = datei.display().to_string().replace('\\', "/");
             let bytes = fs::read(&datei).map_err(|e| {
                 melde(match e.kind() {
+                    // Nur ein Name, kein Pfad: Das könnte auch ein Paket sein, das noch nicht geholt ist.
+                    std::io::ErrorKind::NotFound if !import.ziel.contains(['/', '\\', '.']) => format!(
+                        "De Datei {anzeige} find i ned, und a ka Paket '{}' (in {}/{}). A Paket hoit ma mit: oida hol wer/{}",
+                        import.ziel,
+                        crate::pakete::ORDNER,
+                        import.ziel,
+                        import.ziel
+                    ),
                     std::io::ErrorKind::NotFound => format!("De Datei {anzeige} find i ned."),
                     _ => format!("De Datei {anzeige} kaun i ned lesn: {e}"),
                 })
@@ -187,7 +221,13 @@ fn lade_alles(
             let text = String::from_utf8(bytes)
                 .map_err(|_| melde(format!("{anzeige} is ka UTF-8. Speicher de Datei im Editor ois UTF-8 o.")))?;
             let daneben = datei.parent().map(Path::to_path_buf).unwrap_or_default();
-            let stamm = datei.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            // Als Namensraum heißt die Datei wie sie selbst; ein Paket mit paket.oida wie sein Ordner.
+            let mut stamm = datei.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            if stamm == "paket"
+                && let Some(ordner_name) = daneben.file_name()
+            {
+                stamm = ordner_name.to_string_lossy().into_owned();
+            }
             (kennung(&datei), anzeige, text, stamm, daneben)
         };
         let stelle = match geladen.get(&wieder) {

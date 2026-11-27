@@ -2,7 +2,7 @@
   "name": "oida",
   "displayName": "OIDA",
   "description": "Die Programmiersprache OIDA in VS Code: Einfärben, Fehler beim Tippen, Vorschläge, Übersetzen und Starten.",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "publisher": "lelewithheart",
   "engines": {
     "vscode": "^1.85.0"
