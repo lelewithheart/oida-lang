@@ -1109,13 +1109,16 @@ Ein Paket ist eine Bibliothek, die jemand auf GitHub gelegt hat. `oida hol` holt
 Ordner `pakete` neben dem eigenen Programm:
 
 ```
-oida hol franz/wüafl              # das ist github.com/franz/wüafl
+oida hol lelewithheart/oida-wuerfel     # das ist github.com/lelewithheart/oida-wuerfel
 ```
 
 ```
-BRAUCH "wüafl" OIS w OIDA         # nur der Name, kein Pfad
-SCHREIB(w.wuaf()) OIDA
+BRAUCH "oida-wuerfel" OIS w OIDA        # nur der Name, kein Pfad
+SCHREIB(w.wuaf(), w.mehrmois(3), w.münze()) OIDA
 ```
+
+Das Paket [`oida-wuerfel`](https://github.com/lelewithheart/oida-wuerfel) gibt es wirklich: ein
+kleines Beispiel zum Ausprobieren und zum Abschauen, wie ein Paket aufgebaut ist.
 
 | Befehl | was er tut |
 |---|---|
@@ -1139,6 +1142,8 @@ SCHREIB(w.wuaf()) OIDA
 - `BRAUCH "name"` sucht zuerst eine Datei `name.oida` daneben, dann einen Ordner `name`, dann
   das Paket `pakete/name`.
 - Zum Holen werden `curl` und `tar` verwendet, die bei Windows 10 und 11 und bei Linux dabei sind.
+- Hat ein Paket einen Bindestrich im Namen, nimmt man hinter `OIS` einen anderen Namen: ein
+  Bindestrich geht dort nicht.
 
 **Vorsicht:** Ein Paket ist fremder Code, der Teil des eigenen Programms wird und alles darf,
 was das Programm darf. Hol nur Pakete von Leuten, denen du traust, und schau hinein.

@@ -77,7 +77,9 @@ pub fn hol(argumente: &[String]) -> Result<(), String> {
             let mut geholt = Vec::new();
             holen(&hier, &name, adresse, &quelle, None, &mut liste, &mut geholt)?;
             liste_schreiben(&hier, &liste)?;
-            println!("Passt! '{name}' liegt in {ORDNER}/{name}. Im Programm: BRAUCH \"{name}\" OIS {name} OIDA");
+            // Hinter OIS steht ein Name, wie er im Programm geht: ohne Bindestrich.
+            let raum = name.replace('-', "_");
+            println!("Passt! '{name}' liegt in {ORDNER}/{name}. Im Programm: BRAUCH \"{name}\" OIS {raum} OIDA");
         }
         None => {
             if name.is_some() {
@@ -284,7 +286,13 @@ fn laden(adresse: &str, ziel: &Path, auch_datei: bool) -> Result<(), String> {
 }
 
 fn auspacken(archiv: &Path, ziel: &Path) -> Result<(), String> {
-    let lauf = werkzeug("tar")
+    let mut tar = werkzeug("tar");
+    // In den Archiven von GitHub stehen die Namen als UTF-8, ohne dass das dabeisteht. Das tar von
+    // Windows nimmt sonst die Zeichentabelle des Rechners an und macht aus "zöhn.oida" "z├Âhn.oida".
+    if cfg!(windows) {
+        tar.args(["--options", "hdrcharset=UTF-8"]);
+    }
+    let lauf = tar
         .arg("-xzf")
         .arg(archiv)
         .arg("-C")

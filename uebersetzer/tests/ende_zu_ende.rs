@@ -227,28 +227,59 @@ fn zu_grosse_zahlen_laufen_still_ueber_und_melden_sich_nur_mit_schalter() {
     }
 }
 
+/// Ein `.tar.gz`, Byte für Byte selbst gebaut, so wie GitHub es ausliefert: Die Namen stehen als
+/// rohes UTF-8 im Kopf jeder Datei (ohne Angabe der Zeichentabelle). Genau daran ist das
+/// Auspacken unter Windows zuerst gescheitert: Aus `zöhn.oida` wurde `z├Âhn.oida`.
+/// Gepackt wird nicht wirklich ("stored"): Das versteht jedes gzip.
+fn tar_gz(dateien: &[(String, &str)]) -> Vec<u8> {
+    let mut tar: Vec<u8> = Vec::new();
+    for (name, inhalt) in dateien {
+        let mut kopf = [0u8; 512];
+        assert!(name.len() <= 100, "{name} ist für diesen einfachen Kopf zu lang");
+        kopf[..name.len()].copy_from_slice(name.as_bytes());
+        kopf[100..108].copy_from_slice(b"0000644\0");
+        kopf[108..116].copy_from_slice(b"0000000\0");
+        kopf[116..124].copy_from_slice(b"0000000\0");
+        kopf[124..136].copy_from_slice(format!("{:011o}\0", inhalt.len()).as_bytes());
+        kopf[136..148].copy_from_slice(b"00000000000\0");
+        kopf[148..156].copy_from_slice(b"        "); // die Prüfsumme zählt hier als Leerzeichen
+        kopf[156] = b'0';
+        kopf[257..265].copy_from_slice(b"ustar\x0000");
+        let summe: u32 = kopf.iter().map(|b| u32::from(*b)).sum();
+        kopf[148..156].copy_from_slice(format!("{summe:06o}\0 ").as_bytes());
+        tar.extend_from_slice(&kopf);
+        tar.extend_from_slice(inhalt.as_bytes());
+        tar.resize(tar.len().div_ceil(512) * 512, 0);
+    }
+    tar.resize(tar.len() + 1024, 0);
+
+    let mut gz = vec![0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3];
+    let stuecke: Vec<&[u8]> = tar.chunks(65535).collect();
+    for (i, stueck) in stuecke.iter().enumerate() {
+        gz.push(u8::from(i == stuecke.len() - 1));
+        gz.extend_from_slice(&(stueck.len() as u16).to_le_bytes());
+        gz.extend_from_slice(&(!(stueck.len() as u16)).to_le_bytes());
+        gz.extend_from_slice(stueck);
+    }
+    let mut crc = 0xffff_ffffu32;
+    for byte in &tar {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 { (crc >> 1) ^ 0xedb8_8320 } else { crc >> 1 };
+        }
+    }
+    gz.extend_from_slice(&(!crc).to_le_bytes());
+    gz.extend_from_slice(&(tar.len() as u32).to_le_bytes());
+    gz
+}
+
 /// Legt ein Paket so ab, wie GitHub es ausliefert: `<basis>/<wer>/<repo>/archive/<stand>.tar.gz`,
 /// darin ein Ordner `<repo>-<stand>` mit den Dateien.
 fn paket_ablegen(basis: &Path, wer: &str, repo: &str, stand: &str, dateien: &[(&str, &str)]) {
-    let bau = basis.join("bau");
-    let _ = fs::remove_dir_all(&bau);
-    let oben = format!("{repo}-{stand}");
-    for (name, inhalt) in dateien {
-        let datei = bau.join(&oben).join(name);
-        fs::create_dir_all(datei.parent().unwrap()).unwrap();
-        fs::write(datei, inhalt).unwrap();
-    }
+    let mit_ordner: Vec<(String, &str)> = dateien.iter().map(|(name, inhalt)| (format!("{repo}-{stand}/{name}"), *inhalt)).collect();
     let ziel = basis.join(wer).join(repo).join("archive");
     fs::create_dir_all(&ziel).unwrap();
-    let lauf = Command::new("tar")
-        .arg("-czf")
-        .arg(ziel.join(format!("{stand}.tar.gz")))
-        .arg("-C")
-        .arg(&bau)
-        .arg(&oben)
-        .output()
-        .expect("tar gibt es unter Windows 10/11 und unter Linux");
-    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    fs::write(ziel.join(format!("{stand}.tar.gz")), tar_gz(&mit_ordner)).unwrap();
 }
 
 #[test]
@@ -277,8 +308,8 @@ fn pakete_holen_und_brauchen() {
         "wuerfel",
         "HEAD",
         &[
-            ("wuerfel.oida", "BRAUCH \"teile/hilfe.oida\" OIDA\nBRAUCH \"kortn\" OIS k OIDA\nFUNKTIAUN wuaf() GIBT ZRUCK KETTN\n    GIB ZRUCK rahmen(\"6\") + \" \" + k.ziag() OIDA\nPASST SCHO\n"),
-            ("teile/hilfe.oida", "FUNKTIAUN rahmen(t KETTN) GIBT ZRUCK KETTN\n    GIB ZRUCK \"[\" + t + \"]\" OIDA\nPASST SCHO\n"),
+            ("wuerfel.oida", "BRAUCH \"teile/hüfe.oida\" OIDA\nBRAUCH \"kortn\" OIS k OIDA\nFUNKTIAUN wuaf() GIBT ZRUCK KETTN\n    GIB ZRUCK rahmen(\"6\") + \" \" + k.ziag() OIDA\nPASST SCHO\n"),
+            ("teile/hüfe.oida", "FUNKTIAUN rahmen(t KETTN) GIBT ZRUCK KETTN\n    GIB ZRUCK \"[\" + t + \"]\" OIDA\nPASST SCHO\n"),
             ("pakete.txt", &format!("# was dieses Paket braucht\n{zeile_kortn}\n")),
         ],
     );
@@ -287,7 +318,8 @@ fn pakete_holen_und_brauchen() {
     let lauf = hol(&["franz/wuerfel"]);
     assert!(lauf.status.success(), "{}", text(&lauf.stderr));
     assert!(text(&lauf.stdout).contains("Passt! 'wuerfel' liegt in pakete/wuerfel. Im Programm: BRAUCH \"wuerfel\" OIS wuerfel OIDA"), "{}", text(&lauf.stdout));
-    for datei in ["pakete/wuerfel/wuerfel.oida", "pakete/wuerfel/teile/hilfe.oida", "pakete/kortn/paket.oida"] {
+    // (Eine Datei mit Umlaut im Namen: Die muss auch unter Windows richtig ankommen.)
+    for datei in ["pakete/wuerfel/wuerfel.oida", "pakete/wuerfel/teile/hüfe.oida", "pakete/kortn/paket.oida"] {
         assert!(projekt.join(datei).is_file(), "{datei} fehlt");
     }
     let liste = lies(&projekt.join("pakete.txt"));
@@ -338,6 +370,9 @@ fn pakete_holen_und_brauchen() {
     fs::create_dir_all(lokal.join(".git")).unwrap();
     fs::write(lokal.join("paket.oida"), "FUNKTIAUN servas() GIBT ZRUCK KETTN\n    GIB ZRUCK \"vo daham\" OIDA\nPASST SCHO\n").unwrap();
     fs::write(lokal.join(".git").join("HEAD"), "gehört nicht zum Paket").unwrap();
+    let lauf = hol(&["../mei-paket"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(text(&lauf.stdout).contains("Im Programm: BRAUCH \"mei-paket\" OIS mei_paket OIDA"), "{}", text(&lauf.stdout));
     let lauf = hol(&["../mei-paket", "--ois", "daham"]);
     assert!(lauf.status.success(), "{}", text(&lauf.stderr));
     assert!(projekt.join("pakete/daham/paket.oida").is_file() && !projekt.join("pakete/daham/.git").exists());
