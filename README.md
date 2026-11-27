@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.19.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.20.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -258,7 +258,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.19)
+## Die Sprache (v0.20)
 
 ### Typen
 
@@ -616,6 +616,50 @@ So kann niemand den Kontostand ändern, ohne dass `prüf` gefragt wird. Die Meth
 kommen auch an das `GHEIME` eines anderen Objekts derselben Klasse (`aundas.stand`).
 
 Ein größeres Beispiel steht in [`beispiele/arena.oida`](beispiele/arena.oida).
+
+### Schnittstellen
+
+Eine Schnittstelle sagt, was etwas können muss, ohne zu sagen, was es ist. Eine Funktion kann
+dann alles annehmen, was das kann, auch Klassen, die sonst nichts miteinander zu tun haben.
+
+```
+SCHNITTSTÖ Bella
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN       # nur der Kopf, kein Inhalt
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+PASST SCHO
+
+KLASSE Hund KAUN Bella                                 # verspricht: Ich hab diese Methoden
+    ruaf KETTN
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+        GIB ZRUCK wiederhoi("Wau", wia_oft) OIDA
+    PASST SCHO
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK MEI.ruaf OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Robota KAUN Bella                               # hat mit Hunden nichts zu tun
+    ...
+PASST SCHO
+
+FUNKTIAUN loss_belln(wer Bella, wia_oft ZOI)           # nimmt Hund, Robota und alles andere, das bellt
+    SCHREIB(wer.nam(), wer.bell(wia_oft)) OIDA
+PASST SCHO
+
+SOG AU olle LISTN VON Bella = [Hund("Rex"), Robota(7)] OIDA
+```
+
+- Hinter `KAUN` können mehrere Schnittstellen stehen: `KLASSE Hund ERBT VON Viech KAUN Bella, Schwimma`.
+- Der Compiler prüft, dass die Klasse jede Methode der Schnittstelle hat, mit denselben Werten
+  und demselben Ergebnis: `'Stumm' kaun 'Bella' no ned: De Methode 'bell' fehlt.`
+- Wer von einer Klasse erbt, die etwas kann, kann es auch; seine eigene Fassung einer Methode zählt.
+- An einem Wert vom Typ `Bella` gehen nur die Methoden der Schnittstelle. Was dahintersteckt,
+  fragt man wie bei Klassen: `wer IS A Hund`, `wer OIS Hund`, auch quer zu einer anderen
+  Schnittstelle (`wer OIS Schwimma`).
+- Eine Schnittstelle selbst lässt sich nicht bauen (`Bella()` geht nicht), und Felder hat sie keine.
+- `VIELLEICHT Bella`, `LISTN VON Bella`, Felder und Rückgabewerte vom Typ `Bella` gehen wie bei Klassen.
+
+Das ganze Beispiel: [`beispiele/schnittstön.oida`](beispiele/schnittstön.oida).
 
 **Struktur oder Klasse?** Eine Struktur für kleine Werte, die man kopiert (ein Punkt, eine Farbe);
 eine Klasse für Dinge, die es einmal gibt und die sich ändern (ein Spieler, ein Gegner), und
@@ -2142,6 +2186,9 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
 - Ob etwas `NIX` ist, merkt sich der Compiler nur bei Variablen, nicht bei Feldern und Listenstellen.
 - Einen `FEHLA` gibt es nur mit einer Meldung; eigene Arten von Fehlern kommen später.
 - In einen Text mit `$` lassen sich Listen und Strukturen noch nicht als Ganzes einsetzen.
+- Schnittstellen: Eine Vorlage (`KLASSE Stapl VON T`) kann noch keine; eine Schnittstelle kann
+  nicht von einer anderen erben und hat keine fertigen Methoden. Können die Elemente einer
+  hingeschriebenen Liste mehrere gemeinsame Schnittstellen, gilt die erste.
 - Bei `JE NOCHDEM` gehen als Fälle Werte und Bereiche, aber noch keine Klassen (`BEI Gegner ...`)
   und keine eigenen Bedingungen. Die Werte einer Aufzählung tragen keine eigenen Daten.
 - Im Netz: Ein Server bedient einen Gast nach dem anderen (Threads fehlen noch); kein Server für
@@ -2205,7 +2252,8 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 13 | [Netzwerk](#netzwerk): HTTP und HTTPS als Client, dazu TCP-Verbindungen in beide Richtungen | fertig |
 | 14 | Die Sprache selbst, Teil 2: [Aufzählungen](#aufzählungen), [`JE NOCHDEM`](#nach-fällen-je-nochdem) mit Prüfung, dass kein Fall fehlt; fragen, was ein Objekt wirklich ist (`OIS`, `IS A`) | fertig |
 | 15 | Weniger Abstürze: `liste[i] ODA HOID ersatz` und `a / b ODA HOID ersatz` brechen nie ab; `a / 0` meldet schon der Compiler; mit `--mit-zoinprüfung` melden sich ganze Zahlen, die überlaufen | fertig |
-| 16 | Ordnung für große Programme: privat, Namensräume (`BRAUCH "datei" OIS name`), Schnittstellen, Pakete aus dem Netz holen | offen |
+| 16 | Ordnung für große Programme: [`GHEIM` und Namensräume](#ordnung-halten-gheim-und-namensräume) (`BRAUCH "datei" OIS name`), [Schnittstellen](#schnittstellen) (`SCHNITTSTÖ`, `KAUN`) | fertig |
+| 16b | Pakete aus dem Netz holen | offen |
 | 17 | Threads ohne geteilte Daten: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind

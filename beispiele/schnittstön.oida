@@ -1,0 +1,60 @@
+# Schnittstellen: Eine Funktion nimmt alles, was "bellen" kann, egal was es sonst ist.
+
+SCHNITTSTÖ Bella
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+PASST SCHO
+
+KLASSE Hund KAUN Bella
+    ruaf KETTN
+
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+        SOG AU aus = "" OIDA
+        FIA i VON 1 BIS wia_oft TUA
+            aus = aus + "Wau" OIDA
+        PASST SCHO
+        GIB ZRUCK aus OIDA
+    PASST SCHO
+
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK MEI.ruaf OIDA
+    PASST SCHO
+PASST SCHO
+
+# Ein Dackl ist ein Hund und kann darum auch bellen, nur anders.
+KLASSE Dackl ERBT VON Hund
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+        GIB ZRUCK "Wiff x" + KETTN(wia_oft) OIDA
+    PASST SCHO
+PASST SCHO
+
+# Mit Hunden hat der nichts zu tun. Bellen kann er trotzdem.
+KLASSE Robota KAUN Bella
+    numma ZOI
+
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+        GIB ZRUCK "BEEP " + KETTN(wia_oft * MEI.numma) OIDA
+    PASST SCHO
+
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK "R" + KETTN(MEI.numma) OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN loss_belln(wer Bella, wia_oft ZOI)
+    SCHREIB($"{wer.nam()}: {wer.bell(wia_oft)}") OIDA
+PASST SCHO
+
+SOG AU olle LISTN VON Bella = [Hund("Rex"), Dackl("Waldi"), Robota(7)] OIDA
+FIA JEDE b IN olle TUA
+    loss_belln(b, 2) OIDA
+PASST SCHO
+
+# Was dahintersteckt, lässt sich fragen.
+FIA JEDE b IN olle TUA
+    WENN b IS A Hund DAUN
+        SCHREIB(b.nam(), "is a Hund") OIDA
+    SUNST
+        SCHREIB(b.nam(), "is kana:", b) OIDA
+    PASST SCHO
+PASST SCHO

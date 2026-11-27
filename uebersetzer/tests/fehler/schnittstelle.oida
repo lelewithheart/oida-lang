@@ -1,0 +1,35 @@
+SCHNITTSTÖ Bella
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+PASST SCHO
+
+KLASSE Stumm KAUN Bella
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK "stad" OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Vakehrt KAUN Bella
+    FUNKTIAUN bell(wia_oft KETTN) GIBT ZRUCK KETTN
+        GIB ZRUCK wia_oft OIDA
+    PASST SCHO
+    GHEIM FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK "x" OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Kind ERBT VON Bella
+PASST SCHO
+
+KLASSE Wos KAUN Gibtsned, Stumm
+PASST SCHO
+
+KLASSE Katz
+    nam KETTN
+PASST SCHO
+
+SOG AU b = Bella() OIDA
+SOG AU k Bella = Katz("Mitzi") OIDA
+SOG AU olle LISTN VON Bella = [] OIDA
+SCHREIB(olle[0].ruaf) OIDA
+olle[0].miau() OIDA

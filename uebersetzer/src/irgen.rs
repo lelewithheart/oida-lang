@@ -408,7 +408,8 @@ fn brauchbar(typ: Typ) -> bool {
 
 /// Gibt es eine Klasse, die von dieser erbt?
 fn hat_kinder(typen: &Typen, klasse: u32) -> bool {
-    typen.klassen.iter().any(|k| k.eltern == Some(klasse))
+    // Hinter einer Schnittstelle steckt immer ein Objekt einer anderen Klasse.
+    typen.klassen[klasse as usize].schnittstelle || typen.klassen.iter().any(|k| k.eltern == Some(klasse))
 }
 
 /// Gibt es unterhalb der Klasse eine eigene Fassung der Methode? Nur dann
@@ -798,8 +799,8 @@ impl Modul<'_> {
         }
 
         for (n, k) in typen.klassen.iter().enumerate() {
-            if k.vorlage {
-                continue; // Aus einer Vorlage entsteht selbst kein Code.
+            if k.vorlage || k.schnittstelle {
+                continue; // Aus einer Vorlage entsteht selbst kein Code, und Objekte einer Schnittstelle gibt es nicht.
             }
             // Freigeben: erst loslassen, was in den Feldern steckt, dann das Objekt selbst.
             let _ = writeln!(aus, "define internal void @oida.frei.k{n}(ptr %objekt) {{\nstart:");
@@ -1959,7 +1960,7 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 let typen = self.modul.typen;
                 let mut passt = "false".to_string();
                 for (n, info) in typen.klassen.iter().enumerate() {
-                    if info.vorlage || !typen.erbt_von(n as u32, *klasse) {
+                    if info.vorlage || info.schnittstelle || !typen.erbt_von(n as u32, *klasse) {
                         continue;
                     }
                     let (gleich, oder) = (self.temp(), self.temp());
@@ -2873,6 +2874,51 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         if programm.typen.klassen[n].vorlage {
             continue; // Aus einer Vorlage entsteht selbst kein Code.
         }
+        if k.schnittstelle {
+            // Eine Methode einer Schnittstelle schaut nach, was für ein Objekt es wirklich ist, und
+            // ruft dessen Methode auf. Der Compiler kennt alle Klassen, die die Schnittstelle können.
+            let typen = &programm.typen;
+            for m in &k.methoden {
+                let rt = ir_typ(m.rueckgabe);
+                let mut kopf = vec!["ptr %selbst".to_string()];
+                let mut werte = vec!["ptr %selbst".to_string()];
+                for (i, p) in m.parameter.iter().enumerate() {
+                    kopf.push(format!("{} %p{i}", ir_typ(p.typ)));
+                    werte.push(format!("{} %p{i}", ir_typ(p.typ)));
+                }
+                let mut code = format!(
+                    "define internal {rt} {}({}) {{\nstart:\n  \
+                     %kp = getelementptr inbounds {{ i64, ptr }}, ptr %selbst, i32 0, i32 1\n  \
+                     %klasse = load ptr, ptr %kp\n  br label %frag0\n",
+                    methoden_name(&k.name, &m.name),
+                    kopf.join(", ")
+                );
+                let mut frage = 0;
+                for (c, info) in typen.klassen.iter().enumerate() {
+                    if info.vorlage || info.schnittstelle || !typen.erbt_von(c as u32, n as u32) {
+                        continue;
+                    }
+                    let Some(eigene) = info.methoden.iter().find(|eigene| eigene.name == m.name) else { continue };
+                    let ziel = methoden_name(&typen.klassen[eigene.klasse as usize].name, &m.name);
+                    let _ = write!(
+                        code,
+                        "frag{frage}:\n  %ist{frage} = icmp eq ptr %klasse, @oida.klasse.{c}\n  \
+                         br i1 %ist{frage}, label %ruf{frage}, label %frag{}\nruf{frage}:\n",
+                        frage + 1
+                    );
+                    if m.rueckgabe == Typ::Nix {
+                        let _ = write!(code, "  call void {ziel}({})\n  ret void\n", werte.join(", "));
+                    } else {
+                        let _ = write!(code, "  %r{frage} = call {rt} {ziel}({})\n  ret {rt} %r{frage}\n", werte.join(", "));
+                    }
+                    frage += 1;
+                }
+                // Etwas anderes kann es nicht sein: Die Typprüfung lässt nur Klassen durch, die es können.
+                let _ = write!(code, "frag{frage}:\n  unreachable\n}}\n\n");
+                funktionen.push_str(&code);
+            }
+            continue;
+        }
         for m in &k.methoden {
             let code = baue_funktion(&mut modul, m, FunktionsArt::Methode(&k.name));
             funktionen.push_str(&code);
@@ -2913,7 +2959,7 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
     }
     // Ein Objekt: Zähler, Angaben zur Klasse, dann die Felder.
     for (n, k) in programm.typen.klassen.iter().enumerate() {
-        if k.vorlage {
+        if k.vorlage || k.schnittstelle {
             continue;
         }
         let felder: String = k.felder.iter().map(|feld| format!(", {}", ir_typ(feld.typ))).collect();

@@ -409,7 +409,12 @@ impl Parser<'_> {
                 let passt = matches!(
                     self.aktuell().art,
                     TokenArt::Schluessel(
-                        Schluessel::Function | Schluessel::Struct | Schluessel::Enum | Schluessel::Class | Schluessel::Const
+                        Schluessel::Function
+                            | Schluessel::Struct
+                            | Schluessel::Enum
+                            | Schluessel::Class
+                            | Schluessel::Interface
+                            | Schluessel::Const
                     )
                 );
                 if !passt {
@@ -486,6 +491,11 @@ impl Parser<'_> {
                     let gheim = std::mem::take(&mut self.gheim_als_naechstes);
                     let klasse = self.klasse()?;
                     programm.klassen.push(KlassenDef { gheim, ..klasse });
+                }
+                TokenArt::Schluessel(Schluessel::Interface) => {
+                    let gheim = std::mem::take(&mut self.gheim_als_naechstes);
+                    let schnittstelle = self.schnittstelle()?;
+                    programm.klassen.push(KlassenDef { gheim, ..schnittstelle });
                 }
                 TokenArt::Schluessel(Schluessel::End) => {
                     return Err(Fehler::neu(
@@ -613,6 +623,18 @@ impl Parser<'_> {
         } else {
             None
         };
+        // KLASSE Hund KAUN Bella, Laufa: die Schnittstellen, die sie verspricht.
+        let mut kann = Vec::new();
+        if self.nimm(Schluessel::Implements) {
+            loop {
+                let wofuer = format!("de {}, de '{name}' kaun", self.wort(Schluessel::Interface));
+                kann.push(self.name(&wofuer)?);
+                if self.aktuell().art != TokenArt::Komma {
+                    break;
+                }
+                self.weiter();
+            }
+        }
         let mut felder = Vec::new();
         let mut methoden = Vec::new();
         while !self.ist(Schluessel::End) && self.aktuell().art != TokenArt::DateiEnde {
@@ -636,7 +658,61 @@ impl Parser<'_> {
             felder.push(KlassenFeldDef { name: feld, angabe, standard, pos: feld_pos, gheim });
         }
         self.erwarte_end(pos, Schluessel::Class)?;
-        Ok(KlassenDef { name, typ_parameter, eltern, felder, methoden, pos, gheim: false })
+        Ok(KlassenDef { name, typ_parameter, eltern, felder, methoden, pos, gheim: false, schnittstelle: false, kann })
+    }
+
+    /// `SCHNITTSTÖ Bella` und darunter die Köpfe der Methoden, ohne Inhalt, bis PASST SCHO.
+    fn schnittstelle(&mut self) -> Result<KlassenDef, Fehler> {
+        let pos = self.weiter().pos; // SCHNITTSTÖ
+        let wofuer = format!("de {}", self.wort(Schluessel::Interface));
+        let (name, _) = self.name(&wofuer)?;
+        let mut methoden = Vec::new();
+        while !self.ist(Schluessel::End) && self.aktuell().art != TokenArt::DateiEnde {
+            if !self.ist(Schluessel::Function) {
+                return Err(Fehler::neu(
+                    self.aktuell().pos,
+                    format!(
+                        "In ana {} stehn nur de Köpf von Methodn ({} nam(...) {} ...), kane Föda und ka Inhoit.",
+                        self.wort(Schluessel::Interface),
+                        self.wort(Schluessel::Function),
+                        self.wort(Schluessel::Returns)
+                    ),
+                ));
+            }
+            let m_pos = self.weiter().pos; // FUNKTIAUN
+            let wofuer = format!("de {}", self.wort(Schluessel::Function));
+            let (m_name, _) = self.name(&wofuer)?;
+            self.erwarte(TokenArt::KlammerAuf, "a '('")?;
+            let parameter = self.parameter()?;
+            let rueckgabe_angabe = if self.nimm(Schluessel::Returns) { Some(self.typ_angabe()?) } else { None };
+            let rueckgabe = rueckgabe_angabe.as_ref().map_or(Typ::Nix, einfacher_typ);
+            // Ein OIDA hinter dem Kopf darf sein, muss aber nicht.
+            self.nimm(Schluessel::Oida);
+            methoden.push(Funktion {
+                name: m_name,
+                parameter,
+                rueckgabe_angabe,
+                rueckgabe,
+                rumpf: Vec::new(),
+                pos: m_pos,
+                selbst_id: 0,
+                typ_parameter: Vec::new(),
+                aussen: None,
+                gheim: false,
+            });
+        }
+        self.erwarte_end(pos, Schluessel::Interface)?;
+        Ok(KlassenDef {
+            name,
+            typ_parameter: Vec::new(),
+            eltern: None,
+            felder: Vec::new(),
+            methoden,
+            pos,
+            gheim: false,
+            schnittstelle: true,
+            kann: Vec::new(),
+        })
     }
 
     fn funktion(&mut self) -> Result<Funktion, Fehler> {
@@ -678,7 +754,11 @@ impl Parser<'_> {
                 | TokenArt::Schluessel(Schluessel::Catch)
                 | TokenArt::Schluessel(Schluessel::Case) => return Ok(anweisungen),
                 TokenArt::Schluessel(
-                    wort @ (Schluessel::Function | Schluessel::Struct | Schluessel::Class | Schluessel::Enum),
+                    wort @ (Schluessel::Function
+                    | Schluessel::Struct
+                    | Schluessel::Class
+                    | Schluessel::Enum
+                    | Schluessel::Interface),
                 ) => {
                     return Err(Fehler::neu(
                         token.pos,

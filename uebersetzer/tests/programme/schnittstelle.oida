@@ -1,0 +1,118 @@
+# Schnittstellen: was eine Klasse können muss, egal von wem sie erbt.
+
+SCHNITTSTÖ Bella
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+PASST SCHO
+
+SCHNITTSTÖ Schwimma
+    FUNKTIAUN schwimm(meta ZOI)
+PASST SCHO
+
+KLASSE Hund KAUN Bella, Schwimma
+    ruaf KETTN
+    gschwumma ZOI = 0
+
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+        SOG AU aus = "" OIDA
+        FIA i VON 1 BIS wia_oft TUA
+            aus = aus + "Wau" OIDA
+        PASST SCHO
+        GIB ZRUCK aus OIDA
+    PASST SCHO
+
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK MEI.ruaf OIDA
+    PASST SCHO
+
+    FUNKTIAUN schwimm(meta ZOI)
+        MEI.gschwumma += meta OIDA
+    PASST SCHO
+PASST SCHO
+
+# Wer von einem Hund erbt, kann auch, was der Hund kann; seine eigene Fassung zählt.
+KLASSE Dackl ERBT VON Hund
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+        GIB ZRUCK "Wiff x" + KETTN(wia_oft) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Robota KAUN Bella
+    numma ZOI
+
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK KETTN
+        GIB ZRUCK "BEEP " + KETTN(wia_oft * MEI.numma) OIDA
+    PASST SCHO
+
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK "R" + KETTN(MEI.numma) OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Entn KAUN Schwimma
+    weit ZOI = 0
+
+    FUNKTIAUN schwimm(meta ZOI)
+        MEI.weit += meta * 2 OIDA
+    PASST SCHO
+PASST SCHO
+
+FUNKTIAUN loss_belln(wer Bella, wia_oft ZOI) GIBT ZRUCK KETTN
+    GIB ZRUCK wer.nam() + ": " + wer.bell(wia_oft) OIDA
+PASST SCHO
+
+FUNKTIAUN lautasta(olle LISTN VON Bella) GIBT ZRUCK VIELLEICHT Bella
+    SOG AU bester VIELLEICHT Bella = NIX OIDA
+    SOG AU läng = -1 OIDA
+    FIA JEDE b IN olle TUA
+        SOG AU text = b.bell(2) OIDA
+        WENN LÄNGN(text) > läng DAUN
+            läng = LÄNGN(text) OIDA
+            bester = b OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK bester OIDA
+PASST SCHO
+
+SCHREIB("--- a jeda, der's kaun") OIDA
+SOG AU rex = Hund("Rex") OIDA
+SCHREIB(loss_belln(rex, 2)) OIDA
+SCHREIB(loss_belln(Dackl("Waldi"), 3)) OIDA
+SCHREIB(loss_belln(Robota(7), 2)) OIDA
+
+SCHREIB("--- in ana Listn") OIDA
+SOG AU olle LISTN VON Bella = [rex, Dackl("Waldi"), Robota(7)] OIDA
+FIA JEDE b IN olle TUA
+    SCHREIB(b.nam(), b.bell(1), b IS A Hund, b IS A Robota) OIDA
+PASST SCHO
+HAU EINE(olle, Robota(100)) OIDA
+SCHREIB(LÄNGN(olle), olle[3].nam(), olle[0] == rex, olle[1] == rex) OIDA
+
+SCHREIB("--- vielleicht ana") OIDA
+SOG AU laut = lautasta(olle) OIDA
+WENN laut != NIX DAUN
+    SCHREIB(laut.nam(), laut) OIDA
+PASST SCHO
+SCHREIB(lautasta([]) == NIX) OIDA
+
+SCHREIB("--- wos is es wirklich?") OIDA
+FIA JEDE b IN olle TUA
+    SOG AU dackl = b OIS Dackl OIDA
+    SOG AU hund = b OIS Hund OIDA
+    SCHREIB(b.nam(), dackl != NIX, hund != NIX) OIDA
+PASST SCHO
+
+SCHREIB("--- zwa Schnittstön, a Objekt") OIDA
+SOG AU im_wossa LISTN VON Schwimma = [rex, Entn()] OIDA
+FIA JEDE s IN im_wossa TUA
+    s.schwimm(10) OIDA
+PASST SCHO
+SOG AU entn = im_wossa[1] OIS Entn OIDA
+WENN entn != NIX DAUN
+    SCHREIB(rex.gschwumma, entn.weit, im_wossa[0] IS A Bella) OIDA
+PASST SCHO
+# Dasselbe Objekt als Schwimma und als Bella.
+SOG AU ois_bella = im_wossa[0] OIS Bella OIDA
+WENN ois_bella != NIX DAUN
+    SCHREIB(ois_bella.bell(1)) OIDA
+PASST SCHO

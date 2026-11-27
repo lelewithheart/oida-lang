@@ -574,7 +574,7 @@ fn sammle_namen(
                 Some(TokenArt::Text(ziel)) => brauch.push((false, ziel.clone(), raum_hinter(i + 2))),
                 _ => {}
             },
-            TokenArt::Schluessel(art @ (S::Struct | S::Class | S::Enum)) => {
+            TokenArt::Schluessel(art @ (S::Struct | S::Class | S::Enum | S::Interface)) => {
                 if let Some(name) = name_bei(i + 1) {
                     // KLASSE Dackl ERBT VON Hund
                     let eltern = (i + 2..tokens.len())
@@ -649,7 +649,7 @@ fn sammle_namen(
                     }
                 }
                 let (art, zu) = match &drin {
-                    Some((klasse, S::Class)) if !am_anfang && !ganz_aussen_gheim => ("methode", klasse.clone()),
+                    Some((klasse, S::Class | S::Interface)) if !am_anfang && !ganz_aussen_gheim => ("methode", klasse.clone()),
                     _ => ("funktion", String::new()),
                 };
                 neu(Eintrag {

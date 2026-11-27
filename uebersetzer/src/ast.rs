@@ -109,6 +109,10 @@ pub struct KlassenInfo {
     pub methoden: Vec<MethodenInfo>,
     /// Wie viele Plätze die Sprungtabelle hat (für alle Klassen einer Familie gleich viele).
     pub plaetze: usize,
+    /// Eine Schnittstelle: Objekte davon gibt es nicht, nur Objekte von Klassen, die sie können.
+    pub schnittstelle: bool,
+    /// Die Schnittstellen, die diese Klasse selbst verspricht (die geerbten stehen bei den Eltern).
+    pub kann: Vec<u32>,
 }
 
 /// Alle Strukturen, Klassen und Listentypen eines Programms. Die Typprüfung
@@ -259,13 +263,21 @@ impl Typen {
     }
 
     /// Ist `kind` dieselbe Klasse wie `eltern` oder erbt (über wie viele Stufen auch immer) von ihr?
+    /// Ist `kind` ein `eltern`: dieselbe Klasse, eine, die davon erbt, oder (wenn `eltern` eine
+    /// Schnittstelle ist) eine Klasse, die sie kann oder von so einer erbt?
     pub fn erbt_von(&self, kind: u32, eltern: u32) -> bool {
         let mut aktuell = Some(kind);
         // Die Zählung schützt vor einem Kreis, falls der gerade erst als Fehler gemeldet wird.
         for _ in 0..=self.klassen.len() {
             match aktuell {
                 Some(k) if k == eltern => return true,
-                Some(k) => aktuell = self.klassen.get(k as usize).and_then(|info| info.eltern),
+                Some(k) => {
+                    let Some(info) = self.klassen.get(k as usize) else { return false };
+                    if info.kann.contains(&eltern) {
+                        return true;
+                    }
+                    aktuell = info.eltern;
+                }
                 None => return false,
             }
         }
@@ -666,6 +678,11 @@ pub struct KlassenDef {
     pub pos: Position,
     /// `GHEIM KLASSE ...`: gilt nur in ihrer Datei.
     pub gheim: bool,
+    /// `SCHNITTSTÖ Bella ... PASST SCHO`: keine Klasse, sondern die Liste der Methoden, die eine
+    /// Klasse haben muss, um eine `Bella` zu sein. Die Methoden haben hier keinen Rumpf.
+    pub schnittstelle: bool,
+    /// `KLASSE Hund KAUN Bella, Laufa`: die Schnittstellen, die die Klasse verspricht.
+    pub kann: Vec<(String, Position)>,
 }
 
 /// `BRAUCH listen OIDA` oder `BRAUCH "gegner.oida" OIDA`: Die Funktionen,

@@ -1236,7 +1236,22 @@ impl Pruefer<'_> {
     fn klassen_namen(&mut self, definitionen: &[KlassenDef]) {
         for (nummer, k) in definitionen.iter().enumerate() {
             let vorlage = !k.typ_parameter.is_empty();
-            self.typen.klassen.push(KlassenInfo { name: k.name.clone(), vorlage, ..KlassenInfo::default() });
+            if let (true, Some((_, pos))) = (vorlage, k.kann.first()) {
+                let meldung = format!(
+                    "A Vorlog wia '{}' kaun no kane {}: Des geht derweil nur bei ana {} ohne {}.",
+                    k.name,
+                    self.wort(Schluessel::Interface),
+                    self.wort(Schluessel::Class),
+                    self.wort(Schluessel::From)
+                );
+                self.melde(*pos, meldung);
+            }
+            self.typen.klassen.push(KlassenInfo {
+                name: k.name.clone(),
+                vorlage,
+                schnittstelle: k.schnittstelle,
+                ..KlassenInfo::default()
+            });
             if self.klassen_nummern.contains_key(&k.name) || self.klassen_vorlagen.contains_key(&k.name) {
                 let meldung = format!("De {} '{}' gibt's scho. Zwamoi geht ned.", self.wort(Schluessel::Class), k.name);
                 self.melde(k.pos, meldung);
@@ -1292,6 +1307,16 @@ impl Pruefer<'_> {
                 Some(eltern) if eltern as usize == n => {
                     let meldung =
                         format!("De {} '{}' kaun ned von si söwa erbn.", self.wort(Schluessel::Class), k.name);
+                    self.melde(*pos, meldung);
+                }
+                Some(eltern) if self.typen.klassen[eltern as usize].schnittstelle => {
+                    let meldung = format!(
+                        "Von ana {} erbt ma ned, de kaun ma: {} {} {} {eltern_name}.",
+                        self.wort(Schluessel::Interface),
+                        self.wort(Schluessel::Class),
+                        k.name,
+                        self.wort(Schluessel::Implements)
+                    );
                     self.melde(*pos, meldung);
                 }
                 Some(eltern) => self.typen.klassen[n].eltern = Some(eltern),
@@ -1440,10 +1465,59 @@ impl Pruefer<'_> {
             }
             self.typen.klassen[n].plaetze = anzahl.get(&wurzel).copied().unwrap_or(0);
         }
+
+        // KAUN: Hat die Klasse wirklich jede Methode, die die Schnittstelle verlangt?
+        for &n in &gueltig {
+            for (name, pos) in definitionen[n].kann.clone() {
+                let klassen_name = definitionen[n].name.clone();
+                let Some(s) = self.klassen_nummern.get(&name).copied().filter(|s| self.typen.klassen[*s as usize].schnittstelle)
+                else {
+                    let meldung = if self.klassen_nummern.contains_key(&name) || self.struktur_nummern.contains_key(&name) {
+                        format!("'{name}' is ka {}, des kaun ma ned kenna.", self.wort(Schluessel::Interface))
+                    } else {
+                        format!("De {} '{name}' kenn i ned.{}", self.wort(Schluessel::Interface), self.hinweis(&name))
+                    };
+                    self.melde(pos, meldung);
+                    continue;
+                };
+                let verlangt = self.typen.klassen[s as usize].methoden.clone();
+                let mut passt = true;
+                for m in &verlangt {
+                    let gefunden = self.typen.klassen[n].methoden.iter().find(|eigene| eigene.name == m.name).cloned();
+                    let meldung = match gefunden {
+                        None => format!(
+                            "'{klassen_name}' kaun '{name}' no ned: De Methode '{}' fehlt.",
+                            m.name
+                        ),
+                        Some(eigene) if eigene.parameter != m.parameter || eigene.rueckgabe != m.rueckgabe => format!(
+                            "'{klassen_name}' kaun '{name}' no ned: De Methode '{}' muass de gleichn Werte nehma \
+                             und des Gleiche zruckgebn wia in da {}.",
+                            m.name,
+                            self.wort(Schluessel::Interface)
+                        ),
+                        Some(eigene) if eigene.gheim => format!(
+                            "'{klassen_name}' kaun '{name}' no ned: De Methode '{}' is {}, de siecht kana.",
+                            m.name,
+                            self.wort(Schluessel::Private)
+                        ),
+                        Some(_) => continue,
+                    };
+                    self.melde(pos, meldung);
+                    passt = false;
+                }
+                if passt && !self.typen.klassen[n].kann.contains(&s) {
+                    self.typen.klassen[n].kann.push(s);
+                }
+            }
+        }
     }
 
     /// Prüft, was in einer Klasse steht: die Werte, mit denen Felder beginnen, und die Methoden.
     fn klassen_inhalt(&mut self, nummer: u32, k: &mut KlassenDef) {
+        // In einer Schnittstelle stehen nur Köpfe: Da gibt es nichts zu prüfen.
+        if k.schnittstelle {
+            return;
+        }
         for feld in &mut k.felder {
             let Some(standard) = &mut feld.standard else { continue };
             // Der Wert wird beim Anlegen des Objekts ausgerechnet: Da gibt es noch kein SÖWA.
@@ -1484,6 +1558,15 @@ impl Pruefer<'_> {
     fn neu(&mut self, ausdruck: &mut Ausdruck, nummer: u32, geprueft: Option<Vec<Typ>>) -> Typ {
         let AusdruckArt::Aufruf { name, argumente } = &mut ausdruck.art else { unreachable!() };
         let name = name.clone();
+        if self.typen.klassen[nummer as usize].schnittstelle {
+            let meldung = format!(
+                "'{name}' is a {}, de kaun ma ned baun. Bau a {}, de '{name}' kaun.",
+                self.wort(Schluessel::Interface),
+                self.wort(Schluessel::Class)
+            );
+            self.melde(ausdruck.pos, meldung);
+            return Typ::Fehler;
+        }
         let mut argumente = std::mem::take(argumente);
         // Sind die Werte schon geprüft (bei Vorlagen), kein zweites Mal.
         let typen: Vec<Typ> = match geprueft {
@@ -2706,8 +2789,14 @@ impl Pruefer<'_> {
                 let wort = self.wort(Schluessel::As).to_string();
                 match (von, ziel) {
                     (Typ::Fehler, _) | (_, Typ::Fehler) => Typ::Fehler,
-                    // Nach oben oder nach unten in derselben Familie: Das kann zutreffen.
-                    (Typ::Klasse(a), Typ::Klasse(b)) if self.typen.erbt_von(b, a) || self.typen.erbt_von(a, b) => {
+                    // Nach oben oder nach unten in derselben Familie: Das kann zutreffen. Bei einer
+                    // Schnittstelle immer: Was dahintersteckt, kann auch noch etwas anderes können.
+                    (Typ::Klasse(a), Typ::Klasse(b))
+                        if self.typen.erbt_von(b, a)
+                            || self.typen.erbt_von(a, b)
+                            || self.typen.klassen[a as usize].schnittstelle
+                            || self.typen.klassen[b as usize].schnittstelle =>
+                    {
                         *klasse = b;
                         self.typen.vielleicht_von(ziel)
                     }
@@ -3165,6 +3254,18 @@ impl Pruefer<'_> {
                         break;
                     }
                     vorfahr = self.typen.klassen[v as usize].eltern;
+                }
+            }
+        }
+        // Objekte, die nicht verwandt sind, aber dasselbe können: Es gilt die Schnittstelle, die alle können.
+        if let Typ::Klasse(a) = gemeinsam {
+            let klassen: Vec<u32> = typen.iter().filter_map(|t| if let Typ::Klasse(k) = t { Some(*k) } else { None }).collect();
+            if klassen.iter().any(|k| !self.typen.erbt_von(*k, a)) {
+                let alle_kennan = (0..self.typen.klassen.len() as u32).find(|s| {
+                    self.typen.klassen[*s as usize].schnittstelle && klassen.iter().all(|k| self.typen.erbt_von(*k, *s))
+                });
+                if let Some(s) = alle_kennan {
+                    gemeinsam = Typ::Klasse(s);
                 }
             }
         }
