@@ -55,8 +55,10 @@ Für Windows und Linux (64 Bit). Fenster und Ton gibt es derzeit nur unter Windo
 
 ## Installieren
 
-Am einfachsten kommt OIDA mit einem Installer auf den Rechner. Es gibt drei; sie entstehen aus
-diesem Projekt (siehe [Installer bauen](#installer-bauen)) und landen in `installer/aus/`.
+Am einfachsten kommt OIDA mit einem Installer auf den Rechner. Es gibt drei, zum Herunterladen
+bei den [Releases](https://github.com/lelewithheart/oida-lang/releases/latest); dort liegt auch
+die Erweiterung für VS Code (`oida-vscode.vsix`). Sie entstehen aus diesem Projekt (siehe
+[Installer bauen](#installer-bauen)) und landen beim Bauen in `installer/aus/`.
 Wer OIDA lieber selbst baut, liest bei [Was man braucht](#was-man-braucht) weiter.
 
 ### Windows
