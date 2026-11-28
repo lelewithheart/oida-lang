@@ -72,7 +72,7 @@
   },
   "BRAUCH": {
     "prefix": "brauch",
-    "body": ["BRAUCH ${1|listen,texte,mathe,dateien,programm,json,netz,fensta,ton,\"datei.oida\"|} OIDA"],
+    "body": ["BRAUCH ${1|listen,texte,mathe,dateien,programm,json,netz,nebnbei,fensta,ton,\"datei.oida\"|} OIDA"],
     "description": "Bibliothek oder eigene Datei dazuholen"
   },
   "FUNKTIAUN VON T": {
@@ -94,6 +94,11 @@
     "prefix": "fensta",
     "body": ["BRAUCH fensta OIDA", "", "fensta_auf(\"${1:Mei Programm}\", ${2:800}, ${3:600}) OIDA", "SOLONG fensta_offn() TUA", "\tfoab(20, 20, 40) OIDA", "\thintagrund() OIDA", "\t$0", "PASST SCHO"],
     "description": "Ein Fenster aufmachen und in einer Schleife zeichnen"
+  },
+  "NEBNBEI": {
+    "prefix": "nebnbei",
+    "body": ["SOG AU ${1:aufgab} = NEBNBEI ${2:funktion}($3) OIDA", "SOG AU ${4:ergebnis} = WOAT AUF ${1:aufgab} OIDA"],
+    "description": "Eine Funktion in einem eigenen Thread laufen lassen und auf ihr Ergebnis warten"
   },
   "SCHREIB": {
     "prefix": "schreib",

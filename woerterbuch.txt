@@ -182,3 +182,10 @@ IS        = IS A, IS AN
 PRIVATE   = GHEIM, PRIVAT
 INTERFACE = SCHNITTSTÖ, SCHNITTSTELLE
 IMPLEMENTS = KAUN
+
+# --- Nebenbei: mehrere Dinge gleichzeitig tun ----------------------------------
+#     SOG AU a = NEBNBEI rechne(1, 1000) OIDA    die Funktion läuft in einem eigenen Thread
+#     SOG AU summe = WOAT AUF a OIDA             warten, bis sie fertig ist; ihr Ergebnis
+#     (dazu:  BRAUCH nebnbei OIDA)
+SPAWN     = NEBNBEI, NEBENBEI
+AWAIT     = WOAT AUF, WART AUF

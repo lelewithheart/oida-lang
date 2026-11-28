@@ -1,0 +1,72 @@
+# Ein Programm, das zugleich horcht und sich mit sich selbst verbindet: Das geht erst mit Threads.
+# Der Horcher gibt jeden Gast einem eigenen Thread; mitgegeben wird die Nummer der Verbindung.
+BRAUCH nebnbei OIS n OIDA
+BRAUCH netz OIDA
+
+FUNKTIAUN bedien(numma ZOI) GIBT ZRUCK ZOI
+    SOG AU gost = Vabindung(numma) OIDA
+    SOG AU zeilen = 0 OIDA
+    SOLONG WOAHR TUA
+        SOG AU zeile = gost.zeile() OIDA
+        WENN zeile == NIX DAUN
+            HAU OB OIDA
+        PASST SCHO
+        zeilen += 1 OIDA
+        PROBIER gost.schick_zeile(SCHREI(zeile))
+        WONNS SCHIEFGEHT
+            HAU OB OIDA
+        PASST SCHO
+    PASST SCHO
+    gost.zua() OIDA
+    GIB ZRUCK zeilen OIDA
+PASST SCHO
+
+FUNKTIAUN kunde(port ZOI, nam KETTN, wia_oft ZOI) GIBT ZRUCK LISTN VON KETTN
+    SOG AU antwortn LISTN VON KETTN = [] OIDA
+    PROBIER v = vabind("127.0.0.1", port)
+        FIA i VON 1 BIS wia_oft TUA
+            PROBIER v.schick_zeile(nam + " " + KETTN(i))
+            WONNS SCHIEFGEHT f
+                HAU EINE(antwortn, f.meldung) OIDA
+            PASST SCHO
+            HAU EINE(antwortn, v.zeile() ODA HOID "?") OIDA
+        PASST SCHO
+        v.zua() OIDA
+    WONNS SCHIEFGEHT f
+        HAU EINE(antwortn, f.meldung) OIDA
+    PASST SCHO
+    GIB ZRUCK antwortn OIDA
+PASST SCHO
+
+FUNKTIAUN haupt() GIBT ZRUCK NIX ODA FEHLA
+    SOG AU horcha = PROBIER horch(0) OIDA
+    SOG AU port = horcha.port() OIDA
+    SOG AU kundn LISTN VON n.Aufgab VON LISTN VON KETTN = [] OIDA
+    FIA JEDE nam IN ["hansi", "resi", "sepp"] TUA
+        HAU EINE(kundn, NEBNBEI kunde(port, nam, 3)) OIDA
+    PASST SCHO
+    SOG AU bediena LISTN VON n.Aufgab VON ZOI = [] OIDA
+    FIA i VON 1 BIS 3 TUA
+        SOG AU gost = PROBIER horcha.nächsta() OIDA
+        HAU EINE(bediena, NEBNBEI bedien(gost.numma)) OIDA
+    PASST SCHO
+    FIA JEDE k IN kundn TUA
+        SCHREIB(WOAT AUF k) OIDA
+    PASST SCHO
+    SOG AU zeilen = 0 OIDA
+    FIA JEDE b IN bediena TUA
+        zeilen += WOAT AUF b OIDA
+    PASST SCHO
+    SCHREIB(zeilen, "Zeilen bedient") OIDA
+    horcha.zua() OIDA
+PASST SCHO
+
+PROBIER haupt()
+WONNS SCHIEFGEHT f
+    SCHREIB("Schiefgaunga:", f.meldung) OIDA
+PASST SCHO
+
+# Mit Namensraum heißt alles n.name.
+SOG AU k = n.neicha_kanal VON KETTN() OIDA
+n.schick_eine(k, "duach den Kanal") OIDA
+SCHREIB(n.hol_aussa(k), n.wia_vü_drin(k), n.kerne() > 0) OIDA

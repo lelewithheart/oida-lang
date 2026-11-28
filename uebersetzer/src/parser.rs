@@ -339,6 +339,7 @@ impl Parser<'_> {
             typ_parameter: Vec::new(),
             aussen: None,
             gheim: false,
+            per_zeiger: Vec::new(),
         };
         if self.aktuell().art == TokenArt::Pfeil {
             let pfeil = self.weiter().pos;
@@ -445,6 +446,8 @@ impl Parser<'_> {
                     let (ziel, bibliothek) = match token.art {
                         TokenArt::Text(pfad) => (pfad, false),
                         TokenArt::Name(name) => (name, true),
+                        // Die Bibliothek heißt wie das Wort der Sprache: BRAUCH nebnbei OIDA.
+                        TokenArt::Schluessel(Schluessel::Spawn) => ("nebnbei".to_string(), true),
                         _ => {
                             return Err(self.unerwartet(
                                 "da Nom von ana Bibliothek (zum Beispü listen) oda a Datei in Anführungszeichn",
@@ -699,6 +702,7 @@ impl Parser<'_> {
                 typ_parameter: Vec::new(),
                 aussen: None,
                 gheim: false,
+                per_zeiger: Vec::new(),
             });
         }
         self.erwarte_end(pos, Schluessel::Interface)?;
@@ -739,7 +743,19 @@ impl Parser<'_> {
             rumpf = self.block()?;
             self.erwarte_end(pos, Schluessel::Function)?;
         }
-        Ok(Funktion { name, parameter, rueckgabe_angabe, rueckgabe, rumpf, pos, selbst_id: 0, typ_parameter, aussen, gheim: false })
+        Ok(Funktion {
+            name,
+            parameter,
+            rueckgabe_angabe,
+            rueckgabe,
+            rumpf,
+            pos,
+            selbst_id: 0,
+            typ_parameter,
+            aussen,
+            gheim: false,
+            per_zeiger: Vec::new(),
+        })
     }
 
     /// Anweisungen bis PASST SCHO, SUNST oder zum Ende der Datei.
@@ -1094,6 +1110,8 @@ impl Parser<'_> {
                         | Schluessel::Try
                         | Schluessel::Map
                         | Schluessel::Function
+                        | Schluessel::Spawn
+                        | Schluessel::Await
                 )
                     || s.ist_funktion()
                     || self.typ_hier().is_some()
@@ -1211,6 +1229,19 @@ impl Parser<'_> {
             let pos = self.weiter().pos;
             let innen = self.unaer()?;
             return Ok(Ausdruck::neu(AusdruckArt::Unaer { op: UnaerOp::Minus, innen: Box::new(innen) }, pos));
+        }
+        // NEBNBEI f(a, b): Die Funktion läuft in einem eigenen Thread; der Wert ist die Aufgabe.
+        if self.ist(Schluessel::Spawn) {
+            let pos = self.weiter().pos;
+            let aufruf = self.primaer()?;
+            return Ok(Ausdruck::neu(AusdruckArt::Nebenbei { aufruf: Box::new(aufruf) }, pos));
+        }
+        // WOAT AUF aufgab: was die Funktion zurückgegeben hat. Bindet wie ein Minus davor:
+        // WOAT AUF a + WOAT AUF b zählt die zwei Ergebnisse zusammen.
+        if self.ist(Schluessel::Await) {
+            let pos = self.weiter().pos;
+            let aufgabe = self.unaer()?;
+            return Ok(Ausdruck::neu(AusdruckArt::WartAuf { aufgabe: Box::new(aufgabe) }, pos));
         }
         self.primaer()
     }
@@ -1546,6 +1577,8 @@ mod tests {
             AusdruckArt::FunktionsWert { .. } => unreachable!("entsteht erst in der Typprüfung"),
             AusdruckArt::OdaHoid { links, rechts } => format!("({} ODA HOID {})", klammern(links), klammern(rechts)),
             AusdruckArt::Probier { innen } => format!("PROBIER {}", klammern(innen)),
+            AusdruckArt::Nebenbei { aufruf } => format!("NEBNBEI {}", klammern(aufruf)),
+            AusdruckArt::WartAuf { aufgabe } => format!("WOAT AUF {}", klammern(aufgabe)),
             AusdruckArt::Bau { .. }
             | AusdruckArt::Neu { .. }
             | AusdruckArt::IstNix { .. }
@@ -1969,6 +2002,30 @@ PASST SCHO");
     fn fehlender_wert() {
         let f = fehler("SOG AU x = OIDA");
         assert_eq!(f.meldung, "Do ghört a Wert her, ned OIDA.");
+    }
+
+    #[test]
+    fn nebenbei_und_warten() {
+        let start = ausdruck("NEBNBEI f(1, a)");
+        assert!(start.starts_with("NEBNBEI f"), "{start}");
+        // WOAT AUF bindet wie ein Minus davor, also fester als Mal und Plus.
+        assert_eq!(ausdruck("WOAT AUF a + WOAT AUF b * 2"), "(WOAT AUF a + (WOAT AUF b * 2))");
+        assert_eq!(ausdruck("WOAT AUF a ODA HOID 0"), "(WOAT AUF a ODA HOID 0)");
+        assert_eq!(ausdruck("WOAT AUF liste[0]"), "WOAT AUF liste[0]");
+        let beides = ausdruck("WOAT AUF NEBNBEI f()");
+        assert!(beides.starts_with("WOAT AUF NEBNBEI f"), "{beides}");
+        assert_eq!(ausdruck("wart auf a"), "WOAT AUF a");
+        // Auch allein als Anweisung.
+        let programm = parse("NEBNBEI f() OIDA\nWOAT AUF a OIDA");
+        assert!(matches!(&programm.haupt[0].art, AnweisungArt::Ausdruck(a) if matches!(a.art, AusdruckArt::Nebenbei { .. })));
+        assert!(matches!(&programm.haupt[1].art, AnweisungArt::Ausdruck(a) if matches!(a.art, AusdruckArt::WartAuf { .. })));
+        assert_eq!(fehler("x = NEBNBEI OIDA").meldung, "Do ghört a Wert her, ned OIDA.");
+        assert_eq!(fehler("x = WOAT AUF OIDA").meldung, "Do ghört a Wert her, ned OIDA.");
+        // Hinter BRAUCH ist nebnbei der Name der Bibliothek, nicht das Wort der Sprache.
+        let programm = parse("BRAUCH nebnbei OIDA\nBRAUCH NEBNBEI OIS n OIDA");
+        assert_eq!(programm.importe.len(), 2);
+        assert!(programm.importe.iter().all(|i| i.ziel == "nebnbei" && i.bibliothek));
+        assert_eq!(programm.importe[1].raum.as_deref(), Some("n"));
     }
 
     #[test]

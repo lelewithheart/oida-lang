@@ -1,0 +1,287 @@
+# Nebenbei: Funktionen in eigenen Threads, mit Kopien statt geteilter Werte, und Kanäle dazwischen.
+BRAUCH nebnbei OIDA
+BRAUCH listen OIDA
+BRAUCH json OIDA
+
+AUFZÖHLUNG Foab
+    ROT, GRÜN, BLAU
+PASST SCHO
+
+STRUKTUR Punkt
+    x KOMMAZOI
+    y KOMMAZOI
+PASST SCHO
+
+STRUKTUR Auftrog
+    nam KETTN
+    zoin LISTN VON ZOI
+    wo VIELLEICHT Punkt
+    foab Foab
+    spitznam VIELLEICHT KETTN
+    punkte VAZEICHNIS VON KETTN UND ZOI
+PASST SCHO
+
+KLASSE Viech
+    nam KETTN
+    haxn ZOI
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK MEI.nam + " hot " + KETTN(MEI.haxn) + " Haxn" OIDA
+    PASST SCHO
+PASST SCHO
+
+# ------------------------------------------------------------- Aufgaben
+
+FUNKTIAUN summe_zwischn(aufang ZOI, schluss ZOI) GIBT ZRUCK ZOI
+    SOG AU s = 0 OIDA
+    FIA i VON aufang BIS schluss TUA
+        s += i OIDA
+    PASST SCHO
+    GIB ZRUCK s OIDA
+PASST SCHO
+
+FUNKTIAUN gruaß(nam KETTN, wia_oft ZOI) GIBT ZRUCK KETTN
+    SOG AU aus = "" OIDA
+    FIA i VON 1 BIS wia_oft TUA
+        aus = aus + "Servas " + nam + "! " OIDA
+    PASST SCHO
+    GIB ZRUCK STUTZ(aus) OIDA
+PASST SCHO
+
+# Ändert, was sie mitbekommen hat: Das ist ihre eigene Kopie.
+FUNKTIAUN mit_kopie(a Auftrog) GIBT ZRUCK Auftrog
+    HAU EINE(a.zoin, 99) OIDA
+    a.punkte["neich"] = 1 OIDA
+    a.nam = a.nam + " (im Thread)" OIDA
+    GIB ZRUCK a OIDA
+PASST SCHO
+
+FUNKTIAUN ohne_wos(wia_laung ZOI)
+    schlof(wia_laung) OIDA
+PASST SCHO
+
+FUNKTIAUN teil_durch(a ZOI, b ZOI) GIBT ZRUCK ZOI ODA FEHLA
+    WENN b == 0 DAUN
+        GIB ZRUCK FEHLA("Durch nix geht ned") OIDA
+    PASST SCHO
+    GIB ZRUCK a / b OIDA
+PASST SCHO
+
+FUNKTIAUN vielleicht_wos(do JONA) GIBT ZRUCK VIELLEICHT KETTN
+    WENN do DAUN
+        GIB ZRUCK "do" OIDA
+    PASST SCHO
+    GIB ZRUCK NIX OIDA
+PASST SCHO
+
+# Ein Objekt entsteht im Thread und gehört am Ende dem, der wartet.
+FUNKTIAUN mach_viech(nam KETTN) GIBT ZRUCK Viech
+    GIB ZRUCK Viech(nam, 4) OIDA
+PASST SCHO
+
+FUNKTIAUN fib(n ZOI) GIBT ZRUCK ZOI
+    WENN n < 2 DAUN
+        GIB ZRUCK n OIDA
+    PASST SCHO
+    # Die oberen Ebenen teilen sich auf zwei Threads auf.
+    WENN n > 14 DAUN
+        SOG AU links = NEBNBEI fib(n - 1) OIDA
+        SOG AU rechts = fib(n - 2) OIDA
+        GIB ZRUCK WOAT AUF links + rechts OIDA
+    PASST SCHO
+    GIB ZRUCK fib(n - 1) + fib(n - 2) OIDA
+PASST SCHO
+
+FUNKTIAUN würfln(wia_oft ZOI) GIBT ZRUCK LISTN VON ZOI
+    SOG AU aus LISTN VON ZOI = [] OIDA
+    FIA i VON 1 BIS wia_oft TUA
+        HAU EINE(aus, ZUFOI(1, 1000000)) OIDA
+    PASST SCHO
+    GIB ZRUCK aus OIDA
+PASST SCHO
+
+FUNKTIAUN schreibt(wer KETTN)
+    SCHREIB("i bin", wer) OIDA
+    SCHREIB("und no a Zeile von", wer) OIDA
+PASST SCHO
+
+SCHREIB("--- Aufgaben") OIDA
+SOG AU a = NEBNBEI summe_zwischn(1, 1000) OIDA
+SOG AU b = NEBNBEI summe_zwischn(1001, 2000) OIDA
+SCHREIB(WOAT AUF a + WOAT AUF b, summe_zwischn(1, 2000)) OIDA
+SCHREIB(WOAT AUF NEBNBEI gruaß("Hansi", 2)) OIDA
+
+# Was mitgeht, ist eine Kopie: Hier bleibt alles, wie es war, auch wenn der Thread seines ändert.
+SOG AU auftrog = Auftrog("Zöhn", [1, 2, 3], Punkt(1.5, -2.0), Foab.GRÜN, NIX, VAZEICHNIS VON KETTN UND ZOI()) OIDA
+auftrog.punkte["oid"] = 7 OIDA
+SOG AU kopie = NEBNBEI mit_kopie(auftrog) OIDA
+HAU EINE(auftrog.zoin, 4) OIDA
+SOG AU zruck = WOAT AUF kopie OIDA
+SCHREIB(auftrog.nam, auftrog.zoin, auftrog.punkte) OIDA
+SCHREIB(zruck.nam, zruck.zoin, zruck.punkte, zruck.wo, zruck.foab, zruck.spitznam) OIDA
+
+# Ohne Rückgabe, mit Fehler, mit NIX, mit einem Objekt.
+SOG AU stü = NEBNBEI ohne_wos(1) OIDA
+WOAT AUF stü OIDA
+SCHREIB(is_fertig(stü)) OIDA
+SCHREIB(WOAT AUF NEBNBEI teil_durch(10, 2) ODA HOID -1, WOAT AUF NEBNBEI teil_durch(10, 0) ODA HOID -1) OIDA
+PROBIER z = WOAT AUF NEBNBEI teil_durch(1, 0)
+    SCHREIB(z) OIDA
+WONNS SCHIEFGEHT f
+    SCHREIB("Schiefgaunga:", f.meldung) OIDA
+PASST SCHO
+SCHREIB(WOAT AUF NEBNBEI vielleicht_wos(WOAHR), WOAT AUF NEBNBEI vielleicht_wos(FOISCH)) OIDA
+SOG AU viech = WOAT AUF NEBNBEI mach_viech("Bello") OIDA
+SCHREIB(viech.sog()) OIDA
+
+# Threads, die selbst Threads starten.
+SCHREIB(fib(20)) OIDA
+
+# Viele auf einmal, in einer Liste.
+SOG AU olle LISTN VON Aufgab VON ZOI = [] OIDA
+FIA i VON 1 BIS 20 TUA
+    HAU EINE(olle, NEBNBEI summe_zwischn(1, i)) OIDA
+PASST SCHO
+SOG AU summen LISTN VON ZOI = [] OIDA
+FIA JEDE aufgab IN olle TUA
+    HAU EINE(summen, WOAT AUF aufgab) OIDA
+PASST SCHO
+SCHREIB(summen) OIDA
+
+# Eine Vorlage aus der Bibliothek und eine Funktion der Laufzeit gehen auch.
+SCHREIB(WOAT AUF NEBNBEI größtes([3, 9, 4]), WOAT AUF NEBNBEI kerne() > 0) OIDA
+
+# Jeder Thread würfelt für sich; mit demselben SOMEN kommt dasselbe heraus.
+SOMEN(5) OIDA
+SOG AU wuaf1 = WOAT AUF NEBNBEI würfln(5) OIDA
+SOG AU wuaf2 = WOAT AUF NEBNBEI würfln(5) OIDA
+SOMEN(5) OIDA
+SOG AU wuaf3 = WOAT AUF NEBNBEI würfln(5) OIDA
+SCHREIB(LÄNGN(wuaf1), wuaf1 == wuaf2, wuaf1 == wuaf3) OIDA
+
+# Was ein Thread schreibt, steht da, wo es hingehört: nach dem, was vorher geschrieben wurde.
+SCHREIB("vuahea") OIDA
+WOAT AUF NEBNBEI schreibt("da Thread") OIDA
+SCHREIB("nochhea") OIDA
+
+# ---------------------------------------------------------------- Kanäle
+
+FUNKTIAUN oabeita(numma ZOI, auftreg Kanal VON Auftrog, fertige Kanal VON KETTN) GIBT ZRUCK ZOI
+    SOG AU gmocht = 0 OIDA
+    SOLONG WOAHR TUA
+        SOG AU a = aussa_oda_nix(auftreg) OIDA
+        WENN a == NIX DAUN
+            HAU OB OIDA
+        PASST SCHO
+        schick_eine(fertige, a.nam + "=" + KETTN(summe(a.zoin))) OIDA
+        gmocht += 1 OIDA
+    PASST SCHO
+    GIB ZRUCK gmocht OIDA
+PASST SCHO
+
+# Schickt nach einer Weile, damit der andere wirklich warten muss.
+FUNKTIAUN spät(k Kanal VON KETTN, wos KETTN)
+    schlof(30) OIDA
+    schick_eine(k, wos) OIDA
+PASST SCHO
+
+FUNKTIAUN obwechslnd(hin Kanal VON ZOI, her Kanal VON ZOI)
+    FIA i VON 1 BIS 3 TUA
+        SCHREIB("thread", i) OIDA
+        schick_eine(hin, i) OIDA
+        SOG AU zruck = hol_aussa(her) OIDA
+    PASST SCHO
+    SCHREIB("thread fertig") OIDA
+PASST SCHO
+
+# Bekommt einen Kanal durch einen Kanal und antwortet darauf.
+FUNKTIAUN auskunft(frogn Kanal VON Kanal VON ZOI)
+    SOG AU wohin = hol_aussa(frogn) OIDA
+    schick_eine(wohin, 42) OIDA
+PASST SCHO
+
+SCHREIB("--- Kanäle") OIDA
+SOG AU k = neicha_kanal VON ZOI() OIDA
+FIA i VON 1 BIS 5 TUA
+    schick_eine(k, i * i) OIDA
+PASST SCHO
+SCHREIB(wia_vü_drin(k), hol_aussa(k), hol_aussa(k), aussa_glei(k), wia_vü_drin(k)) OIDA
+moch_zua(k) OIDA
+SCHREIB(is_zua(k), aussa_oda_nix(k), aussa_oda_nix(k), aussa_oda_nix(k), aussa_glei(k), aussa_bis(k, 5)) OIDA
+
+# Alles, was sich kopieren lässt, geht durch einen Kanal; der Absender behält seines.
+SOG AU kk = neicha_kanal VON Auftrog() OIDA
+schick_eine(kk, auftrog) OIDA
+HAU EINE(auftrog.zoin, 5) OIDA
+auftrog.spitznam = "Zöhni" OIDA
+schick_eine(kk, auftrog) OIDA
+SOG AU erster = hol_aussa(kk) OIDA
+SOG AU zweiter = hol_aussa(kk) OIDA
+SCHREIB(erster.zoin, erster.spitznam, erster.punkte, erster.wo, erster.foab) OIDA
+SCHREIB(zweiter.zoin, zweiter.spitznam, erster == zweiter, zweiter == auftrog) OIDA
+
+SOG AU kv = neicha_kanal VON VAZEICHNIS VON ZOI UND LISTN VON KETTN() OIDA
+SOG AU nochschlog = VAZEICHNIS VON ZOI UND LISTN VON KETTN() OIDA
+nochschlog[3] = ["drei", "three"] OIDA
+nochschlog[-1] = [] OIDA
+schick_eine(kv, nochschlog) OIDA
+HAU AUSSE(nochschlog, 3) OIDA
+SCHREIB(hol_aussa(kv), nochschlog) OIDA
+
+SOG AU kj = neicha_kanal VON Json() OIDA
+schick_eine(kj, json_lesn("{\"nam\": \"Hansi\", \"sochn\": [1, 2.5, null, true]}") ODA HOID j_nix()) OIDA
+SCHREIB(OIS JSON(hol_aussa(kj))) OIDA
+
+SOG AU kl = neicha_kanal VON LISTN VON VIELLEICHT Punkt() OIDA
+schick_eine(kl, [Punkt(1.0, 2.0), NIX]) OIDA
+SCHREIB(hol_aussa(kl)) OIDA
+
+# Warten: mit Frist kommt NIX, wenn nichts kommt; sonst der Wert, sobald er da ist.
+SOG AU kt = neicha_kanal VON KETTN() OIDA
+SCHREIB(aussa_glei(kt), aussa_bis(kt, 20)) OIDA
+SOG AU späta = NEBNBEI spät(kt, "endlich") OIDA
+SCHREIB(hol_aussa(kt)) OIDA
+WOAT AUF späta OIDA
+SOG AU späta2 = NEBNBEI spät(kt, "no amoi") OIDA
+SCHREIB(aussa_bis(kt, 20000)) OIDA
+WOAT AUF späta2 OIDA
+
+# Zwei Threads schreiben abwechselnd: Jede Zeile steht gleich da, nicht erst am Ende des Threads.
+SOG AU hin = neicha_kanal VON ZOI() OIDA
+SOG AU her = neicha_kanal VON ZOI() OIDA
+SOG AU ping = NEBNBEI obwechslnd(hin, her) OIDA
+FIA i VON 1 BIS 3 TUA
+    SCHREIB("haupt", hol_aussa(hin)) OIDA
+    schick_eine(her, i) OIDA
+PASST SCHO
+WOAT AUF ping OIDA
+
+# Ein Kanal durch einen Kanal.
+SOG AU frogn = neicha_kanal VON Kanal VON ZOI() OIDA
+SOG AU auskunftei = NEBNBEI auskunft(frogn) OIDA
+SOG AU antwort = neicha_kanal VON ZOI() OIDA
+schick_eine(frogn, antwort) OIDA
+SCHREIB(hol_aussa(antwort)) OIDA
+WOAT AUF auskunftei OIDA
+
+# Drei Arbeiter teilen sich die Aufträge; am Ende ist jeder genau einmal gemacht.
+SOG AU auftreg = neicha_kanal VON Auftrog() OIDA
+SOG AU fertige = neicha_kanal VON KETTN() OIDA
+SOG AU leit LISTN VON Aufgab VON ZOI = [] OIDA
+FIA i VON 1 BIS 3 TUA
+    HAU EINE(leit, NEBNBEI oabeita(i, auftreg, fertige)) OIDA
+PASST SCHO
+FIA i VON 1 BIS 40 TUA
+    schick_eine(auftreg, Auftrog("A" + KETTN(i), [i, i * 10], NIX, Foab.ROT, NIX, VAZEICHNIS VON KETTN UND ZOI())) OIDA
+PASST SCHO
+moch_zua(auftreg) OIDA
+SOG AU gmocht = 0 OIDA
+FIA JEDE ana IN leit TUA
+    gmocht += WOAT AUF ana OIDA
+PASST SCHO
+SOG AU ergebnisse LISTN VON KETTN = [] OIDA
+SOLONG wia_vü_drin(fertige) > 0 TUA
+    HAU EINE(ergebnisse, hol_aussa(fertige)) OIDA
+PASST SCHO
+sortier(ergebnisse, FUNKTIAUN(l KETTN, r KETTN) => l < r) OIDA
+SCHREIB(gmocht, LÄNGN(ergebnisse), ergebnisse[0], ergebnisse[39]) OIDA

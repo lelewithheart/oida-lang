@@ -1,0 +1,91 @@
+# OIDA-Bibliothek: mehrere Dinge gleichzeitig tun.     Dazuholen mit:  BRAUCH nebnbei OIDA
+#
+# Zwei Wörter der Sprache gehören dazu:
+#
+#     SOG AU a = NEBNBEI rechne(1, 1000) OIDA    # rechne läuft ab jetzt in einem eigenen Thread
+#     SOG AU b = NEBNBEI rechne(1001, 2000) OIDA # ... und das hier gleichzeitig in einem zweiten
+#     SCHREIB(WOAT AUF a + WOAT AUF b) OIDA      # warten, bis sie fertig sind; ihre Ergebnisse
+#
+# Die eine Regel, die alles einfach hält: Zwei Threads teilen sich nie einen
+# Wert. Was eine Funktion bei NEBNBEI mitbekommt, ist ihre eigene Kopie; ändert
+# sie eine Liste, merkt der Aufrufer davon nichts. Darum kann hier nicht
+# passieren, was Threads in anderen Sprachen schwer macht: dass zwei
+# gleichzeitig dasselbe ändern.
+#
+# Reden können Threads über einen Kanal: Der eine schickt Werte hinein (auch
+# das sind Kopien), der andere holt sie heraus, in derselben Reihenfolge.
+#
+#     SOG AU k = neicha_kanal VON KETTN() OIDA
+#     schick_eine(k, "Servas") OIDA
+#     SCHREIB(hol_aussa(k)) OIDA                 # Servas
+#
+# Kopieren lassen sich ZOI, KOMMAZOI, JONA, KETTN, alles, was mit STRUKTUR
+# oder AUFZÖHLUNG angesagt ist, LISTN, VIELLEICHT und VAZEICHNIS. Objekte einer
+# KLASSE und Funktionen als Werte nicht; das sagt schon der Compiler.
+
+# Eine Aufgabe: eine Funktion, die mit NEBNBEI gestartet wurde. `T` ist, was sie
+# zurückgibt. Was man damit tut: WOAT AUF aufgab, oder is_fertig(aufgab).
+STRUKTUR Aufgab VON T
+    numma ZOI
+PASST SCHO
+
+# Ein Kanal für Werte vom Typ `T`. Ihn selbst kann man kopieren, mitgeben und
+# verschicken, so oft man will: Es bleibt derselbe Kanal.
+STRUKTUR Kanal VON T
+    numma ZOI
+PASST SCHO
+
+# --------------------------------------------------------------- Aufgaben
+
+# Ist die Funktion schon fertig? Wartet nicht. (Ihr Ergebnis holt WOAT AUF.)
+FUNKTIAUN is_fertig VON T(aufgab Aufgab VON T) GIBT ZRUCK JONA VON DRAUSSN "oida_nebnbei_fertig" OIDA
+
+# Wie viele Dinge der Rechner wirklich gleichzeitig tun kann. Mehr Threads als
+# das machen Rechenarbeit nicht schneller.
+FUNKTIAUN kerne() GIBT ZRUCK ZOI VON DRAUSSN "oida_nebnbei_kerne" OIDA
+
+# Der Thread, der das aufruft, tut so lange nichts (1000 Millisekunden sind eine Sekunde).
+FUNKTIAUN schlof(millisekundn ZOI) VON DRAUSSN "oida_nebnbei_schlafen" OIDA
+
+# ----------------------------------------------------------------- Kanäle
+
+# Ein neuer, leerer Kanal. Der Typ steht dabei:  neicha_kanal VON ZOI()
+FUNKTIAUN neicha_kanal VON T() GIBT ZRUCK Kanal VON T VON DRAUSSN "oida_kanal_neu" OIDA
+
+# Legt eine Kopie des Werts in den Kanal. Wartet nie: In einen Kanal passt
+# beliebig viel. In einen Kanal, der zu ist, kann man nichts mehr schicken.
+FUNKTIAUN schick_eine VON T(kanal Kanal VON T, wert T) VON DRAUSSN "oida_kanal_schicken" OIDA
+
+# Holt den ältesten Wert aus dem Kanal. Ist keiner da, wartet es, bis einer kommt.
+# (Ist der Kanal zu und leer, kann keiner mehr kommen: Dann hört das Programm
+# mit einer Meldung auf. Wer damit rechnet, nimmt aussa_oda_nix.)
+FUNKTIAUN hol_aussa VON T(kanal Kanal VON T) GIBT ZRUCK T VON DRAUSSN "oida_kanal_holen" OIDA
+
+# Wie hol_aussa, aber aus einem Kanal, der zu und leer ist, kommt NIX. So arbeitet
+# man einen Kanal ab, bis nichts mehr kommt:
+#
+#     SOLONG WOAHR TUA
+#         SOG AU auftrog = aussa_oda_nix(auftreg) OIDA
+#         WENN auftrog == NIX DAUN
+#             HAU OB OIDA
+#         PASST SCHO
+#         ...
+#     PASST SCHO
+FUNKTIAUN aussa_oda_nix VON T(kanal Kanal VON T) GIBT ZRUCK VIELLEICHT T VON DRAUSSN "oida_kanal_holen_vielleicht" OIDA
+
+# Wartet höchstens so viele Millisekunden auf einen Wert; kommt keiner, gibt es NIX.
+FUNKTIAUN aussa_bis VON T(kanal Kanal VON T, millisekundn ZOI) GIBT ZRUCK VIELLEICHT T VON DRAUSSN "oida_kanal_holen_bis" OIDA
+
+# Der älteste Wert, wenn gerade einer da ist, sonst NIX. Wartet nie.
+FUNKTIAUN aussa_glei VON T(kanal Kanal VON T) GIBT ZRUCK VIELLEICHT T
+    GIB ZRUCK aussa_bis(kanal, 0) OIDA
+PASST SCHO
+
+# Macht den Kanal zu: Ab jetzt kommt nichts Neues mehr hinein. Was noch drin
+# ist, kann man holen; wer danach noch wartet, bekommt von aussa_oda_nix NIX.
+FUNKTIAUN moch_zua VON T(kanal Kanal VON T) VON DRAUSSN "oida_kanal_zu" OIDA
+
+FUNKTIAUN is_zua VON T(kanal Kanal VON T) GIBT ZRUCK JONA VON DRAUSSN "oida_kanal_ist_zu" OIDA
+
+# Wie viele Werte im Kanal liegen und noch nicht geholt sind.
+FUNKTIAUN wia_vü_drin VON T(kanal Kanal VON T) GIBT ZRUCK ZOI VON DRAUSSN "oida_kanal_anzahl" OIDA

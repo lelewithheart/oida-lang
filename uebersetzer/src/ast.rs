@@ -324,6 +324,23 @@ pub enum TypAngabe {
     Verzeichnis { schluessel: Box<TypAngabe>, wert: Box<TypAngabe>, pos: Position },
 }
 
+impl TypAngabe {
+    /// Kommt in dieser Angabe einer der Namen vor (die offenen Typen einer Vorlage)?
+    pub fn erwaehnt(&self, namen: &[String]) -> bool {
+        match self {
+            TypAngabe::Einfach(_) => false,
+            TypAngabe::Name { name, .. } => namen.contains(name),
+            TypAngabe::Liste(innen) | TypAngabe::Vielleicht { innen, .. } => innen.erwaehnt(namen),
+            TypAngabe::OderFehler { wert, .. } => wert.as_ref().is_some_and(|w| w.erwaehnt(namen)),
+            TypAngabe::Funktion { parameter, rueckgabe, .. } => {
+                parameter.iter().any(|p| p.erwaehnt(namen)) || rueckgabe.as_ref().is_some_and(|r| r.erwaehnt(namen))
+            }
+            TypAngabe::Generisch { argumente, .. } => argumente.iter().any(|a| a.erwaehnt(namen)),
+            TypAngabe::Verzeichnis { schluessel, wert, .. } => schluessel.erwaehnt(namen) || wert.erwaehnt(namen),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaerOp {
     Minus,
@@ -518,6 +535,12 @@ pub enum AusdruckArt {
     /// `objekt OIS Klasse`: das Objekt als diese Klasse, wenn es wirklich eines davon ist, sonst
     /// `NIX`. `klasse` ist die Nummer der Klasse; die Typprüfung trägt sie ein.
     Als { objekt: Box<Ausdruck>, angabe: TypAngabe, klasse: u32 },
+    /// `NEBNBEI f(a, b)`: Die Funktion läuft in einem eigenen Thread, mit Kopien der Werte.
+    /// `aufruf` ist ein [`AusdruckArt::Aufruf`]; der Wert des Ganzen ist die Aufgabe
+    /// (`Aufgab VON <was f zurückgibt>` aus der Bibliothek `nebnbei`).
+    Nebenbei { aufruf: Box<Ausdruck> },
+    /// `WOAT AUF aufgab`: wartet, bis die Funktion fertig ist; der Wert ist, was sie zurückgegeben hat.
+    WartAuf { aufgabe: Box<Ausdruck> },
 }
 
 /// Ein Wert von außen, den eine Funktion ohne Namen mitnimmt. Er wird
@@ -616,6 +639,11 @@ pub struct Funktion {
     pub aussen: Option<String>,
     /// `GHEIM FUNKTIAUN ...`: gilt nur in ihrer Datei, als Methode nur in ihrer Klasse.
     pub gheim: bool,
+    /// Nur bei der Fassung einer Vorlage `VON DRAUSSN`: für jeden Parameter und zuletzt für die
+    /// Rückgabe, ob dort in der Vorlage ein offener Typ steht. So ein Wert reist als Zeiger
+    /// zusammen mit der Beschreibung seines Typs, weil die Laufzeit ihn sonst nicht verstünde.
+    /// Die Typprüfung trägt das ein; sonst ist die Liste leer.
+    pub per_zeiger: Vec<bool>,
 }
 
 /// Ein Feld in `STRUKTUR ... PASST SCHO`.

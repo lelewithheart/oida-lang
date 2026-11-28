@@ -1,0 +1,54 @@
+# Was bei NEBNBEI, WOAT AUF und Kanälen nicht geht.
+BRAUCH nebnbei OIDA
+
+KLASSE Viech
+    nam KETTN
+
+    FUNKTIAUN sog() GIBT ZRUCK KETTN
+        GIB ZRUCK MEI.nam OIDA
+    PASST SCHO
+PASST SCHO
+
+STRUKTUR Stoi
+    viecha LISTN VON Viech
+PASST SCHO
+
+FUNKTIAUN streichl(v Viech) GIBT ZRUCK KETTN
+    GIB ZRUCK v.nam OIDA
+PASST SCHO
+
+FUNKTIAUN zöh(s Stoi, wia_oft ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK LÄNGN(s.viecha) * wia_oft OIDA
+PASST SCHO
+
+FUNKTIAUN ruaf(wos FUNKTIAUN() GIBT ZRUCK ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK wos() OIDA
+PASST SCHO
+
+FUNKTIAUN ans() GIBT ZRUCK ZOI
+    GIB ZRUCK 1 OIDA
+PASST SCHO
+
+SOG AU bello = Viech("Bello") OIDA
+SOG AU a1 = NEBNBEI streichl(bello) OIDA
+SOG AU a2 = NEBNBEI zöh(Stoi([bello]), 2) OIDA
+SOG AU a3 = NEBNBEI ruaf(ans) OIDA
+SOG AU a4 = NEBNBEI bello.sog() OIDA
+SOG AU dopplt = FUNKTIAUN(x ZOI) => x * 2 OIDA
+SOG AU a5 = NEBNBEI dopplt(4) OIDA
+SOG AU a6 = NEBNBEI 5 OIDA
+SOG AU a7 = NEBNBEI ans(1) OIDA
+SOG AU a8 = NEBNBEI gibts_ned() OIDA
+SOG AU w1 = WOAT AUF 5 OIDA
+SOG AU w2 = WOAT AUF ans() OIDA
+SOG AU guat = NEBNBEI ans() OIDA
+SOG AU w3 KETTN = WOAT AUF guat OIDA
+SOG AU k = neicha_kanal VON Viech() OIDA
+schick_eine(k, bello) OIDA
+SOG AU kz = neicha_kanal VON ZOI() OIDA
+schick_eine(kz, "ans") OIDA
+SOG AU kf = neicha_kanal VON FUNKTIAUN() GIBT ZRUCK ZOI() OIDA
+schick_eine(kf, ans) OIDA
+SOG AU kn = neicha_kanal() OIDA
+SOG AU kzv = neicha_kanal VON ZOI UND KETTN() OIDA
+SOG AU s LISTN VON ZOI = hol_aussa(kz) OIDA

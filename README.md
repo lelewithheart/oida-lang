@@ -34,7 +34,7 @@ Der Compiler heißt `oida`, ist in Rust geschrieben und erzeugt über LLVM ein n
 für Windows oder Linux (rund 340 KB; unter Windows eine `.exe`, die ohne zusätzliche DLLs läuft). OIDA ist die große Schwester von
 [OIDA-SQL](https://github.com/lelewithheart/oida-sql).
 
-**Stand: v0.21.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
+**Stand: v0.22.** Zahlen, Texte, Strukturen, Listen, Verzeichnisse, Klassen mit Vererbung, Vorlagen
 (Generics), Funktionen als Werte, fehlende Werte (`NIX`), Fehler ohne Absturz, Programme aus
 mehreren Dateien, eine mitgelieferte Bibliothek, ein eigenes
 [Fenster](#ein-fenster-zeichnen-tasten-und-maus) zum Zeichnen mit Tasten und Maus,
@@ -258,7 +258,7 @@ Gebaut und getestet wird sie derzeit nur unter Windows; unter Linux ist sie nich
 Mehr dazu in [`vscode/README.md`](vscode/README.md).
 
 
-## Die Sprache (v0.21)
+## Die Sprache (v0.22)
 
 ### Typen
 
@@ -1205,8 +1205,9 @@ SCHREIB(sortiert(nur(zahlen, FUNKTIAUN(z ZOI) => z > 2), FUNKTIAUN(a ZOI, b ZOI)
 
 Dazu kommen vier Teile, die mit Windows reden; sie haben unten eigene Abschnitte:
 **`BRAUCH dateien OIDA`**, **`BRAUCH programm OIDA`**, **`BRAUCH fensta OIDA`** und **`BRAUCH ton OIDA`**.
-Und **`BRAUCH json OIDA`** für [JSON](#json), dessen Aufbau man nicht vorher kennt, und
-**`BRAUCH netz OIDA`** für das [Netzwerk](#netzwerk).
+Und **`BRAUCH json OIDA`** für [JSON](#json), dessen Aufbau man nicht vorher kennt,
+**`BRAUCH netz OIDA`** für das [Netzwerk](#netzwerk) und **`BRAUCH nebnbei OIDA`** für
+[Threads und Kanäle](#nebenbei-mehrere-dinge-gleichzeitig).
 
 Weil alles im ganzen Programm gilt, kann eine eigene Funktion nicht so heißen wie eine aus einem
 Teil der Bibliothek, den man dazuholt. Eine Variable schon (`SOG AU summe = 0 OIDA` geht).
@@ -1692,14 +1693,191 @@ Zwei Beispiele: [`beispiele/netz/wetta.oida`](beispiele/netz/wetta.oida) holt da
 Internet und liest es in eine `STRUKTUR`; [`beispiele/netz/plaudan.oida`](beispiele/netz/plaudan.oida)
 ist ein kleiner Server, mit dem man plaudern kann.
 
-Was noch fehlt: Ein Server bedient einen Gast nach dem anderen, nicht mehrere zugleich (das
-kommt mit den Threads). Einen Server für `https` gibt es nicht, auch kein UDP und keine
-WebSockets. Antworten werden ungepackt verlangt (kein gzip). Unter Linux geht eine Anfrage
+Der Server oben bedient einen Gast nach dem anderen. Wie er viele zugleich bedient, steht bei
+[Nebenbei](#ein-server-für-viele-zugleich).
+
+Was noch fehlt: Einen Server für `https` gibt es nicht, auch kein UDP und keine WebSockets. Antworten werden ungepackt verlangt (kein gzip). Unter Linux geht eine Anfrage
 immer direkt hinaus, ohne Proxy; Windows nimmt den Proxy, der dort eingestellt ist.
 
 Darunter: Unter Windows macht HTTP und HTTPS WinHTTP, das zu Windows gehört. Unter Linux spricht
 OIDA HTTP selbst und nimmt für HTTPS die OpenSSL-Bibliothek des Systems (`libssl`, auf fast
 jedem Linux schon da). Beides lädt ein Programm erst, wenn es das Netz wirklich braucht.
+
+### Nebenbei: mehrere Dinge gleichzeitig
+
+Mit `NEBNBEI` läuft eine Funktion in einem eigenen Thread, während das Programm weitermacht.
+`WOAT AUF` wartet, bis sie fertig ist, und gibt, was sie zurückgegeben hat.
+
+```
+BRAUCH nebnbei OIDA
+
+FUNKTIAUN zöh_prim(erste ZOI, letzte ZOI) GIBT ZRUCK ZOI
+    # ... zählt die Primzahlen von erste bis letzte
+PASST SCHO
+
+SOG AU a = NEBNBEI zöh_prim(1, 2_500_000) OIDA           # läuft ab jetzt in einem eigenen Thread
+SOG AU b = NEBNBEI zöh_prim(2_500_001, 5_000_000) OIDA   # ... und das gleichzeitig in einem zweiten
+SCHREIB(WOAT AUF a + WOAT AUF b) OIDA                     # 348513
+```
+
+**Die eine Regel: Zwei Threads teilen sich nie einen Wert.** Was eine Funktion bei `NEBNBEI`
+mitbekommt, ist ihre eigene Kopie, mit allem, was daran hängt. Ändert sie eine Liste, merkt der
+Aufrufer davon nichts, und umgekehrt:
+
+```
+FUNKTIAUN häng_au(liste LISTN VON ZOI) GIBT ZRUCK LISTN VON ZOI
+    HAU EINE(liste, 99) OIDA
+    GIB ZRUCK liste OIDA
+PASST SCHO
+
+SOG AU meine = [1, 2, 3] OIDA
+SOG AU aufgab = NEBNBEI häng_au(meine) OIDA
+SCHREIB(WOAT AUF aufgab, meine) OIDA                      # [1, 2, 3, 99] [1, 2, 3]
+```
+
+Darum kann in OIDA nicht passieren, was Threads in C#, Java oder C++ schwer macht: dass zwei
+gleichzeitig dasselbe ändern und es niemand merkt. Sperren (`lock`) gibt es nicht, weil es
+nichts zu sperren gibt, und ob das stimmt, prüft schon der Compiler:
+
+```
+SOG AU a = NEBNBEI streichl(bello) OIDA
+#          A Viech kaun ned zu an aundan Thread (bei NEBNBEI streichl). Zwa Threads teiln si nie
+#          an Wert, drum wird kopiert, und des geht mit ZOI, KOMMAZOI, JONA, KETTN, ollem, wos mit
+#          STRUKTUR oda AUFZÖHLUNG augsogt is, LISTN, VIELLEICHT und VAZEICHNIS. Fia a KLASSE
+#          schreibst da a STRUKTUR mit dem, wos drübn braucht wird.
+```
+
+- Hinter `NEBNBEI` steht der Aufruf einer Funktion mit Namen: einer eigenen, einer aus der
+  Bibliothek oder einer Vorlage. Eine Methode oder eine Funktion ohne Namen geht nicht (an
+  denen hängen Werte, die dann zwei Threads gehören würden).
+- Der Typ von `NEBNBEI f()` ist `Aufgab VON <was f zurückgibt>`. So schreibt man ihn, wenn man
+  Aufgaben sammelt: `SOG AU olle LISTN VON Aufgab VON ZOI = [] OIDA`.
+- **Zurückgeben** darf die Funktion alles, auch ein Objekt oder `... ODA FEHLA`: Wenn sie fertig
+  ist, gibt es ihren Thread nicht mehr, und das Ergebnis gehört dem, der wartet. `WOAT AUF`
+  steht, wo ein Wert stehen kann: `WOAT AUF a ODA HOID 0`, `PROBIER WOAT AUF a`.
+- Das Ergebnis einer Aufgabe gibt es **einmal**. Ein zweites `WOAT AUF` dieselbe Aufgabe ist
+  ein Fehler im Programm (`Auf de Aufgab hot scho wer gwoat.`).
+- `NEBNBEI f() OIDA` allein startet die Funktion, ohne dass jemand auf sie wartet. Hört das
+  Hauptprogramm auf, hören alle Threads auf, auch mitten in der Arbeit.
+- Geht in einem Thread etwas schief, wofür es eine Meldung gibt (durch 0 geteilt, eine Stelle,
+  die es nicht gibt), hört das ganze Programm damit auf, wie sonst auch.
+- Jeder Thread würfelt für sich (`ZUFOI`); mit `SOMEN` kommt trotzdem jedes Mal dasselbe heraus.
+- Was ein Thread mit `SCHREIB` ausgibt, kommt als ganze Zeilen an; zwei Threads zerreißen
+  einander keine Zeile.
+
+#### Kanäle: Threads reden miteinander
+
+In einen Kanal schickt der eine Werte hinein, der andere holt sie heraus, in derselben
+Reihenfolge. Auch das sind Kopien. Einen Kanal selbst kann man mitgeben und verschicken, so oft
+man will: Es bleibt derselbe.
+
+```
+STRUKTUR Bstöllung
+    tisch ZOI
+    speisn LISTN VON KETTN
+PASST SCHO
+
+# Ein Koch holt Bestellungen, bis keine mehr kommen.
+FUNKTIAUN koch(bstöllungen Kanal VON Bstöllung, fertige Kanal VON KETTN) GIBT ZRUCK ZOI
+    SOG AU kocht = 0 OIDA
+    SOLONG WOAHR TUA
+        SOG AU b = aussa_oda_nix(bstöllungen) OIDA        # wartet, bis eine kommt
+        WENN b == NIX DAUN
+            HAU OB OIDA                                   # der Kanal ist zu und leer: Feierabend
+        PASST SCHO
+        schick_eine(fertige, $"Tisch {b.tisch} is fertig") OIDA
+        kocht += 1 OIDA
+    PASST SCHO
+    GIB ZRUCK kocht OIDA
+PASST SCHO
+
+SOG AU bstöllungen = neicha_kanal VON Bstöllung() OIDA   # der Typ steht dabei
+SOG AU fertige = neicha_kanal VON KETTN() OIDA
+SOG AU köch = [NEBNBEI koch(bstöllungen, fertige), NEBNBEI koch(bstöllungen, fertige)] OIDA
+FIA tisch VON 1 BIS 6 TUA
+    schick_eine(bstöllungen, Bstöllung(tisch, ["Schnitzl"])) OIDA
+PASST SCHO
+moch_zua(bstöllungen) OIDA                               # mehr kommt nicht
+FIA JEDE k IN köch TUA
+    SCHREIB(WOAT AUF k, "kocht") OIDA
+PASST SCHO
+```
+
+| | |
+|---|---|
+| `neicha_kanal VON T()` | ein neuer, leerer Kanal für Werte vom Typ `T`: ein `Kanal VON T` |
+| `schick_eine(kanal, wert)` | legt eine Kopie des Werts hinein; wartet nie (in einen Kanal passt beliebig viel) |
+| `hol_aussa(kanal)` | der älteste Wert; wartet, bis einer da ist |
+| `aussa_oda_nix(kanal)` | dasselbe, aber `NIX`, wenn der Kanal zu und leer ist |
+| `aussa_bis(kanal, millisekundn)` | wartet höchstens so lange, sonst `NIX` |
+| `aussa_glei(kanal)` | der älteste Wert, wenn gerade einer da ist, sonst `NIX`; wartet nie |
+| `moch_zua(kanal)`, `is_zua(kanal)` | zumachen: Es kommt nichts Neues mehr hinein; was drin ist, kann man noch holen |
+| `wia_vü_drin(kanal)` | wie viele Werte noch nicht geholt sind |
+| `is_fertig(aufgab)` | ist die Funktion schon fertig? Wartet nicht |
+| `kerne()` | wie viele Dinge der Rechner wirklich gleichzeitig tun kann |
+| `schlof(millisekundn)` | der Thread tut so lange nichts |
+
+- **Wenn alle warten**, geht nie mehr etwas weiter: Jeder Thread wartet auf einen Kanal oder
+  auf eine Aufgabe, und keiner ist mehr da, der etwas schicken oder fertig werden könnte. In
+  anderen Sprachen hängt das Programm dann für immer. OIDA merkt es und hört auf:
+  `Heast! Jetzt woatn olle, und kana tuat mehr wos: ...`
+- In einen Kanal, der zu ist, kann man nichts mehr schicken; `hol_aussa` aus einem Kanal, der
+  zu und leer ist, ist ein Fehler im Programm. Wer damit rechnet, nimmt `aussa_oda_nix`.
+- Mit `BRAUCH nebnbei OIS n` heißt alles `n.name`: `n.Kanal VON ZOI`, `n.neicha_kanal VON ZOI()`.
+- Bei einer Funktion mit `VON` kann der Typ jetzt überall dabeistehen, wo er sich nicht ablesen
+  lässt: `neicha_kanal VON ZOI()`.
+
+#### Ein Server für viele zugleich
+
+Offene Dateien und Verbindungen gelten im ganzen Programm. Mitgegeben wird ihre Nummer (ein
+Objekt kann ja nicht zu einem anderen Thread), drüben macht man daraus wieder die Verbindung:
+
+```
+BRAUCH nebnbei OIDA
+BRAUCH netz OIDA
+
+FUNKTIAUN bedien(numma ZOI)
+    SOG AU gost = Vabindung(numma) OIDA
+    SOLONG WOAHR TUA
+        SOG AU zeile = gost.zeile() OIDA
+        WENN zeile == NIX DAUN
+            HAU OB OIDA
+        PASST SCHO
+        PROBIER gost.schick_zeile(SCHREI(zeile))
+        WONNS SCHIEFGEHT
+            HAU OB OIDA
+        PASST SCHO
+    PASST SCHO
+    gost.zua() OIDA
+PASST SCHO
+
+FUNKTIAUN server() GIBT ZRUCK NIX ODA FEHLA
+    SOG AU horcha = PROBIER horch(4711) OIDA
+    SOLONG WOAHR TUA
+        SOG AU gost = PROBIER horcha.nächsta() OIDA      # wartet, bis jemand kommt
+        NEBNBEI bedien(gost.numma) OIDA                   # ... und horcht gleich wieder
+    PASST SCHO
+PASST SCHO
+```
+
+Eine Verbindung oder Datei kann immer nur ein Thread auf einmal verwenden; ein zweiter bekommt
+in der Zeit einen `FEHLA` (`De Vabindung braucht grad a aundara Thread.`).
+
+**Wie viel es bringt:** Gemessen an einem Programm, das die Primzahlen bis 5 Millionen zählt (ein
+Rechner mit 6 Kernen, die sich als 12 melden; bester von drei Läufen): ohne Threads 1,83
+Sekunden, mit zwei Threads 1,07, mit vier 0,64, mit acht 0,50 und mit sechzehn 0,43. Mehr als
+viermal so schnell also; zwölfmal geht nicht, weil es nur sechs echte Kerne sind. Einen Thread
+starten und auf ihn warten kostet rund 0,15 Millisekunden: Für ganz kurze Arbeiten lohnt es sich
+also nicht. Über zwei Kanäle zwischen zwei Threads hin und zurück geht ein Wert gut 400 000 Mal
+in der Sekunde (unter Windows und unter Linux gemessen).
+
+Das Beispiel mit beidem, Rechnen auf allen Kernen und Köchen am Kanal:
+[`beispiele/nebnbei.oida`](beispiele/nebnbei.oida).
+
+Darunter: Ein Thread ist ein echter Thread des Betriebssystems. Kopiert wird nach der
+Beschreibung des Typs, die der Compiler mitgibt (dieselbe wie für JSON und für `==`). Weil kein
+Wert zwei Threads gehört, zählen Texte und Listen weiter ohne Sperre mit, und ein Programm ohne
+`NEBNBEI` ist so schnell wie vorher.
 
 ### Ein Fenster: zeichnen, Tasten und Maus
 
@@ -2204,6 +2382,8 @@ laufzeit/              Laufzeitbibliothek (Rust), wird in jedes Programm gelinkt
   src/programm.rs        Argumente, Umgebung, aufhören, andere Programme starten
   src/json.rs            JSON lesen und schreiben, nach der Beschreibung des Typs vom Compiler
   src/netz.rs            TCP; HTTP und HTTPS (Windows: WinHTTP, Linux: selbst, mit OpenSSL)
+  src/nebnbei.rs         Threads, Kanäle und die Kopie, die von einem Thread zum anderen geht
+  src/tabelle.rs         die offenen Dateien und Verbindungen, für alle Threads zusammen
   src/fenster.rs         Fenster, Zeichnen (Direct2D, DirectWrite), Tasten und Maus; nur unter Windows
   src/fenster/           Farbverläufe, Leuchten, Mischen; freie Formen, Ausschnitte; Bilder
   src/ton.rs             Töne errechnen, mischen und an Windows geben; nur unter Windows
@@ -2236,8 +2416,15 @@ es sie braucht; eines ohne Fenster merkt nichts davon.
   hingeschriebenen Liste mehrere gemeinsame Schnittstellen, gilt die erste.
 - Bei `JE NOCHDEM` gehen als Fälle Werte und Bereiche, aber noch keine Klassen (`BEI Gegner ...`)
   und keine eigenen Bedingungen. Die Werte einer Aufzählung tragen keine eigenen Daten.
-- Im Netz: Ein Server bedient einen Gast nach dem anderen (Threads fehlen noch); kein Server für
-  `https`, kein UDP, keine WebSockets, kein gzip; unter Linux kein Proxy.
+- Im Netz: kein Server für `https`, kein UDP, keine WebSockets, kein gzip; unter Linux kein Proxy.
+- Threads: Zu einem anderen Thread kann nur, was sich kopieren lässt, also keine Objekte und
+  keine Funktionen als Werte; große Listen kosten dabei ihre Kopie. Ein Kanal nimmt beliebig
+  viel auf (wer schneller schickt, als geholt wird, braucht immer mehr Speicher), und ein
+  Kanal bleibt bis zum Ende des Programms bestehen. Einen Thread von außen abbrechen geht nicht.
+  Den Typ einer Aufgabe ohne Rückgabe und einer mit `ODA FEHLA` kann man nicht hinschreiben
+  (für eine leere Liste davon); aus den Werten abgelesen wird er. Bei einer Meldung aus der
+  Bibliothek (`In an Kanal, der zua is ...`) steht keine Zeile dabei. Fenster und Ton gehören
+  dem Hauptprogramm.
 - Pakete: Es gibt kein Verzeichnis zum Suchen und keine Versionsnummern mit Regeln ("mindestens
   1.2"); ein Paket ist ein Repository auf GitHub, sein Stand eine Marke oder ein Commit. Brauchen
   zwei Pakete dasselbe dritte in verschiedenen Ständen, gilt, was zuerst geholt wurde.
@@ -2302,7 +2489,7 @@ und Programme im Netz braucht (die Schritte ab 10).
 | 15 | Weniger Abstürze: `liste[i] ODA HOID ersatz` und `a / b ODA HOID ersatz` brechen nie ab; `a / 0` meldet schon der Compiler; mit `--mit-zoinprüfung` melden sich ganze Zahlen, die überlaufen | fertig |
 | 16 | Ordnung für große Programme: [`GHEIM` und Namensräume](#ordnung-halten-gheim-und-namensräume) (`BRAUCH "datei" OIS name`), [Schnittstellen](#schnittstellen) (`SCHNITTSTÖ`, `KAUN`) | fertig |
 | 16b | [Pakete](#pakete-bibliotheken-von-anderen-holen): `oida hol wer/paket` holt eine Bibliothek von GitHub, `pakete.txt` merkt sich Stand und Prüfsumme | fertig |
-| 17 | Threads ohne geteilte Daten: Arbeit nebenher erledigen, Kanäle zum Austauschen, Server für viele zugleich | offen |
+| 17 | [Threads ohne geteilte Daten](#nebenbei-mehrere-dinge-gleichzeitig): `NEBNBEI f()` und `WOAT AUF`, Kanäle zum Austauschen, ein Server für viele zugleich; wenn alle warten, meldet sich das Programm, statt zu hängen | fertig |
 
 Für VS Code gibt es Einfärben, Fehler, Vorschläge und Starten schon (Ordner `vscode`). Offen sind
 dort Springen zur Definition, Umbenennen und ein Debugger.

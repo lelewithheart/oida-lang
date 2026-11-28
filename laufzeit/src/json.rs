@@ -76,11 +76,11 @@ pub struct JsonTyp {
 }
 
 impl JsonTyp {
-    unsafe fn felder(&self) -> &[JsonFeld] {
+    pub(crate) unsafe fn felder(&self) -> &[JsonFeld] {
         unsafe { std::slice::from_raw_parts(self.felder, self.anzahl as usize) }
     }
 
-    unsafe fn innen(&self) -> &JsonTyp {
+    pub(crate) unsafe fn innen(&self) -> &JsonTyp {
         unsafe { &*self.innen }
     }
 }

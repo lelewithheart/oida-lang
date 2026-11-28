@@ -11,12 +11,15 @@
 //!
 //! Beides wird erst geladen, wenn ein Programm es wirklich braucht.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream, ToSocketAddrs};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use super::dateien::{merke_fehler, merke_meldung};
+use super::tabelle::{Geliehen, Tabelle};
 use super::{ListenKopf, TextKopf, bytes, liste_aus_texten, liste_aus_zahlen, neuer_text};
 
 /// Eine offene Verbindung: zum Lesen mit Puffer (für Zeilen), zum Schreiben direkt.
@@ -33,19 +36,23 @@ struct Antwort {
     inhalt: Vec<u8>,
 }
 
+// Die Nummern, die ein Programm in der Hand hat, sind Stellen in diesen Tabellen.
+// Eine Stelle wird nie wiederverwendet: Wer nach dem Zumachen noch schreibt,
+// erwischt so nie die Verbindung von jemand anderem. Die Tabellen gelten für das
+// ganze Programm: Wer eine Verbindung annimmt, kann sie einem anderen Thread mitgeben.
+static VERBINDUNGEN: Tabelle<Verbindung> = Tabelle::neu(false);
+// Auf einen Horcher dürfen mehrere Threads gleichzeitig warten.
+static HORCHER: Tabelle<Arc<TcpListener>> = Tabelle::neu(false);
+/// Wie lange auf das Netz gewartet wird, in Sekunden (0: ohne Ende).
+static WARTEZEIT: AtomicU64 = AtomicU64::new(30);
+
 thread_local! {
-    // Die Nummern, die ein Programm in der Hand hat, sind Stellen in diesen Listen.
-    // Eine Stelle wird nie wiederverwendet: Wer nach dem Zumachen noch schreibt,
-    // erwischt so nie die Verbindung von jemand anderem.
-    static VERBINDUNGEN: RefCell<Vec<Option<Verbindung>>> = const { RefCell::new(Vec::new()) };
-    static HORCHER: RefCell<Vec<Option<TcpListener>>> = const { RefCell::new(Vec::new()) };
-    /// Wie lange auf das Netz gewartet wird, in Sekunden (0: ohne Ende).
-    static WARTEZEIT: Cell<u64> = const { Cell::new(30) };
+    /// Jeder Thread hat seine eigene letzte Antwort.
     static ANTWORT: RefCell<Antwort> = const { RefCell::new(Antwort { code: 0, koepfe: Vec::new(), inhalt: Vec::new() }) };
 }
 
 fn wartezeit() -> Option<Duration> {
-    match WARTEZEIT.get() {
+    match WARTEZEIT.load(Ordering::Relaxed) {
         0 => None,
         sekunden => Some(Duration::from_secs(sekunden)),
     }
@@ -73,7 +80,7 @@ fn merke_netz(fehler: &std::io::Error) {
 /// `netz_wortzeit(sekundn)`: wie lange auf eine Verbindung oder Antwort gewartet wird (0: ohne Ende).
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_netz_wartezeit(sekunden: i64) {
-    WARTEZEIT.set(sekunden.clamp(0, 86_400) as u64);
+    WARTEZEIT.store(sekunden.clamp(0, 86_400) as u64, Ordering::Relaxed);
 }
 
 // ---------------------------------------------------------------------- TCP
@@ -112,30 +119,27 @@ fn verbindung_ablegen(strom: TcpStream) -> i64 {
         merke_meldung("De Vabindung losst si ned aufmochn.");
         return -1;
     };
-    VERBINDUNGEN.with(|v| {
-        let mut v = v.borrow_mut();
-        v.push(Some(Verbindung { lesen: BufReader::new(lesen), schreiben: strom }));
-        v.len() as i64 - 1
-    })
+    VERBINDUNGEN.ablegen(Verbindung { lesen: BufReader::new(lesen), schreiben: strom })
 }
 
 /// Tut etwas mit einer offenen Verbindung. Gibt es sie nicht (mehr) oder geht es schief,
 /// kommt `None` zurück, und der Fehler ist gemerkt.
 fn mit_verbindung<R>(nummer: i64, tu: impl FnOnce(&mut Verbindung) -> std::io::Result<R>) -> Option<R> {
-    VERBINDUNGEN.with(|v| {
-        let mut v = v.borrow_mut();
-        let Some(verbindung) = usize::try_from(nummer).ok().and_then(|n| v.get_mut(n)).and_then(Option::as_mut) else {
-            merke_meldung("De Vabindung is scho zua.");
-            return None;
-        };
-        match tu(verbindung) {
-            Ok(wert) => Some(wert),
-            Err(fehler) => {
-                merke_netz(&fehler);
-                None
-            }
+    match VERBINDUNGEN.mit(nummer, tu) {
+        Geliehen::Fertig(Ok(wert)) => Some(wert),
+        Geliehen::Fertig(Err(fehler)) => {
+            merke_netz(&fehler);
+            None
         }
-    })
+        Geliehen::Zu => {
+            merke_meldung("De Vabindung is scho zua.");
+            None
+        }
+        Geliehen::Besetzt => {
+            merke_meldung("De Vabindung braucht grad a aundara Thread.");
+            None
+        }
+    }
 }
 
 /// `vabind(rechna, port)`: die Nummer der neuen Verbindung, oder -1.
@@ -243,13 +247,9 @@ pub extern "C" fn oida_netz_gegenueber(nummer: i64) -> *mut TextKopf {
 /// Macht die Verbindung zu. Die andere Seite sieht dann beim Lesen das Ende.
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_netz_zu(nummer: i64) {
-    VERBINDUNGEN.with(|v| {
-        if let Some(platz) = usize::try_from(nummer).ok().and_then(|n| v.borrow_mut().get_mut(n).map(Option::take))
-            && let Some(verbindung) = platz
-        {
-            let _ = verbindung.schreiben.shutdown(Shutdown::Both);
-        }
-    });
+    if let Some(verbindung) = VERBINDUNGEN.nimm(nummer) {
+        let _ = verbindung.schreiben.shutdown(Shutdown::Both);
+    }
 }
 
 /// `horch(port)`: wartet auf Verbindungen. Mit `alle` auch von anderen Rechnern,
@@ -261,11 +261,7 @@ pub extern "C" fn oida_netz_horchen(port: i64, alle: bool) -> i64 {
         return -1;
     };
     match TcpListener::bind((if alle { "0.0.0.0" } else { "127.0.0.1" }, port)) {
-        Ok(horcher) => HORCHER.with(|h| {
-            let mut h = h.borrow_mut();
-            h.push(Some(horcher));
-            h.len() as i64 - 1
-        }),
+        Ok(horcher) => HORCHER.ablegen(Arc::new(horcher)),
         Err(fehler) => {
             merke_netz(&fehler);
             -1
@@ -274,20 +270,21 @@ pub extern "C" fn oida_netz_horchen(port: i64, alle: bool) -> i64 {
 }
 
 fn mit_horcher<R>(nummer: i64, tu: impl FnOnce(&TcpListener) -> std::io::Result<R>) -> Option<R> {
-    HORCHER.with(|h| {
-        let h = h.borrow();
-        let Some(horcher) = usize::try_from(nummer).ok().and_then(|n| h.get(n)).and_then(Option::as_ref) else {
+    // Nur kurz ausleihen, um ihn in die Hand zu bekommen: Das Warten selbst hält niemanden auf.
+    let horcher = match HORCHER.mit(nummer, |h| h.clone()) {
+        Geliehen::Fertig(horcher) => horcher,
+        Geliehen::Zu | Geliehen::Besetzt => {
             merke_meldung("Der Horcha is scho zua.");
             return None;
-        };
-        match tu(horcher) {
-            Ok(wert) => Some(wert),
-            Err(fehler) => {
-                merke_netz(&fehler);
-                None
-            }
         }
-    })
+    };
+    match tu(&horcher) {
+        Ok(wert) => Some(wert),
+        Err(fehler) => {
+            merke_netz(&fehler);
+            None
+        }
+    }
 }
 
 /// Auf welchem Port gehorcht wird (wichtig nach `horch(0)`), oder -1.
@@ -313,11 +310,7 @@ pub extern "C" fn oida_netz_annehmen(nummer: i64) -> i64 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_netz_horcher_zu(nummer: i64) {
-    HORCHER.with(|h| {
-        if let Some(platz) = usize::try_from(nummer).ok().and_then(|n| h.borrow_mut().get_mut(n).map(Option::take)) {
-            drop(platz);
-        }
-    });
+    drop(HORCHER.nimm(nummer));
 }
 
 // --------------------------------------------------------------------- HTTP

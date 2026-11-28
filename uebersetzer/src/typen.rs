@@ -540,6 +540,9 @@ impl Pruefer<'_> {
         f.rueckgabe = f.rueckgabe_angabe.as_ref().map_or(Typ::Nix, |angabe| self.typ_aus(angabe));
         self.typ_umgebung = aussen;
         self.fassung = aussen_fassung;
+        if f.aussen.is_some() {
+            f.per_zeiger = Self::offene_stellen(&f);
+        }
         f.name = voller_name.clone();
         f.typ_parameter.clear();
         self.signaturen.insert(
@@ -548,6 +551,107 @@ impl Pruefer<'_> {
         );
         self.offene_funktionen.push((f, umgebung));
         voller_name
+    }
+
+    /// Bei einer Vorlage: für jeden Parameter und zuletzt für die Rückgabe, ob dort ein
+    /// offener Typ vorkommt.
+    fn offene_stellen(vorlage: &Funktion) -> Vec<bool> {
+        let offen = &vorlage.typ_parameter;
+        let mut stellen: Vec<bool> = vorlage.parameter.iter().map(|p| p.angabe.erwaehnt(offen)).collect();
+        stellen.push(vorlage.rueckgabe_angabe.as_ref().is_some_and(|angabe| angabe.erwaehnt(offen)));
+        stellen
+    }
+
+    /// Eine Vorlage `VON DRAUSSN` gibt Werte an die Laufzeit, die sie kopiert: in einen Kanal,
+    /// zu einem anderen Thread. Das geht nicht mit jedem Typ; gemeldet wird dort, wo die
+    /// Funktion aufgerufen wird.
+    fn draussen_pruefen(&mut self, vorlage: &str, fassung: &str, pos: Position) {
+        let Some(v) = self.funktions_vorlagen.get(vorlage) else { return };
+        if v.aussen.is_none() {
+            return;
+        }
+        let stellen = Self::offene_stellen(v);
+        let Some(signatur) = self.signaturen.get(fassung) else { return };
+        let typen: Vec<Typ> = signatur.parameter.iter().copied().chain([signatur.rueckgabe]).collect();
+        for (typ, offen) in typen.into_iter().zip(stellen) {
+            if offen && self.schick_verlangt(typ, pos, &format!("'{vorlage}'")) {
+                return;
+            }
+        }
+    }
+
+    /// Der erste Typ in `typ`, der nicht von einem Thread zum anderen kann, oder `None`, wenn
+    /// alles geht. Objekte und Funktionen gehen nicht: An ihnen hängen Werte, die dann zwei
+    /// Threads gehören würden.
+    fn schick_hindernis(&self, typ: Typ, gesehen: &mut Vec<Typ>) -> Option<Typ> {
+        if gesehen.contains(&typ) {
+            return None;
+        }
+        gesehen.push(typ);
+        match typ {
+            Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn | Typ::Fehler => None,
+            Typ::Struktur(_) => {
+                let felder: Vec<Typ> = self.typen.struktur(typ).map(|s| s.felder.iter().map(|(_, t)| *t).collect())?;
+                felder.into_iter().find_map(|feld| self.schick_hindernis(feld, gesehen))
+            }
+            Typ::Liste(_) => self.schick_hindernis(self.typen.element(typ)?, gesehen),
+            Typ::Vielleicht { .. } => self.schick_hindernis(self.typen.innen(typ)?, gesehen),
+            Typ::Verzeichnis(_) => self.schick_hindernis(self.typen.verzeichnis(typ)?.1, gesehen),
+            _ => Some(typ),
+        }
+    }
+
+    /// Meldet einen Fehler, wenn ein Wert dieses Typs nicht zu einem anderen Thread kann.
+    /// `wobei` sagt, wo das verlangt ist. Gibt zurück, ob es einen Fehler gab.
+    fn schick_verlangt(&mut self, typ: Typ, pos: Position, wobei: &str) -> bool {
+        let Some(hindernis) = self.schick_hindernis(typ, &mut Vec::new()) else { return false };
+        let wer = self.typ_name(typ).replacen("a ", "A ", 1);
+        let anfang = if hindernis == typ {
+            format!("{wer} kaun ned zu an aundan Thread (bei {wobei}).")
+        } else {
+            format!(
+                "{wer} kaun ned zu an aundan Thread (bei {wobei}), weu do {} drinsteckt.",
+                self.typ_name(hindernis)
+            )
+        };
+        let rat = if matches!(hindernis, Typ::Klasse(_)) {
+            format!(
+                " Fia a {} schreibst da a {} mit dem, wos drübn braucht wird.",
+                self.wort(Schluessel::Class),
+                self.wort(Schluessel::Struct)
+            )
+        } else {
+            String::new()
+        };
+        let meldung = format!(
+            "{anfang} Zwa Threads teiln si nie an Wert, drum wird kopiert, und des geht mit {}, {}, {}, {}, ollem, wos mit {} oda {} augsogt is, {}, {} und {}.{rat}",
+            self.wort(Schluessel::Int),
+            self.wort(Schluessel::Float),
+            self.wort(Schluessel::Boolean),
+            self.wort(Schluessel::Text),
+            self.wort(Schluessel::Struct),
+            self.wort(Schluessel::Enum),
+            self.wort(Schluessel::List),
+            self.wort(Schluessel::Maybe),
+            self.wort(Schluessel::Map)
+        );
+        self.melde(pos, meldung);
+        true
+    }
+
+    /// Die Vorlage `Aufgab VON T` aus der Bibliothek `nebnbei`: Das ist der Typ von
+    /// `NEBNBEI f()`. Mit `BRAUCH nebnbei OIS n` heißt sie `n.Aufgab`.
+    fn aufgab_vorlage(&self) -> Option<String> {
+        let passt = |name: &str| name == "Aufgab" || name.ends_with(".Aufgab");
+        let ist = |s: &StrukturDef| s.typ_parameter.len() == 1 && s.felder.len() == 1 && s.felder[0].name == "numma";
+        self.struktur_vorlagen.iter().find(|(name, s)| passt(name) && ist(s)).map(|(name, _)| name.clone())
+    }
+
+    /// Ist das der Typ einer Aufgabe? Dann kommt zurück, was ihre Funktion zurückgibt.
+    fn aufgab_ergebnis(&self, typ: Typ) -> Option<Typ> {
+        let Typ::Struktur(nummer) = typ else { return None };
+        let (vorlage, typen) = self.struktur_aus.get(&nummer)?;
+        (Some(vorlage) == self.aufgab_vorlage().as_ref()).then(|| typen[0])
     }
 
     /// Liest aus einem Typ, wie er hingeschrieben ist, und dem Typ eines
@@ -592,6 +696,12 @@ impl Pruefer<'_> {
                     && vorlage == name
                 {
                     for (a, t) in argumente.iter().zip(typen) {
+                        // `Aufgab VON T` bei einer Funktion ohne Rückgabe: Dort steht T für "nichts".
+                        if let (TypAngabe::Name { name, .. }, Typ::Nix) = (a, *t)
+                            && offen.contains(name)
+                        {
+                            gefunden.entry(name.clone()).or_insert(Typ::Nix);
+                        }
                         self.gleiche_ab(a, *t, offen, gefunden);
                     }
                 }
@@ -622,7 +732,8 @@ impl Pruefer<'_> {
         }
         if let Some(fehlt) = offen.iter().find(|o| !gefunden.contains_key(*o)) {
             let meldung = format!(
-                "Bei '{name}' waaß i ned, wos '{fehlt}' sei soll: Aus de Werte in da Klammer geht's ned hervua."
+                "Bei '{name}' waaß i ned, wos '{fehlt}' sei soll: Aus de Werte in da Klammer geht's ned hervua. Schreib's dazua: {name} {} ...(...)",
+                self.wort(Schluessel::From)
             );
             self.melde(pos, meldung);
             return None;
@@ -895,6 +1006,27 @@ impl Pruefer<'_> {
         else {
             unreachable!()
         };
+        // `neicha_kanal VON ZOI()`: eine Funktion mit VON, bei der die Typen dabeistehen
+        // (weil sie sich aus den Werten in der Klammer nicht ablesen lassen).
+        if let TypAngabe::Generisch { name, argumente: angaben, .. } = &angabe
+            && self.funktions_vorlagen.contains_key(name)
+        {
+            let gewaehlt: Vec<Typ> = angaben.iter().map(|a| self.typ_aus(a)).collect();
+            let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
+            let offen = self.funktions_vorlagen[name].typ_parameter.clone();
+            if gewaehlt.contains(&Typ::Fehler)
+                || typen.contains(&Typ::Fehler)
+                || !self.typen_anzahl_passt(name, &offen, gewaehlt.len(), pos)
+            {
+                return Typ::Fehler;
+            }
+            let fassung = self.funktions_fassung(name, gewaehlt);
+            self.draussen_pruefen(name, &fassung, pos);
+            let typ = self.aufruf(&fassung, &mut argumente, &typen, pos);
+            ausdruck.art = AusdruckArt::Aufruf { name: fassung, argumente };
+            ausdruck.typ = typ;
+            return typ;
+        }
         let typ = self.typ_aus(&angabe);
         let typen: Vec<Typ> = argumente.iter_mut().map(|a| self.ausdruck(a)).collect();
         let name = self.typ_wort(typ);
@@ -1986,8 +2118,12 @@ impl Pruefer<'_> {
             let einfach = |t: Typ| matches!(t, Typ::Zoi | Typ::Kommazoi | Typ::Jona | Typ::Kettn);
             // Listen von Zahlen oder Texten: Ihre Elemente liegen so im Speicher, wie die Laufzeit sie erwartet.
             let liste = |t: Typ| matches!(self.typen.element(t), Some(Typ::Zoi | Typ::Kommazoi | Typ::Kettn));
-            let parameter_gut = f.parameter.iter().all(|p| einfach(p.typ) || liste(p.typ));
+            // In der Fassung einer Vorlage reist, was dort ein offener Typ war, als Zeiger mit der
+            // Beschreibung seines Typs: Ob das geht, ist beim Aufruf schon geprüft (`draussen_pruefen`).
+            let per_zeiger = |stelle: usize| f.per_zeiger.get(stelle).copied().unwrap_or(false);
+            let parameter_gut = f.parameter.iter().enumerate().all(|(i, p)| per_zeiger(i) || einfach(p.typ) || liste(p.typ));
             let rueckgabe_gut = f.rueckgabe == Typ::Nix
+                || per_zeiger(f.parameter.len())
                 || einfach(f.rueckgabe)
                 || liste(f.rueckgabe)
                 || self.typen.innen(f.rueckgabe).is_some_and(|innen| innen == Typ::Kettn || liste(innen));
@@ -2398,6 +2534,8 @@ impl Pruefer<'_> {
                         | AusdruckArt::ElternAufruf { .. }
                         | AusdruckArt::Probier { .. }
                         | AusdruckArt::WertAufruf { .. }
+                        | AusdruckArt::Nebenbei { .. }
+                        | AusdruckArt::WartAuf { .. }
                 );
                 if matches!(typ, Typ::Ergebnis(_)) {
                     // Einen Fehler darf man nicht einfach übersehen.
@@ -2768,6 +2906,7 @@ impl Pruefer<'_> {
                             Some(gewaehlt) => {
                                 let fassung = self.funktions_fassung(&vorlagen_name, gewaehlt);
                                 *name = fassung.clone();
+                                self.draussen_pruefen(&vorlagen_name, &fassung, pos);
                                 self.aufruf(&fassung, argumente, &typen, pos)
                             }
                             None => Typ::Fehler,
@@ -3058,6 +3197,64 @@ impl Pruefer<'_> {
                 self.wert_aufruf(funktion, f_typ, argumente, &typen, pos)
             }
             AusdruckArt::Erzeug { .. } => unreachable!("oben erledigt"),
+            AusdruckArt::Nebenbei { aufruf } => {
+                let wort = self.wort(Schluessel::Spawn).to_string();
+                let typ = self.ausdruck(aufruf);
+                // Nach der Prüfung ist es nur dann noch ein Aufruf, wenn eine Funktion mit Namen gemeint war.
+                let AusdruckArt::Aufruf { name, argumente } = &aufruf.art else {
+                    if typ != Typ::Fehler {
+                        let meldung = format!(
+                            "Hinta {wort} ghört da Aufruf von ana {f} mit Nom, zum Beispü: {wort} rechne(1, 2). A Methode oda a {f} ohne Nom geht ned: An dena hängan Werte, de daun zwa Threads ghörn tatn.",
+                            f = self.wort(Schluessel::Function)
+                        );
+                        self.melde(pos, meldung);
+                    }
+                    return Typ::Fehler;
+                };
+                let name = name.clone();
+                let stellen: Vec<(Typ, Position)> = argumente.iter().map(|a| (a.typ, a.pos)).collect();
+                if typ == Typ::Fehler {
+                    return Typ::Fehler;
+                }
+                // Was die Funktion mitbekommt, wird für den neuen Thread kopiert.
+                let parameter = self.signaturen.get(&name).map(|s| s.parameter.clone()).unwrap_or_default();
+                let mut gut = true;
+                for (ziel, (_, wo)) in parameter.into_iter().zip(stellen) {
+                    gut &= !self.schick_verlangt(ziel, wo, &format!("{wort} {}", crate::treiber::ohne_marken(&name)));
+                }
+                if !gut {
+                    return Typ::Fehler;
+                }
+                match self.aufgab_vorlage() {
+                    Some(vorlage) => self.struktur_fassung(&vorlage, vec![typ], pos),
+                    None => {
+                        let meldung = format!(
+                            "Fia {wort} brauchst de Bibliothek dazua. Schreib gaunz obn in de Datei: {} nebnbei {}",
+                            self.wort(Schluessel::Import),
+                            self.wort(Schluessel::Oida)
+                        );
+                        self.melde(pos, meldung);
+                        Typ::Fehler
+                    }
+                }
+            }
+            AusdruckArt::WartAuf { aufgabe } => {
+                let typ = self.ausdruck(aufgabe);
+                match self.aufgab_ergebnis(typ) {
+                    Some(ergebnis) => ergebnis,
+                    None if typ == Typ::Fehler => Typ::Fehler,
+                    None => {
+                        let meldung = format!(
+                            "{} wü a Aufgab hom (des, wos {} zruckgibt), do steht oba {}.",
+                            self.wort(Schluessel::Await),
+                            self.wort(Schluessel::Spawn),
+                            self.typ_name(typ)
+                        );
+                        self.melde(aufgabe.pos, meldung);
+                        Typ::Fehler
+                    }
+                }
+            }
             AusdruckArt::OdaHoid { links, rechts } => {
                 let mut l = self.ausdruck(links);
                 if matches!(links.art, AusdruckArt::Sicher { .. }) {
@@ -4356,6 +4553,119 @@ mod tests {
                 f.meldung
             );
         }
+    }
+
+    /// Was die Bibliothek `nebnbei` für die Tests hier hergibt.
+    const NEBNBEI: &str = "STRUKTUR Aufgab VON T\n numma ZOI\nPASST SCHO\n\
+        STRUKTUR Kanal VON T\n numma ZOI\nPASST SCHO\n\
+        FUNKTIAUN neicha_kanal VON T() GIBT ZRUCK Kanal VON T VON DRAUSSN \"oida_kanal_neu\" OIDA\n\
+        FUNKTIAUN schick_eine VON T(kanal Kanal VON T, wert T) VON DRAUSSN \"oida_kanal_schicken\" OIDA\n\
+        FUNKTIAUN hol_aussa VON T(kanal Kanal VON T) GIBT ZRUCK T VON DRAUSSN \"oida_kanal_holen\" OIDA\n\
+        FUNKTIAUN aussa_bis VON T(kanal Kanal VON T, ms ZOI) GIBT ZRUCK VIELLEICHT T VON DRAUSSN \"oida_kanal_holen_bis\" OIDA\n\
+        FUNKTIAUN is_fertig VON T(aufgab Aufgab VON T) GIBT ZRUCK JONA VON DRAUSSN \"oida_nebnbei_fertig\" OIDA\n\
+        KLASSE Viech\n nam KETTN\n FUNKTIAUN sog() GIBT ZRUCK KETTN\n  GIB ZRUCK SÖWA.nam OIDA\n PASST SCHO\nPASST SCHO\n\
+        STRUKTUR Stoi\n viecha LISTN VON Viech\nPASST SCHO\n\
+        FUNKTIAUN rechne(a ZOI, t KETTN) GIBT ZRUCK KETTN\n GIB ZRUCK t OIDA\nPASST SCHO\n\
+        FUNKTIAUN stü()\nPASST SCHO\n\
+        FUNKTIAUN kaun_schiefgeh() GIBT ZRUCK ZOI ODA FEHLA\n GIB ZRUCK 1 OIDA\nPASST SCHO\n\
+        FUNKTIAUN mach_viech() GIBT ZRUCK Viech\n GIB ZRUCK Viech(\"x\") OIDA\nPASST SCHO\n\
+        FUNKTIAUN streichl(v Viech)\nPASST SCHO\n\
+        FUNKTIAUN zöh(s Stoi, n ZOI)\nPASST SCHO\n\
+        FUNKTIAUN ruaf(wos FUNKTIAUN() GIBT ZRUCK ZOI)\nPASST SCHO\n";
+
+    #[test]
+    fn nebenbei_gibt_eine_aufgabe_und_warten_ihr_ergebnis() {
+        let programm = ok(&format!(
+            "{NEBNBEI}SOG AU a = NEBNBEI rechne(1, \"x\") OIDA\nSOG AU t KETTN = WOAT AUF a OIDA\n\
+             SOG AU olle LISTN VON Aufgab VON KETTN = [a, NEBNBEI rechne(2, \"y\")] OIDA\n\
+             SOG AU s = NEBNBEI stü() OIDA\nWOAT AUF s OIDA\nNEBNBEI stü() OIDA\nSCHREIB(is_fertig(s), is_fertig(a)) OIDA\n\
+             SOG AU z ZOI = WOAT AUF NEBNBEI kaun_schiefgeh() ODA HOID 0 OIDA\n\
+             SOG AU v Viech = WOAT AUF NEBNBEI mach_viech() OIDA\n\
+             SOG AU zwa = LÄNGN(WOAT AUF a + WOAT AUF olle[1]) OIDA"
+        ));
+        // Der Typ von NEBNBEI f() ist die Vorlage aus der Bibliothek, mit dem, was f zurückgibt.
+        let namen: Vec<&str> = programm.typen.strukturen.iter().map(|s| s.name.as_str()).collect();
+        for name in ["Aufgab VON KETTN", "Aufgab VON nix", "Aufgab VON ZOI ODA FEHLA", "Aufgab VON Viech"] {
+            assert!(namen.contains(&name), "{name} fehlt in {namen:?}");
+        }
+
+        let f = fehler("FUNKTIAUN ans() GIBT ZRUCK ZOI\n GIB ZRUCK 1 OIDA\nPASST SCHO\nSOG AU a = NEBNBEI ans() OIDA");
+        assert_eq!(f.meldung, "Fia NEBNBEI brauchst de Bibliothek dazua. Schreib gaunz obn in de Datei: BRAUCH nebnbei OIDA");
+        // Einen Fehler darf man auch hier nicht einfach wegwerfen.
+        let f = fehler(&format!("{NEBNBEI}SOG AU a = NEBNBEI kaun_schiefgeh() OIDA\nWOAT AUF a OIDA"));
+        assert!(f.meldung.starts_with("Do kaun wos schiefgehn"), "{}", f.meldung);
+        for falsch in ["WOAT AUF 5", "WOAT AUF rechne(1, \"x\")", "WOAT AUF [1]"] {
+            let f = fehler(&format!("{NEBNBEI}SOG AU x = {falsch} OIDA"));
+            assert!(f.meldung.starts_with("WOAT AUF wü a Aufgab hom (des, wos NEBNBEI zruckgibt), do steht oba"), "{}", f.meldung);
+        }
+        let f = fehler(&format!("{NEBNBEI}SOG AU x ZOI = WOAT AUF NEBNBEI rechne(1, \"x\") OIDA"));
+        assert_eq!(f.meldung, "'x' soll a ZOI sei, oba des do is a KETTN.");
+    }
+
+    #[test]
+    fn nebenbei_nimmt_nur_funktionen_mit_namen_und_werte_die_sich_kopieren_lassen() {
+        for falsch in [
+            "SOG AU v = Viech(\"x\") OIDA\nSOG AU a = NEBNBEI v.sog() OIDA",
+            "SOG AU f = FUNKTIAUN(x ZOI) => x OIDA\nSOG AU a = NEBNBEI f(1) OIDA",
+            "SOG AU a = NEBNBEI 5 OIDA",
+            "SOG AU a = NEBNBEI Viech(\"x\") OIDA",
+            "SOG AU a = NEBNBEI LÄNGN(\"x\") OIDA",
+        ] {
+            let f = fehler(&format!("{NEBNBEI}{falsch}"));
+            assert!(f.meldung.starts_with("Hinta NEBNBEI ghört da Aufruf von ana FUNKTIAUN mit Nom"), "{falsch}: {}", f.meldung);
+        }
+        let f = fehler(&format!("{NEBNBEI}SOG AU a = NEBNBEI streichl(Viech(\"x\")) OIDA"));
+        assert!(f.meldung.starts_with("A Viech kaun ned zu an aundan Thread (bei NEBNBEI streichl). Zwa Threads teiln si nie an Wert"), "{}", f.meldung);
+        assert!(f.meldung.ends_with("Fia a KLASSE schreibst da a STRUKTUR mit dem, wos drübn braucht wird."), "{}", f.meldung);
+        let f = fehler(&format!("{NEBNBEI}SOG AU a = NEBNBEI zöh(Stoi([]), 2) OIDA"));
+        assert!(f.meldung.starts_with("A Stoi kaun ned zu an aundan Thread (bei NEBNBEI zöh), weu do a Viech drinsteckt."), "{}", f.meldung);
+        let f = fehler(&format!("{NEBNBEI}FUNKTIAUN ans() GIBT ZRUCK ZOI\n GIB ZRUCK 1 OIDA\nPASST SCHO\nSOG AU a = NEBNBEI ruaf(ans) OIDA"));
+        assert!(f.meldung.starts_with("A FUNKTIAUN() GIBT ZRUCK ZOI kaun ned zu an aundan Thread (bei NEBNBEI ruaf)."), "{}", f.meldung);
+        // Die Werte werden geprüft wie bei jedem Aufruf.
+        let f = fehler(&format!("{NEBNBEI}SOG AU a = NEBNBEI rechne(\"x\", \"y\") OIDA"));
+        assert_eq!(f.meldung, "'rechne' wü ois 1. Wert a ZOI, du gibst eam a KETTN.");
+        let f = fehler(&format!("{NEBNBEI}SOG AU a = NEBNBEI gibts_ned() OIDA"));
+        assert_eq!(f.meldung, "De FUNKTIAUN 'gibts_ned' kenn i ned.");
+    }
+
+    #[test]
+    fn vorlagen_von_draussen_nehmen_was_sich_kopieren_laesst() {
+        let programm = ok(&format!(
+            "{NEBNBEI}STRUKTUR P\n x ZOI\n l LISTN VON KETTN\nPASST SCHO\n\
+             SOG AU k = neicha_kanal VON P() OIDA\nschick_eine(k, P(1, [])) OIDA\nSOG AU p P = hol_aussa(k) OIDA\n\
+             SOG AU v VIELLEICHT P = aussa_bis(k, 5) OIDA\n\
+             SOG AU kk = neicha_kanal VON Kanal VON P() OIDA\nschick_eine(kk, k) OIDA\n\
+             SOG AU kv = neicha_kanal VON VAZEICHNIS VON ZOI UND P() OIDA"
+        ));
+        // In der Fassung steht, welche Werte als Zeiger mit Beschreibung reisen: was in der Vorlage ein offener Typ war.
+        let fassung = |name: &str| programm.funktionen.iter().find(|f| f.name == name).unwrap_or_else(|| panic!("{name} fehlt"));
+        assert_eq!(fassung("schick_eine VON P").per_zeiger, [true, true, false]);
+        assert_eq!(fassung("aussa_bis VON P").per_zeiger, [true, false, true]);
+        assert_eq!(fassung("neicha_kanal VON P").per_zeiger, [true]);
+
+        let f = fehler(&format!("{NEBNBEI}SOG AU k = neicha_kanal VON Viech() OIDA\nschick_eine(k, Viech(\"x\")) OIDA"));
+        assert!(f.meldung.starts_with("A Viech kaun ned zu an aundan Thread (bei 'schick_eine')."), "{}", f.meldung);
+        assert_eq!(f.pos.zeile as usize, NEBNBEI.lines().count() + 2);
+        let f = fehler(&format!("{NEBNBEI}SOG AU k = neicha_kanal VON Stoi() OIDA\nSOG AU s = hol_aussa(k) OIDA"));
+        assert!(f.meldung.starts_with("A Stoi kaun ned zu an aundan Thread (bei 'hol_aussa'), weu do a Viech drinsteckt."), "{}", f.meldung);
+        let f = fehler(&format!("{NEBNBEI}SOG AU k = neicha_kanal VON ZOI() OIDA\nschick_eine(k, \"x\") OIDA"));
+        assert_eq!(f.meldung, "'schick_eine VON ZOI' wü ois 2. Wert a ZOI, du gibst eam a KETTN.");
+        // Bei einer Funktion mit VON kann der Typ dabeistehen; lässt er sich nicht ablesen, muss er das.
+        let f = fehler(&format!("{NEBNBEI}SOG AU k = neicha_kanal() OIDA"));
+        assert_eq!(
+            f.meldung,
+            "Bei 'neicha_kanal' waaß i ned, wos 'T' sei soll: Aus de Werte in da Klammer geht's ned hervua. Schreib's dazua: neicha_kanal VON ...(...)"
+        );
+        let f = fehler(&format!("{NEBNBEI}SOG AU k = neicha_kanal VON ZOI UND KETTN() OIDA"));
+        assert_eq!(f.meldung, "'neicha_kanal' braucht an Typ (T), du gibst 2.");
+        let f = fehler(&format!("{NEBNBEI}SOG AU k = neicha_kanal VON ZOI(5) OIDA"));
+        assert_eq!(f.meldung, "'neicha_kanal VON ZOI' wü kan Wert hom, du gibst eam an Wert.");
+        // Auch bei einer gewöhnlichen Vorlage geht der Typ dazu.
+        ok("FUNKTIAUN laar VON T() GIBT ZRUCK LISTN VON T\n SOG AU l LISTN VON T = [] OIDA\n GIB ZRUCK l OIDA\nPASST SCHO\n\
+            SOG AU l LISTN VON KETTN = laar VON KETTN() OIDA");
+        // Ohne offenen Typ bleibt es bei dem, was die Laufzeit direkt versteht.
+        let f = fehler("STRUKTUR P\n x ZOI\nPASST SCHO\nFUNKTIAUN a VON T(p P, w T) VON DRAUSSN \"oida_a\" OIDA\na(P(1), 2) OIDA");
+        assert!(f.meldung.starts_with("Noch draußn gehn nur"), "{}", f.meldung);
     }
 
     #[test]

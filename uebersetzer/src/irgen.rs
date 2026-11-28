@@ -106,6 +106,8 @@ declare ptr @oida_text_als_kommazoi(ptr, ptr)
 declare ptr @oida_json_lesen(ptr, ptr, ptr)
 declare ptr @oida_json_schreiben(ptr, ptr, i1 zeroext, i64)
 declare zeroext i1 @oida_gleich(ptr, ptr, ptr, i64)
+declare i64 @oida_nebnbei_start(ptr, ptr, ptr, i64)
+declare void @oida_nebnbei_warten(i64, ptr, i64, i64)
 declare void @oida_fehler_durch_null(i64) noreturn
 declare void @oida_fehler_ueberlauf(i64) cold noreturn
 declare void @oida_fehler_schritt_null(i64) noreturn
@@ -457,6 +459,12 @@ fn lass_befehl(typen: &Typen, typ: Typ, wert: &str) -> Option<String> {
     }
 }
 
+/// Die Werte, die eine Funktion bei `NEBNBEI` mitbekommt, hintereinander wie in einer Struktur.
+fn mitgabe_verbund(typen: &[Typ]) -> String {
+    let teile: Vec<String> = typen.iter().map(|t| ir_typ(*t)).collect();
+    format!("{{ {} }}", teile.join(", "))
+}
+
 /// Der Name einer OIDA-Funktion im IR. Der Vorsatz verhindert, dass sich
 /// eine OIDA-Funktion mit einer aus C (`main`, `printf` ...) verwechselt.
 /// Wie eine Struktur oder Klasse heißt, wenn das Programm sie ausgibt: so, wie sie in ihrer
@@ -513,6 +521,8 @@ struct Modul<'t> {
     klassen: &'t [KlassenDef],
     /// Die Typen, für die es schon eine Beschreibung für JSON gibt; die Stelle ist ihre Nummer.
     json_typen: Vec<Typ>,
+    /// Was Funktionen bei `NEBNBEI` mitbekommen, soweit es dafür schon eine Beschreibung gibt.
+    mitgaben: Vec<Vec<Typ>>,
 }
 
 /// Ist das die Struktur `Json` aus der Bibliothek (JSON ohne festen Aufbau)?
@@ -625,6 +635,69 @@ impl Modul<'_> {
             groesse(typ)
         );
         format!("@oida.json.t{n}")
+    }
+
+    /// Die Beschreibung der Werte, die eine Funktion bei `NEBNBEI` mitbekommt: wie eine
+    /// Struktur, in der sie hintereinander liegen. Damit kopiert die Laufzeit sie für den neuen Thread.
+    fn mitgabe_typ(&mut self, typen: &[Typ]) -> String {
+        if let Some(n) = self.mitgaben.iter().position(|t| t == typen) {
+            return format!("@oida.mitgabe.t{n}");
+        }
+        let n = self.mitgaben.len();
+        self.mitgaben.push(typen.to_vec());
+        let verbund = mitgabe_verbund(typen);
+        let mut eintraege = Vec::new();
+        for (i, typ) in typen.iter().enumerate() {
+            let feld = self.json_typ(*typ);
+            eintraege.push(format!(
+                "{{ ptr, i64, ptr }} {{ ptr null, i64 ptrtoint (ptr getelementptr ({verbund}, ptr null, i32 0, i32 {i}) to i64), ptr {feld} }}"
+            ));
+        }
+        let felder = if eintraege.is_empty() {
+            "null".to_string()
+        } else {
+            let _ = writeln!(
+                self.zusatz,
+                "@oida.mitgabe.f{n} = private unnamed_addr constant [{} x {{ ptr, i64, ptr }}] [{}]",
+                eintraege.len(),
+                eintraege.join(", ")
+            );
+            format!("@oida.mitgabe.f{n}")
+        };
+        let _ = writeln!(
+            self.zusatz,
+            "@oida.mitgabe.t{n} = private unnamed_addr constant {{ i64, i64, i64, ptr, ptr }} {{ i64 4, i64 ptrtoint (ptr getelementptr ({verbund}, ptr null, i32 1) to i64), i64 {}, ptr null, ptr {felder} }}\n",
+            eintraege.len()
+        );
+        format!("@oida.mitgabe.t{n}")
+    }
+
+    /// Das Stück Code, mit dem ein neuer Thread die Funktion `name` aufruft: Es nimmt die Werte
+    /// aus der Mitgabe (sie gehören ab da der Funktion) und legt ihr Ergebnis ab. Die Laufzeit
+    /// ruft es auf (`oida_nebnbei_start`). Gibt seinen Namen im IR zurück.
+    fn nebenbei_code(&mut self, name: &str, typen: &[Typ], rueckgabe: Typ) -> String {
+        let code = ir_name("nb", &[name]);
+        if !self.werte_gebaut.insert(format!("nebenbei:{name}")) {
+            return code;
+        }
+        let verbund = mitgabe_verbund(typen);
+        let mut rumpf = String::new();
+        let mut werte = Vec::new();
+        for (i, typ) in typen.iter().enumerate() {
+            let t = ir_typ(*typ);
+            let _ = writeln!(rumpf, "  %p{i} = getelementptr inbounds {verbund}, ptr %mitgabe, i32 0, i32 {i}");
+            let _ = writeln!(rumpf, "  %a{i} = load {t}, ptr %p{i}");
+            werte.push(format!("{t} %a{i}"));
+        }
+        let aufruf = format!("call {} {}({})", ir_typ(rueckgabe), funktions_name(name), werte.join(", "));
+        if rueckgabe == Typ::Nix {
+            let _ = writeln!(rumpf, "  {aufruf}");
+        } else {
+            let _ = writeln!(rumpf, "  %r = {aufruf}");
+            let _ = writeln!(rumpf, "  store {} %r, ptr %ergebnis", ir_typ(rueckgabe));
+        }
+        let _ = writeln!(self.zusatz, "define internal void {code}(ptr %mitgabe, ptr %ergebnis) {{\nstart:\n{rumpf}  ret void\n}}\n");
+        code
     }
 
     /// Die Befehle, die einen Wert ausgeben. `innen` heißt: Der Wert steht in
@@ -1982,6 +2055,57 @@ impl<'m, 't> FunktionsBau<'m, 't> {
                 self.zeile(&format!("{ergebnis} = phi ptr [ {o}, %{m_jo} ], [ null, %{m_na} ]"));
                 ergebnis
             }
+            AusdruckArt::Nebenbei { aufruf } => {
+                let AusdruckArt::Aufruf { name, argumente } = &aufruf.art else {
+                    unreachable!("die Typprüfung lässt hier nur den Aufruf einer Funktion mit Namen zu")
+                };
+                // Die Werte kommen hintereinander in einen Platz; die Laufzeit macht davon eine
+                // Kopie für den neuen Thread. Uns gehören sie weiter (oder sie sind nur geliehen).
+                let typen: Vec<Typ> = argumente.iter().map(|a| a.typ).collect();
+                let verbund = mitgabe_verbund(&typen);
+                let platz = self.versteckter_platz(&verbund);
+                let mut werte = Vec::new();
+                for (i, argument) in argumente.iter().enumerate() {
+                    let (w, eigen) = self.geliehen(argument);
+                    let p = self.temp();
+                    self.zeile(&format!("{p} = getelementptr inbounds {verbund}, ptr {platz}, i32 0, i32 {i}"));
+                    self.zeile(&format!("store {} {w}, ptr {p}", ir_typ(argument.typ)));
+                    werte.push((w, argument.typ, eigen));
+                }
+                let beschreibung = self.modul.mitgabe_typ(&typen);
+                let code = self.modul.nebenbei_code(name, &typen, aufruf.typ);
+                let bytes = if aufruf.typ == Typ::Nix { "0".to_string() } else { groesse(aufruf.typ) };
+                let (nummer, aufgabe) = (self.temp(), self.temp());
+                self.zeile(&format!(
+                    "{nummer} = call i64 @oida_nebnbei_start(ptr {code}, ptr {platz}, ptr {beschreibung}, i64 {bytes})"
+                ));
+                for (w, typ, eigen) in werte {
+                    self.lass_wenn_eigen(&w, typ, eigen);
+                }
+                // Die Aufgabe ist eine Struktur mit einem Feld: ihrer Nummer.
+                self.zeile(&format!("{aufgabe} = insertvalue {} poison, i64 {nummer}, 0", ir_typ(ausdruck.typ)));
+                aufgabe
+            }
+            AusdruckArt::WartAuf { aufgabe } => {
+                let a = self.ausdruck(aufgabe);
+                let nummer = self.temp();
+                self.zeile(&format!("{nummer} = extractvalue {} {a}, 0", ir_typ(aufgabe.typ)));
+                let zeile = ausdruck.pos.zeile;
+                if ausdruck.typ == Typ::Nix {
+                    self.zeile(&format!("call void @oida_nebnbei_warten(i64 {nummer}, ptr null, i64 0, i64 {zeile})"));
+                    return String::new();
+                }
+                // Die Laufzeit stellt das Ergebnis in den Platz; ab da gehört es uns.
+                let zt = ir_typ(ausdruck.typ);
+                let platz = self.versteckter_platz(&zt);
+                self.zeile(&format!(
+                    "call void @oida_nebnbei_warten(i64 {nummer}, ptr {platz}, i64 {}, i64 {zeile})",
+                    groesse(ausdruck.typ)
+                ));
+                let w = self.temp();
+                self.zeile(&format!("{w} = load {zt}, ptr {platz}"));
+                w
+            }
             AusdruckArt::AusJson { text, .. } => {
                 // Die Laufzeit baut den Wert in den Platz und gibt den Fehler zurück (null: keiner).
                 let ziel = self.modul.typen.wert_von(ausdruck.typ).expect("die Typprüfung macht daraus ... ODA FEHLA");
@@ -2737,21 +2861,51 @@ fn aussen_typ(typ: Typ, rueckgabe: bool) -> String {
 fn baue_aussen(modul: &mut Modul, f: &Funktion, symbol: &str) -> String {
     let typen = modul.typen;
     let rt = ir_typ(f.rueckgabe);
+    // In der Fassung einer Vorlage: Was dort ein offener Typ war, kennt die Laufzeit nicht.
+    // So ein Wert reist als Zeiger auf den Wert und Zeiger auf die Beschreibung seines Typs;
+    // eine solche Rückgabe schreibt die Laufzeit in einen Platz, der ganz hinten mitkommt.
+    let per_zeiger = |stelle: usize| f.per_zeiger.get(stelle).copied().unwrap_or(false);
+    let rueckgabe_per_zeiger = per_zeiger(f.parameter.len());
+    let aussen_rueckgabe = if rueckgabe_per_zeiger { "void".to_string() } else { aussen_typ(f.rueckgabe, true) };
     if modul.werte_gebaut.insert(format!("draussen:{symbol}")) {
-        let parameter: Vec<String> = f.parameter.iter().map(|p| aussen_typ(p.typ, false)).collect();
-        let _ = writeln!(
-            modul.zusatz,
-            "declare {} @{symbol}({})\n",
-            aussen_typ(f.rueckgabe, true),
-            parameter.join(", ")
-        );
+        let mut parameter: Vec<String> = Vec::new();
+        for (i, p) in f.parameter.iter().enumerate() {
+            if per_zeiger(i) {
+                parameter.extend(["ptr".to_string(), "ptr".to_string()]);
+            } else {
+                parameter.push(aussen_typ(p.typ, false));
+            }
+        }
+        if rueckgabe_per_zeiger {
+            parameter.extend(["ptr".to_string(), "ptr".to_string()]);
+        }
+        let _ = writeln!(modul.zusatz, "declare {aussen_rueckgabe} @{symbol}({})\n", parameter.join(", "));
     }
     let kopf: Vec<String> = f.parameter.iter().enumerate().map(|(i, p)| format!("{} %p{i}", ir_typ(p.typ))).collect();
-    let werte: Vec<String> =
-        f.parameter.iter().enumerate().map(|(i, p)| format!("{} %p{i}", aussen_typ(p.typ, false))).collect();
     let mut code = String::new();
-    let aufruf = format!("call {} @{symbol}({})", aussen_typ(f.rueckgabe, true), werte.join(", "));
-    if f.rueckgabe == Typ::Nix {
+    let mut werte: Vec<String> = Vec::new();
+    for (i, p) in f.parameter.iter().enumerate() {
+        if per_zeiger(i) {
+            let t = ir_typ(p.typ);
+            let beschreibung = modul.json_typ(p.typ);
+            let _ = writeln!(code, "  %z{i} = alloca {t}");
+            let _ = writeln!(code, "  store {t} %p{i}, ptr %z{i}");
+            werte.push(format!("ptr %z{i}, ptr {beschreibung}"));
+        } else {
+            werte.push(format!("{} %p{i}", aussen_typ(p.typ, false)));
+        }
+    }
+    if rueckgabe_per_zeiger {
+        let beschreibung = modul.json_typ(f.rueckgabe);
+        let _ = writeln!(code, "  %ziel = alloca {rt}");
+        let _ = writeln!(code, "  store {rt} zeroinitializer, ptr %ziel");
+        werte.push(format!("ptr %ziel, ptr {beschreibung}"));
+    }
+    let aufruf = format!("call {aussen_rueckgabe} @{symbol}({})", werte.join(", "));
+    if rueckgabe_per_zeiger {
+        let _ = writeln!(code, "  {aufruf}");
+        let _ = writeln!(code, "  %r = load {rt}, ptr %ziel");
+    } else if f.rueckgabe == Typ::Nix {
         let _ = writeln!(code, "  {aufruf}");
     } else {
         let _ = writeln!(code, "  %r = {aufruf}");
@@ -2862,6 +3016,7 @@ pub fn erzeugen(programm: &Programm, wb: &Woerterbuch) -> String {
         typen: &programm.typen,
         klassen: &programm.klassen,
         json_typen: Vec::new(),
+        mitgaben: Vec::new(),
     };
     let mut funktionen = String::new();
 
@@ -3116,6 +3271,68 @@ mod tests {
     fn namen_mit_umlauten() {
         let ir = ir("KLASSE Bär\n FUNKTIAUN grüß()\n PASST SCHO\nPASST SCHO\nBär().grüß() OIDA");
         assert!(ir.contains("define internal void @\"oida.m.B\\C3\\A4r.gr\\C3\\BC\\C3\\9F\"(ptr %selbst)"), "{ir}");
+    }
+
+    #[test]
+    fn nebenbei_startet_ueber_ein_stueck_code_und_warten_holt_das_ergebnis() {
+        let ir = ir("STRUKTUR Aufgab VON T\n numma ZOI\nPASST SCHO\n\
+             FUNKTIAUN rechne(a ZOI, t KETTN, l LISTN VON ZOI, j JONA) GIBT ZRUCK KETTN\n GIB ZRUCK t OIDA\nPASST SCHO\n\
+             FUNKTIAUN stü()\nPASST SCHO\n\
+             SOG AU text = \"x\" + KETTN(1) OIDA\n\
+             SOG AU a = NEBNBEI rechne(1, text, [2], WOAHR) OIDA\nSOG AU b = NEBNBEI rechne(2, text + \"y\", [3], FOISCH) OIDA\n\
+             SOG AU t = WOAT AUF a OIDA\nSOG AU s = NEBNBEI stü() OIDA\nWOAT AUF s OIDA");
+        // Das Stück Code für den neuen Thread: nimmt die Werte aus der Mitgabe, ruft auf, legt das Ergebnis ab.
+        // Es gibt es je Funktion einmal, auch wenn sie zweimal gestartet wird.
+        assert_eq!(ir.matches("define internal void @\"oida.nb.rechne\"(ptr %mitgabe, ptr %ergebnis)").count(), 1, "{ir}");
+        let anfang = ir.find("define internal void @\"oida.nb.rechne\"").unwrap();
+        let code = &ir[anfang..anfang + ir[anfang..].find("\n}").unwrap()];
+        assert!(code.contains("%p1 = getelementptr inbounds { i64, ptr, ptr, i1 }, ptr %mitgabe, i32 0, i32 1"), "{code}");
+        assert!(code.contains("%r = call ptr @\"oida.f.rechne\"(i64 %a0, ptr %a1, ptr %a2, i1 %a3)"), "{code}");
+        assert!(code.contains("store ptr %r, ptr %ergebnis"), "{code}");
+        // Die Beschreibung der Mitgabe: wie eine Struktur mit vier Feldern (Art 4), je Aufbau einmal.
+        assert_eq!(ir.matches("@oida.mitgabe.t0 = private unnamed_addr constant").count(), 1, "{ir}");
+        assert!(ir.contains("@oida.mitgabe.f0 = private unnamed_addr constant [4 x { ptr, i64, ptr }]"), "{ir}");
+        assert!(ir.contains("i64 4, ptr null, ptr @oida.mitgabe.f0 }"), "{ir}");
+
+        let haupt = haupt(&ir);
+        assert_eq!(haupt.matches("call i64 @oida_nebnbei_start(ptr @\"oida.nb.rechne\", ptr %h").count(), 2, "{haupt}");
+        assert!(haupt.contains("ptr @oida.mitgabe.t0, i64 ptrtoint (ptr getelementptr (ptr, ptr null, i32 1) to i64))"), "{haupt}");
+        // Die Variable `text` ist nur geliehen (die Laufzeit kopiert); der zusammengehängte Text
+        // gehört uns und wird nach dem Starten losgelassen. Die frische Liste auch.
+        let start_b = haupt.rfind("@oida_nebnbei_start(ptr @\"oida.nb.rechne\"").unwrap();
+        let danach = &haupt[start_b..start_b + 400];
+        assert!(danach.contains("call void @oida.lass(ptr") && danach.contains("call void @oida.lass.l"), "{danach}");
+        // Warten: Die Laufzeit stellt das Ergebnis in einen Platz; ohne Rückgabe gibt es keinen.
+        assert!(haupt.contains("call void @oida_nebnbei_warten(i64 %t") && haupt.contains(", i64 ptrtoint (ptr getelementptr (ptr, ptr null, i32 1) to i64), i64 12)"), "{haupt}");
+        assert!(haupt.contains(", ptr null, i64 0, i64 14)"), "{haupt}");
+        assert!(ir.contains("define internal void @\"oida.nb.st\\C3\\BC\"(ptr %mitgabe, ptr %ergebnis)"), "{ir}");
+        // Ein Programm ohne NEBNBEI bekommt nichts davon.
+        assert!(!self::ir("SCHREIB(1) OIDA").contains("@oida.mitgabe."));
+    }
+
+    #[test]
+    fn vorlagen_von_draussen_reichen_zeiger_und_beschreibung_weiter() {
+        // (Funktionen VON DRAUSSN gibt es nur in der Bibliothek: Darum hier die echte.)
+        let ir = ir("BRAUCH nebnbei OIDA\n\
+             SOG AU k = neicha_kanal VON KETTN() OIDA\nschick_eine(k, \"x\") OIDA\nSCHREIB(aussa_bis(k, 5)) OIDA\n\
+             SOG AU z = neicha_kanal VON ZOI() OIDA\nschick_eine(z, 1) OIDA");
+        // Für alle Fassungen dieselbe Funktion der Laufzeit, einmal angesagt.
+        assert_eq!(ir.matches("declare void @oida_kanal_schicken(ptr, ptr, ptr, ptr)").count(), 1, "{ir}");
+        assert_eq!(ir.matches("declare void @oida_kanal_neu(ptr, ptr)").count(), 1, "{ir}");
+        assert_eq!(ir.matches("declare void @oida_kanal_holen_bis(ptr, ptr, i64, ptr, ptr)").count(), 1, "{ir}");
+        // Die Fassung für KETTN: Der Wert kommt in einen Platz, mit geht die Beschreibung von KETTN (Art 3);
+        // danach lässt die Funktion ihren Parameter los, wie jede.
+        let anfang = ir.find("define internal void @\"oida.f.schick_eine\\20VON\\20KETTN\"").expect("die Fassung gibt es");
+        let code = &ir[anfang..anfang + ir[anfang..].find("\n}").unwrap()];
+        assert!(code.contains("%z1 = alloca ptr") && code.contains("store ptr %p1, ptr %z1"), "{code}");
+        assert!(code.contains("call void @oida_kanal_schicken(ptr %z0, ptr @oida.json.t") && code.contains(", ptr %z1, ptr @oida.json.t"), "{code}");
+        assert!(code.contains("call void @oida.lass(ptr %p1)"), "{code}");
+        // Zurück kommt der Wert über einen Platz, den die Laufzeit füllt.
+        let anfang = ir.find("define internal ptr @\"oida.f.aussa_bis\\20VON\\20KETTN\"").expect("die Fassung gibt es");
+        let code = &ir[anfang..anfang + ir[anfang..].find("\n}").unwrap()];
+        assert!(code.contains("%ziel = alloca ptr") && code.contains("store ptr zeroinitializer, ptr %ziel"), "{code}");
+        assert!(code.contains("i64 %p1, ptr %ziel, ptr @oida.json.t") && code.contains("%r = load ptr, ptr %ziel"), "{code}");
+        assert!(ir.contains("define internal void @\"oida.f.schick_eine\\20VON\\20ZOI\"(%s"), "{ir}");
     }
 
     #[test]

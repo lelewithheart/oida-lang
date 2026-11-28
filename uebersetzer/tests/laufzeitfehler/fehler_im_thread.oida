@@ -1,0 +1,11 @@
+BRAUCH nebnbei OIDA
+
+# Ein Fehler in einem Thread beendet das ganze Programm, mit der Zeile, in der er passiert ist.
+FUNKTIAUN teil(a ZOI, b ZOI) GIBT ZRUCK ZOI
+    SCHREIB("i teil", a, "durch", b) OIDA
+    GIB ZRUCK a / b OIDA
+PASST SCHO
+
+SCHREIB("los") OIDA
+SCHREIB(WOAT AUF NEBNBEI teil(6, 3)) OIDA
+SCHREIB(WOAT AUF NEBNBEI teil(6, 0)) OIDA

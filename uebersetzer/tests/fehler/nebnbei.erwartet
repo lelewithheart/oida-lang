@@ -1,0 +1,17 @@
+:33:30: A Viech kaun ned zu an aundan Thread (bei NEBNBEI streichl). Zwa Threads teiln si nie an Wert, drum wird kopiert, und des geht mit ZOI, KOMMAZOI, JONA, KETTN, ollem, wos mit STRUKTUR oda AUFZÖHLUNG augsogt is, LISTN, VIELLEICHT und VAZEICHNIS. Fia a KLASSE schreibst da a STRUKTUR mit dem, wos drübn braucht wird.
+:34:25: A Stoi kaun ned zu an aundan Thread (bei NEBNBEI zöh), weu do a Viech drinsteckt. Zwa Threads teiln si nie an Wert, drum wird kopiert, und des geht mit ZOI, KOMMAZOI, JONA, KETTN, ollem, wos mit STRUKTUR oda AUFZÖHLUNG augsogt is, LISTN, VIELLEICHT und VAZEICHNIS. Fia a KLASSE schreibst da a STRUKTUR mit dem, wos drübn braucht wird.
+:35:26: A FUNKTIAUN() GIBT ZRUCK ZOI kaun ned zu an aundan Thread (bei NEBNBEI ruaf). Zwa Threads teiln si nie an Wert, drum wird kopiert, und des geht mit ZOI, KOMMAZOI, JONA, KETTN, ollem, wos mit STRUKTUR oda AUFZÖHLUNG augsogt is, LISTN, VIELLEICHT und VAZEICHNIS.
+:36:13: Hinta NEBNBEI ghört da Aufruf von ana FUNKTIAUN mit Nom, zum Beispü: NEBNBEI rechne(1, 2). A Methode oda a FUNKTIAUN ohne Nom geht ned: An dena hängan Werte, de daun zwa Threads ghörn tatn.
+:38:13: Hinta NEBNBEI ghört da Aufruf von ana FUNKTIAUN mit Nom, zum Beispü: NEBNBEI rechne(1, 2). A Methode oda a FUNKTIAUN ohne Nom geht ned: An dena hängan Werte, de daun zwa Threads ghörn tatn.
+:39:13: Hinta NEBNBEI ghört da Aufruf von ana FUNKTIAUN mit Nom, zum Beispü: NEBNBEI rechne(1, 2). A Methode oda a FUNKTIAUN ohne Nom geht ned: An dena hängan Werte, de daun zwa Threads ghörn tatn.
+:40:21: 'ans' wü kan Wert hom, du gibst eam an Wert.
+:41:21: De FUNKTIAUN 'gibts_ned' kenn i ned.
+:42:22: WOAT AUF wü a Aufgab hom (des, wos NEBNBEI zruckgibt), do steht oba a ZOI.
+:43:22: WOAT AUF wü a Aufgab hom (des, wos NEBNBEI zruckgibt), do steht oba a ZOI.
+:45:19: 'w3' soll a KETTN sei, oba des do is a ZOI.
+:47:1: A Viech kaun ned zu an aundan Thread (bei 'schick_eine'). Zwa Threads teiln si nie an Wert, drum wird kopiert, und des geht mit ZOI, KOMMAZOI, JONA, KETTN, ollem, wos mit STRUKTUR oda AUFZÖHLUNG augsogt is, LISTN, VIELLEICHT und VAZEICHNIS. Fia a KLASSE schreibst da a STRUKTUR mit dem, wos drübn braucht wird.
+:49:17: 'schick_eine VON ZOI' wü ois 2. Wert a ZOI, du gibst eam a KETTN.
+:51:1: A FUNKTIAUN() GIBT ZRUCK ZOI kaun ned zu an aundan Thread (bei 'schick_eine'). Zwa Threads teiln si nie an Wert, drum wird kopiert, und des geht mit ZOI, KOMMAZOI, JONA, KETTN, ollem, wos mit STRUKTUR oda AUFZÖHLUNG augsogt is, LISTN, VIELLEICHT und VAZEICHNIS.
+:52:13: Bei 'neicha_kanal' waaß i ned, wos 'T' sei soll: Aus de Werte in da Klammer geht's ned hervua. Schreib's dazua: neicha_kanal VON ...(...)
+:53:14: 'neicha_kanal' braucht an Typ (T), du gibst 2.
+:54:26: 's' soll a LISTN VON ZOI sei, oba des do is a ZOI.

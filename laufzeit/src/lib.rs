@@ -4,9 +4,14 @@
 //! Der Compiler ruft diese Funktionen aus dem erzeugten LLVM-IR auf; die
 //! Namen und Parameter müssen daher zu `uebersetzer/src/irgen.rs` passen.
 //!
-//! OIDA-Programme laufen in einem einzigen Thread. Darauf verlässt sich die
-//! Laufzeit: Ausgabepuffer und Zähler sind nicht gegen gleichzeitige
-//! Zugriffe geschützt, das spart bei jedem Aufruf eine Sperre.
+//! # Threads
+//!
+//! Die meisten OIDA-Programme laufen in einem einzigen Thread, und dafür ist
+//! die Laufzeit gebaut: Ausgabepuffer und Zufall kommen ohne Sperre aus.
+//! Startet ein Programm mit `NEBNBEI` weitere Threads (siehe [`nebnbei`]),
+//! bekommt jeder davon seinen eigenen Puffer und seinen eigenen Zufall
+//! ([`zustand`]). Werte teilen sich zwei Threads nie; darum brauchen auch die
+//! Zähler an Texten und Listen keine Sperre.
 //!
 //! # Texte
 //!
@@ -31,15 +36,18 @@ mod dateien;
 #[cfg(windows)]
 mod fenster;
 mod json;
+mod nebnbei;
 mod netz;
 mod programm;
+mod tabelle;
 #[cfg(windows)]
 mod ton;
 
 use std::alloc::{Layout, alloc, dealloc, handle_alloc_error};
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;
 use std::io::{IsTerminal, Write};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering as Reihenfolge};
 
 /// Kopf eines Textes. Direkt dahinter stehen `laenge` Bytes.
 #[repr(C)]
@@ -54,20 +62,10 @@ const KOPF_GROESSE: usize = std::mem::size_of::<TextKopf>();
 /// Negativ, damit der erzeugte Code ihn wie einen festen Text in Ruhe lässt.
 const TOT: i64 = -2;
 
-/// Was die Laufzeit zwischen den Aufrufen im Kopf behält.
+/// Was ein Thread zwischen den Aufrufen im Kopf behält.
 struct Zustand {
     /// Gesammelte Ausgabe, die noch nicht geschrieben ist.
     puffer: Vec<u8>,
-    /// Im Terminal wird nach jeder Zeile geschrieben, in eine Datei oder
-    /// Pipe erst, wenn der Puffer voll ist (das ist viel schneller).
-    terminal: bool,
-    /// Wie viele Texte und Listen gerade am Heap leben.
-    lebende_texte: i64,
-    /// Prüfmodus (Umgebungsvariable `OIDA_TEXTE_PRUEFEN`): Texte und Listen
-    /// werden nicht wirklich freigegeben, sondern als tot markiert. Wird so
-    /// etwas noch verwendet, bricht das Programm ab; am Ende wird gemeldet,
-    /// wie viele übrig sind. Damit testet der Compiler seine Referenzzählung.
-    pruefen: bool,
     /// Stand des Zufallsgenerators. 0 heißt: noch nicht gestartet.
     zufall: u64,
 }
@@ -75,23 +73,96 @@ struct Zustand {
 /// Erlaubt eine veränderliche globale Variable ohne Sperre.
 struct Einzeln(UnsafeCell<Zustand>);
 
-// SAFETY: OIDA-Programme haben genau einen Thread (siehe oben).
+// SAFETY: Nur das Hauptprogramm verwendet diesen Zustand; jeder weitere
+// Thread hat seinen eigenen (siehe `zustand`).
 unsafe impl Sync for Einzeln {}
 
-static ZUSTAND: Einzeln = Einzeln(UnsafeCell::new(Zustand {
-    puffer: Vec::new(),
-    terminal: false,
-    lebende_texte: 0,
-    pruefen: false,
-    zufall: 0,
-}));
+/// Der Zustand des Hauptprogramms.
+static HAUPT: Einzeln = Einzeln(UnsafeCell::new(Zustand { puffer: Vec::new(), zufall: 0 }));
+
+/// Hat das Programm je einen weiteren Thread gestartet? Solange nicht, ist alles wie immer.
+static MEHRERE: AtomicBool = AtomicBool::new(false);
+
+thread_local! {
+    /// In einem Thread, der mit `NEBNBEI` gestartet wurde: sein eigener Zustand. Sonst null.
+    static EIGENER: Cell<*mut Zustand> = const { Cell::new(std::ptr::null_mut()) };
+}
+
+/// Wird nach jeder Zeile wirklich geschrieben? Im Terminal ja; in eine Datei oder Pipe erst,
+/// wenn der Puffer voll ist (das ist viel schneller). Mit mehreren Threads auch immer: So stehen
+/// die Zeilen in der Reihenfolge da, in der sie geschrieben wurden, und keine wird zerrissen.
+static ZEILENWEISE: AtomicBool = AtomicBool::new(false);
+
+/// Prüfmodus (Umgebungsvariable `OIDA_TEXTE_PRUEFEN`): Texte und Listen
+/// werden nicht wirklich freigegeben, sondern als tot markiert. Wird so
+/// etwas noch verwendet, bricht das Programm ab; am Ende wird gemeldet,
+/// wie viele übrig sind. Damit testet der Compiler seine Referenzzählung.
+static PRUEFEN: AtomicBool = AtomicBool::new(false);
+
+/// Im Prüfmodus: wie viele Texte, Listen und Objekte gerade am Heap leben.
+static LEBENDE: AtomicI64 = AtomicI64::new(0);
 
 const PUFFER_GROESSE: usize = 64 * 1024;
 
+#[inline(always)]
 fn zustand() -> &'static mut Zustand {
-    // SAFETY: nur ein Thread, und keine Funktion hier behält den Verweis
-    // über einen Aufruf hinaus, der wieder `zustand()` holt.
-    unsafe { &mut *ZUSTAND.0.get() }
+    // Der gewöhnliche Fall (nie ein Thread gestartet) bleibt so kurz wie möglich.
+    if MEHRERE.load(Reihenfolge::Relaxed) {
+        return zustand_mit_threads();
+    }
+    // SAFETY: Hierher kommt nur das Hauptprogramm, und keine Funktion hier behält
+    // den Verweis über einen Aufruf hinaus, der wieder `zustand()` holt.
+    unsafe { &mut *HAUPT.0.get() }
+}
+
+/// Der Zustand, wenn es mehrere Threads gibt: der eigene, im Hauptprogramm der gewöhnliche.
+#[cold]
+#[inline(never)]
+fn zustand_mit_threads() -> &'static mut Zustand {
+    let eigener = EIGENER.get();
+    if eigener.is_null() {
+        // SAFETY: wie oben, nur das Hauptprogramm hat keinen eigenen.
+        unsafe { &mut *HAUPT.0.get() }
+    } else {
+        // SAFETY: Der Zeiger gehört diesem Thread allein (`thread_beginnt`).
+        unsafe { &mut *eigener }
+    }
+}
+
+#[inline]
+fn pruefen() -> bool {
+    PRUEFEN.load(Reihenfolge::Relaxed)
+}
+
+/// Ein Text, eine Liste oder ein Objekt ist dazugekommen (1) oder freigegeben worden (-1).
+#[inline]
+fn gezaehlt(um: i64) {
+    if pruefen() {
+        LEBENDE.fetch_add(um, Reihenfolge::Relaxed);
+    }
+}
+
+/// Ab jetzt gibt es neben dem Hauptprogramm weitere Threads.
+fn es_gibt_mehrere() {
+    MEHRERE.store(true, Reihenfolge::SeqCst);
+    ZEILENWEISE.store(true, Reihenfolge::SeqCst);
+}
+
+/// Am Anfang eines Threads, der mit `NEBNBEI` gestartet wurde: Er bekommt seinen
+/// eigenen Ausgabepuffer und seinen eigenen Zufall.
+fn thread_beginnt(samen: u64) {
+    let eigener = Box::new(Zustand { puffer: Vec::with_capacity(4096), zufall: samen_mischen(samen) });
+    EIGENER.set(Box::into_raw(eigener));
+}
+
+/// Am Ende so eines Threads: Was er noch zu schreiben hat, kommt hinaus.
+fn thread_endet() {
+    leeren();
+    let eigener = EIGENER.replace(std::ptr::null_mut());
+    if !eigener.is_null() {
+        // SAFETY: von `thread_beginnt` angelegt, und niemand sonst kennt den Zeiger.
+        drop(unsafe { Box::from_raw(eigener) });
+    }
 }
 
 // -------------------------------------------------------------------- Texte
@@ -127,7 +198,7 @@ fn neuer_platz(laenge: usize) -> (*mut TextKopf, *mut u8) {
         let kopf = zeiger as *mut TextKopf;
         (*kopf).zaehler = 1;
         (*kopf).laenge = laenge as i64;
-        zustand().lebende_texte += 1;
+        gezaehlt(1);
         (kopf, zeiger.add(KOPF_GROESSE))
     }
 }
@@ -150,9 +221,8 @@ pub unsafe extern "C" fn oida_text_frei(text: *mut TextKopf) {
         if (*text).zaehler != 0 {
             abbruch_compiler("a Text wird freigebn, obwohl er no braucht wird");
         }
-        let z = zustand();
-        z.lebende_texte -= 1;
-        if z.pruefen {
+        gezaehlt(-1);
+        if pruefen() {
             (*text).zaehler = TOT;
         } else {
             dealloc(text as *mut u8, layout((*text).laenge as usize));
@@ -504,7 +574,7 @@ unsafe fn liste<'a>(liste: *mut ListenKopf) -> &'a mut ListenKopf {
 /// Eine neue, leere Liste mit Platz für `platz` Elemente zu je `groesse` Bytes.
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_liste_neu(groesse: i64, platz: i64) -> *mut ListenKopf {
-    zustand().lebende_texte += 1;
+    gezaehlt(1);
     Box::into_raw(Box::new(ListenKopf { zaehler: 1, laenge: 0, platz, daten: neue_daten(platz, groesse) }))
 }
 
@@ -587,9 +657,8 @@ pub unsafe extern "C" fn oida_liste_frei(liste_zeiger: *mut ListenKopf, groesse:
     if l.zaehler != 0 {
         abbruch_compiler("a LISTN wird freigebn, obwohl sie no braucht wird");
     }
-    let z = zustand();
-    z.lebende_texte -= 1;
-    if z.pruefen {
+    gezaehlt(-1);
+    if pruefen() {
         // Als tot markieren und leeren: Jeder spätere Zugriff fällt dann auf.
         l.zaehler = TOT;
         l.laenge = 0;
@@ -675,7 +744,7 @@ unsafe fn text_loslassen(text: *mut TextKopf) {
 /// Ein neues, leeres Verzeichnis. `text` sagt, ob die Schlüssel Texte sind (sonst ganze Zahlen).
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_wb_neu(text: i64) -> *mut WbKopf {
-    zustand().lebende_texte += 1;
+    gezaehlt(1);
     Box::into_raw(Box::new(WbKopf {
         zaehler: 1,
         laenge: 0,
@@ -823,9 +892,8 @@ pub unsafe extern "C" fn oida_wb_frei(zeiger: *mut WbKopf, groesse: i64) {
                 text_loslassen(*v.schluessel.add(i) as *mut TextKopf);
             }
         }
-        let z = zustand();
-        z.lebende_texte -= 1;
-        if z.pruefen {
+        gezaehlt(-1);
+        if pruefen() {
             // Als tot markieren und leeren: Jeder spätere Zugriff fällt dann auf.
             v.zaehler = TOT;
             v.laenge = 0;
@@ -868,7 +936,7 @@ pub extern "C" fn oida_objekt_neu(groesse: i64) -> *mut u8 {
             handle_alloc_error(layout);
         }
         (*(zeiger as *mut ObjektKopf)).zaehler = 1;
-        zustand().lebende_texte += 1;
+        gezaehlt(1);
         zeiger
     }
 }
@@ -893,9 +961,8 @@ pub unsafe extern "C" fn oida_objekt_frei(objekt: *mut u8, groesse: i64) {
         if (*kopf).zaehler != 0 {
             abbruch_compiler("a Objekt wird freigebn, obwohl's no braucht wird");
         }
-        let z = zustand();
-        z.lebende_texte -= 1;
-        if z.pruefen {
+        gezaehlt(-1);
+        if pruefen() {
             // Als tot markieren und die Felder überschreiben: Wer das Objekt
             // noch verwendet, fällt auf.
             (*kopf).zaehler = TOT;
@@ -962,22 +1029,38 @@ pub extern "C" fn oida_zufall_samen(samen: i64) {
 
 /// Schreibt den Puffer wirklich hinaus.
 fn leeren() {
-    let z = zustand();
-    if z.puffer.is_empty() {
+    puffer_leeren(&mut zustand().puffer);
+}
+
+/// Schreibt die fertigen Zeilen hinaus; eine angefangene bleibt im Puffer. Das passiert, bevor
+/// ein Thread auf einen anderen wartet: Was er geschrieben hat, soll dastehen, aber eine Zeile,
+/// an der er noch schreibt (`SCHREIB("do:", hol_aussa(k))`), soll kein anderer zerreißen.
+fn zeilen_leeren() {
+    let puffer = &mut zustand().puffer;
+    let Some(ende) = puffer.iter().rposition(|b| *b == b'\n') else { return };
+    let mut stdout = std::io::stdout().lock();
+    let _ = stdout.write_all(&puffer[..=ende]);
+    let _ = stdout.flush();
+    puffer.drain(..=ende);
+}
+
+fn puffer_leeren(puffer: &mut Vec<u8>) {
+    if puffer.is_empty() {
         return;
     }
     let mut stdout = std::io::stdout().lock();
     // Ist die Ausgabe zu (zum Beispiel "| head"), gibt es nichts mehr zu tun.
-    let _ = stdout.write_all(&z.puffer);
+    let _ = stdout.write_all(puffer);
     let _ = stdout.flush();
-    z.puffer.clear();
+    puffer.clear();
 }
 
 fn schreib(inhalt: &[u8]) {
-    if zustand().puffer.len() + inhalt.len() > PUFFER_GROESSE {
-        leeren();
+    let puffer = &mut zustand().puffer;
+    if puffer.len() + inhalt.len() > PUFFER_GROESSE {
+        puffer_leeren(puffer);
     }
-    zustand().puffer.extend_from_slice(inhalt);
+    puffer.extend_from_slice(inhalt);
 }
 
 /// Wird am Anfang von jedem Programm aufgerufen.
@@ -985,8 +1068,8 @@ fn schreib(inhalt: &[u8]) {
 pub extern "C" fn oida_start() {
     let z = zustand();
     z.puffer.reserve(PUFFER_GROESSE);
-    z.terminal = std::io::stdout().is_terminal();
-    z.pruefen = std::env::var_os("OIDA_TEXTE_PRUEFEN").is_some_and(|w| !w.is_empty());
+    ZEILENWEISE.store(std::io::stdout().is_terminal(), Reihenfolge::Relaxed);
+    PRUEFEN.store(std::env::var_os("OIDA_TEXTE_PRUEFEN").is_some_and(|w| !w.is_empty()), Reihenfolge::Relaxed);
     // Mit OIDA_SOMEN=<zahl> kommt bei jedem Lauf derselbe Zufall (für Tests).
     if let Some(samen) = std::env::var("OIDA_SOMEN").ok().and_then(|w| w.trim().parse::<i64>().ok()) {
         z.zufall = samen_mischen(samen as u64);
@@ -999,8 +1082,8 @@ pub extern "C" fn oida_ende() {
     leeren();
     // Dateien, die noch zum Schreiben offen sind, bekommen ihren Rest.
     dateien::alles_zu();
-    if zustand().pruefen {
-        eprintln!("OIDA: {} Texte, Listen und Objekte übrig", zustand().lebende_texte);
+    if pruefen() {
+        eprintln!("OIDA: {} Texte, Listen und Objekte übrig", LEBENDE.load(Reihenfolge::SeqCst));
     }
     #[cfg(windows)]
     fenster_und_ton_berichten();
@@ -1089,7 +1172,7 @@ pub extern "C" fn oida_schreib_leer() {
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_schreib_zeilenende() {
     schreib(b"\n");
-    if zustand().terminal {
+    if ZEILENWEISE.load(Reihenfolge::Relaxed) {
         leeren();
     }
 }
@@ -1100,6 +1183,13 @@ pub extern "C" fn oida_schreib_zeilenende() {
 fn abbruch(zeile: i64, meldung: &str) -> ! {
     leeren();
     eprintln!("Heast! Zeile {zeile}: {meldung}");
+    std::process::exit(1);
+}
+
+/// Bricht mit einer Meldung ab, zu der es keine Zeile gibt (aus einer Funktion der Bibliothek).
+fn abbruch_ohne_zeile(meldung: &str) -> ! {
+    leeren();
+    eprintln!("Heast! {meldung}");
     std::process::exit(1);
 }
 

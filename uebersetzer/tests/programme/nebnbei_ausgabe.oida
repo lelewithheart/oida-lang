@@ -1,0 +1,63 @@
+# Was Threads schreiben, steht in der Reihenfolge da, in der es geschrieben wurde, und immer
+# als ganze Zeile. (Die Ausgabe geht hier in eine Datei oder Pipe: Ohne Threads würde sie
+# gesammelt und erst am Ende geschrieben.)
+BRAUCH nebnbei OIDA
+
+# Rechnet eine Weile, ohne zu warten und ohne zu schreiben.
+FUNKTIAUN rechn_a_weil() GIBT ZRUCK ZOI
+    SOG AU s = 0 OIDA
+    FIA i VON 1 BIS 30_000_000 TUA
+        s = (s + i * 7) % 1_000_003 OIDA
+    PASST SCHO
+    GIB ZRUCK s OIDA
+PASST SCHO
+
+FUNKTIAUN schreibt_glei(wos KETTN)
+    SCHREIB(wos) OIDA
+PASST SCHO
+
+FUNKTIAUN erst_schreibn_daun_rechnen(k Kanal VON ZOI) GIBT ZRUCK ZOI
+    SCHREIB("A: da Thread fangt au") OIDA
+    schick_eine(k, 1) OIDA
+    SOG AU s = rechn_a_weil() OIDA
+    SCHREIB("C: da Thread is fertig") OIDA
+    GIB ZRUCK s OIDA
+PASST SCHO
+
+FUNKTIAUN erst_rechnen_daun_schickn(k Kanal VON ZOI)
+    SOG AU s = rechn_a_weil() OIDA
+    SCHREIB("da Thread schickt glei") OIDA
+    schick_eine(k, 7) OIDA
+PASST SCHO
+
+FUNKTIAUN woat_aufs_zuamochn(k Kanal VON ZOI) GIBT ZRUCK KETTN
+    WENN aussa_oda_nix(k) == NIX DAUN
+        GIB ZRUCK "da Kanal is zua" OIDA
+    PASST SCHO
+    GIB ZRUCK "do woa wos drin" OIDA
+PASST SCHO
+
+# 1. Was vor dem ersten Thread geschrieben wurde, steht vor dem, was er schreibt, auch wenn
+#    das Hauptprogramm danach noch lange nicht wartet.
+SCHREIB("vuahea") OIDA
+SOG AU erster = NEBNBEI schreibt_glei("da erste Thread") OIDA
+SOG AU s = rechn_a_weil() OIDA
+WOAT AUF erster OIDA
+
+# 2. Eine Zeile steht da, sobald sie fertig ist, nicht erst am Ende des Threads.
+SOG AU k = neicha_kanal VON ZOI() OIDA
+SOG AU zweiter = NEBNBEI erst_schreibn_daun_rechnen(k) OIDA
+SOG AU do = hol_aussa(k) OIDA
+SCHREIB("B: s'Hauptprogramm dazwischn") OIDA
+SCHREIB(WOAT AUF zweiter == s) OIDA
+
+# 3. Eine angefangene Zeile bleibt ganz, auch wenn mittendrin gewartet wird.
+SOG AU dritter = NEBNBEI erst_rechnen_daun_schickn(k) OIDA
+SCHREIB("kemma is:", hol_aussa(k), "und des in ana Zeile") OIDA
+WOAT AUF dritter OIDA
+
+# 4. Wer auf einen Kanal wartet, merkt, wenn er zugemacht wird.
+SOG AU vierter = NEBNBEI woat_aufs_zuamochn(k) OIDA
+schlof(50) OIDA
+moch_zua(k) OIDA
+SCHREIB(WOAT AUF vierter) OIDA

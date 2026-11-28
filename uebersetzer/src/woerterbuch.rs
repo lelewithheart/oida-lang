@@ -93,6 +93,9 @@ pub enum Schluessel {
     Private,
     Interface,
     Implements,
+    // Nebenbei: Threads
+    Spawn,
+    Await,
     // JSON
     ToJson,
     ToJsonPretty,
@@ -109,7 +112,7 @@ pub enum Schluessel {
 
 impl Schluessel {
     /// Alle Schlüsselwörter mit dem festen Wort, das links im Wörterbuch steht.
-    pub const ALLE: [(Schluessel, &'static str); 84] = [
+    pub const ALLE: [(Schluessel, &'static str); 86] = [
         (Schluessel::Oida, "OIDA"),
         (Schluessel::Declare, "DECLARE"),
         (Schluessel::If, "IF"),
@@ -187,6 +190,8 @@ impl Schluessel {
         (Schluessel::Private, "PRIVATE"),
         (Schluessel::Interface, "INTERFACE"),
         (Schluessel::Implements, "IMPLEMENTS"),
+        (Schluessel::Spawn, "SPAWN"),
+        (Schluessel::Await, "AWAIT"),
         (Schluessel::ToJson, "TOJSON"),
         (Schluessel::ToJsonPretty, "TOJSONPRETTY"),
         (Schluessel::FromJson, "FROMJSON"),

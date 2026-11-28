@@ -9,10 +9,11 @@ use std::fs;
 use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Write};
 use std::path::Path;
 
+use super::tabelle::{Geliehen, Tabelle};
 use super::{ListenKopf, TextKopf, bytes, liste_aus_zahlen, neuer_text};
 
 thread_local! {
-    /// Was beim letzten Versuch schiefgegangen ist.
+    /// Was beim letzten Versuch schiefgegangen ist (jeder Thread merkt sich seinen eigenen Fehler).
     static LETZTER_FEHLER: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
@@ -327,24 +328,10 @@ struct Leser {
     am_anfang: bool,
 }
 
-thread_local! {
-    /// Die offenen Dateien; die Nummer, die OIDA bekommt, ist die Stelle hier.
-    static LESER: RefCell<Vec<Option<Leser>>> = const { RefCell::new(Vec::new()) };
-    static SCHREIBER: RefCell<Vec<Option<BufWriter<fs::File>>>> = const { RefCell::new(Vec::new()) };
-}
-
-/// Legt etwas auf den ersten freien Platz und gibt dessen Nummer zurück.
-fn ablegen<T>(plaetze: &mut Vec<Option<T>>, was: T) -> i64 {
-    let stelle = match plaetze.iter().position(Option::is_none) {
-        Some(stelle) => stelle,
-        None => {
-            plaetze.push(None);
-            plaetze.len() - 1
-        }
-    };
-    plaetze[stelle] = Some(was);
-    stelle as i64
-}
+/// Die offenen Dateien; die Nummer, die OIDA bekommt, ist die Stelle hier. Die Tabellen gelten
+/// für das ganze Programm: Eine offene Datei kann man einem anderen Thread mitgeben.
+static LESER: Tabelle<Leser> = Tabelle::neu(true);
+static SCHREIBER: Tabelle<BufWriter<fs::File>> = Tabelle::neu(true);
 
 /// Öffnet eine Datei zum Lesen, Zeile für Zeile. Gibt ihre Nummer zurück, oder -1.
 ///
@@ -353,7 +340,7 @@ fn ablegen<T>(plaetze: &mut Vec<Option<T>>, was: T) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn oida_leser_auf(pfad: *const TextKopf) -> i64 {
     match fs::File::open(unsafe { pfad_von(pfad) }) {
-        Ok(datei) => LESER.with(|l| ablegen(&mut l.borrow_mut(), Leser { datei: BufReader::new(datei), am_anfang: true })),
+        Ok(datei) => LESER.ablegen(Leser { datei: BufReader::new(datei), am_anfang: true }),
         Err(fehler) => {
             merke_fehler(&fehler);
             -1
@@ -364,11 +351,7 @@ pub unsafe extern "C" fn oida_leser_auf(pfad: *const TextKopf) -> i64 {
 /// Die nächste Zeile, ohne ihr Zeilenende; null, wenn die Datei aus ist (oder zu).
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_leser_zeile(nummer: i64) -> *mut TextKopf {
-    LESER.with(|l| {
-        let mut alle = l.borrow_mut();
-        let Some(Some(leser)) = usize::try_from(nummer).ok().and_then(|n| alle.get_mut(n)) else {
-            return std::ptr::null_mut();
-        };
+    let gelesen = LESER.mit(nummer, |leser| {
         let mut zeile = Vec::new();
         match leser.datei.read_until(b'\n', &mut zeile) {
             Ok(0) | Err(_) => std::ptr::null_mut(),
@@ -386,16 +369,17 @@ pub extern "C" fn oida_leser_zeile(nummer: i64) -> *mut TextKopf {
                 neuer_text(String::from_utf8_lossy(&zeile[ab..]).as_bytes())
             }
         }
-    })
+    });
+    match gelesen {
+        Geliehen::Fertig(zeile) => zeile,
+        // Zu, oder ein anderer Thread liest gerade daraus.
+        Geliehen::Zu | Geliehen::Besetzt => std::ptr::null_mut(),
+    }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_leser_zu(nummer: i64) {
-    LESER.with(|l| {
-        if let Some(platz) = usize::try_from(nummer).ok().and_then(|n| l.borrow_mut().get_mut(n).map(Option::take)) {
-            drop(platz);
-        }
-    });
+    drop(LESER.nimm(nummer));
 }
 
 /// Öffnet eine Datei zum Schreiben, Stück für Stück: leer, oder mit `dazu` hinten anhängend.
@@ -407,7 +391,7 @@ pub unsafe extern "C" fn oida_schreiber_auf(pfad: *const TextKopf, dazu: bool) -
     let mut wie = fs::OpenOptions::new();
     if dazu { wie.create(true).append(true) } else { wie.create(true).write(true).truncate(true) };
     match wie.open(unsafe { pfad_von(pfad) }) {
-        Ok(datei) => SCHREIBER.with(|s| ablegen(&mut s.borrow_mut(), BufWriter::new(datei))),
+        Ok(datei) => SCHREIBER.ablegen(BufWriter::new(datei)),
         Err(fehler) => {
             merke_fehler(&fehler);
             -1
@@ -419,23 +403,23 @@ pub unsafe extern "C" fn oida_schreiber_auf(pfad: *const TextKopf, dazu: bool) -
 /// `inhalt` muss ein gültiger Text sein.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn oida_schreiber_schreiben(nummer: i64, inhalt: *const TextKopf) -> bool {
-    SCHREIBER.with(|s| {
-        let mut alle = s.borrow_mut();
-        match usize::try_from(nummer).ok().and_then(|n| alle.get_mut(n)) {
-            Some(Some(datei)) => geklappt(datei.write_all(unsafe { bytes(inhalt) })),
-            _ => {
-                merke_meldung("De Datei is scho zua.");
-                false
-            }
+    match SCHREIBER.mit(nummer, |datei| datei.write_all(unsafe { bytes(inhalt) })) {
+        Geliehen::Fertig(ergebnis) => geklappt(ergebnis),
+        Geliehen::Zu => {
+            merke_meldung("De Datei is scho zua.");
+            false
         }
-    })
+        Geliehen::Besetzt => {
+            merke_meldung("In de Datei schreibt grad a aundara Thread.");
+            false
+        }
+    }
 }
 
 /// Schreibt den Rest hinaus und macht die Datei zu.
 #[unsafe(no_mangle)]
 pub extern "C" fn oida_schreiber_zu(nummer: i64) -> bool {
-    let datei = SCHREIBER.with(|s| usize::try_from(nummer).ok().and_then(|n| s.borrow_mut().get_mut(n).and_then(Option::take)));
-    match datei {
+    match SCHREIBER.nimm(nummer) {
         Some(mut datei) => geklappt(datei.flush()),
         None => true,
     }
@@ -443,12 +427,10 @@ pub extern "C" fn oida_schreiber_zu(nummer: i64) -> bool {
 
 /// Am Ende vom Programm: Was noch offen ist, wird fertig geschrieben und zugemacht.
 pub(super) fn alles_zu() {
-    SCHREIBER.with(|s| {
-        for mut datei in s.borrow_mut().drain(..).flatten() {
-            let _ = datei.flush();
-        }
-    });
-    LESER.with(|l| l.borrow_mut().clear());
+    for mut datei in SCHREIBER.alles() {
+        let _ = datei.flush();
+    }
+    drop(LESER.alles());
 }
 
 // -------------------------------------------------------------------- Bytes
@@ -595,6 +577,9 @@ mod tests {
 
     #[test]
     fn zeile_fuer_zeile() {
+        // Die offenen Dateien gelten für das ganze Programm (also für alle Tests zusammen): Der
+        // Test weiter unten macht alle zu. Darum laufen die zwei nacheinander.
+        let _allein = crate::test_allein();
         let ordner = arbeitsordner("zeilen");
         let pfad = format!("{ordner}/zeilen.txt");
         unsafe {
@@ -653,6 +638,7 @@ mod tests {
 
     #[test]
     fn offene_dateien_werden_am_ende_fertig_geschrieben() {
+        let _allein = crate::test_allein();
         let ordner = arbeitsordner("ende");
         let pfad = format!("{ordner}/rest.txt");
         unsafe {

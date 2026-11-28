@@ -1,0 +1,13 @@
+BRAUCH nebnbei OIDA
+
+# Der Thread wartet auf einen Wert, das Hauptprogramm auf den Thread: So kommt nie etwas.
+FUNKTIAUN nimmt(k Kanal VON ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK hol_aussa(k) OIDA
+PASST SCHO
+
+SOG AU k = neicha_kanal VON ZOI() OIDA
+SOG AU a = NEBNBEI nimmt(k) OIDA
+SOG AU b = NEBNBEI nimmt(k) OIDA
+schick_eine(k, 7) OIDA
+SCHREIB("ana kriagt wos") OIDA
+SCHREIB(WOAT AUF a + WOAT AUF b) OIDA

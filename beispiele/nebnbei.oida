@@ -1,0 +1,100 @@
+# Mehrere Dinge gleichzeitig: Rechnen auf allen Kernen, und Arbeiter, die sich
+# Aufträge aus einem Kanal holen.
+BRAUCH nebnbei OIDA
+BRAUCH listen OIDA
+
+# ------------------------------------------- 1. Rechnen auf allen Kernen
+
+FUNKTIAUN is_prim(n ZOI) GIBT ZRUCK JONA
+    WENN n < 2 DAUN
+        GIB ZRUCK FOISCH OIDA
+    PASST SCHO
+    SOG AU t = 2 OIDA
+    SOLONG t * t <= n TUA
+        WENN n % t == 0 DAUN
+            GIB ZRUCK FOISCH OIDA
+        PASST SCHO
+        t += 1 OIDA
+    PASST SCHO
+    GIB ZRUCK WOAHR OIDA
+PASST SCHO
+
+# Wie viele Primzahlen es von `erste` bis `letzte` gibt.
+FUNKTIAUN zöh_prim(erste ZOI, letzte ZOI) GIBT ZRUCK ZOI
+    SOG AU wia_vü = 0 OIDA
+    FIA n VON erste BIS letzte TUA
+        WENN is_prim(n) DAUN
+            wia_vü += 1 OIDA
+        PASST SCHO
+    PASST SCHO
+    GIB ZRUCK wia_vü OIDA
+PASST SCHO
+
+FIX OBAGRENZ = 300_000 OIDA
+
+# Den Bereich in Stücke teilen, jedes Stück rechnet ein eigener Thread.
+SOG AU stickln = kerne() * 4 OIDA
+SOG AU breite = OBAGRENZ / stickln + 1 OIDA
+SOG AU aufgobn LISTN VON Aufgab VON ZOI = [] OIDA
+FIA i VON 0 BIS stickln - 1 TUA
+    HAU EINE(aufgobn, NEBNBEI zöh_prim(i * breite + 1, KLANSTA((i + 1) * breite, OBAGRENZ))) OIDA
+PASST SCHO
+
+# Einsammeln: WOAT AUF wartet, bis die Funktion fertig ist, und gibt ihr Ergebnis.
+SOG AU olle = 0 OIDA
+FIA JEDE aufgab IN aufgobn TUA
+    olle += WOAT AUF aufgab OIDA
+PASST SCHO
+SCHREIB("Primzoin bis", OBAGRENZ, ":", olle) OIDA
+
+# ------------------------------------------- 2. Arbeiter und ein Kanal
+
+STRUKTUR Bstöllung
+    tisch ZOI
+    speisn LISTN VON KETTN
+PASST SCHO
+
+# Ein Koch holt Bestellungen aus dem Kanal, bis keine mehr kommen, und meldet
+# jede fertige über den zweiten Kanal. Zurück gibt er, wie viele er gekocht hat.
+FUNKTIAUN koch(nam KETTN, bstöllungen Kanal VON Bstöllung, fertige Kanal VON KETTN) GIBT ZRUCK ZOI
+    SOG AU kocht = 0 OIDA
+    SOLONG WOAHR TUA
+        SOG AU b = aussa_oda_nix(bstöllungen) OIDA
+        WENN b == NIX DAUN
+            HAU OB OIDA                       # der Kanal ist zu und leer: Feierabend
+        PASST SCHO
+        schlof(2 * LÄNGN(b.speisn)) OIDA      # kochen dauert
+        schick_eine(fertige, $"Tisch {b.tisch}: {LÄNGN(b.speisn)} Speisn") OIDA
+        kocht += 1 OIDA
+    PASST SCHO
+    GIB ZRUCK kocht OIDA
+PASST SCHO
+
+SOG AU bstöllungen = neicha_kanal VON Bstöllung() OIDA
+SOG AU fertige = neicha_kanal VON KETTN() OIDA
+SOG AU köch = [NEBNBEI koch("Resi", bstöllungen, fertige), NEBNBEI koch("Sepp", bstöllungen, fertige)] OIDA
+
+FIA tisch VON 1 BIS 6 TUA
+    SOG AU speisn = ["Schnitzl"] OIDA
+    WENN tisch % 2 == 0 DAUN
+        HAU EINE(speisn, "Kaiserschmarrn") OIDA
+    PASST SCHO
+    schick_eine(bstöllungen, Bstöllung(tisch, speisn)) OIDA
+PASST SCHO
+moch_zua(bstöllungen) OIDA                    # mehr kommt nicht
+
+SOG AU kocht = 0 OIDA
+FIA JEDE k IN köch TUA
+    kocht += WOAT AUF k OIDA
+PASST SCHO
+
+# Wer welche Bestellung erwischt hat und in welcher Reihenfolge sie fertig
+# wurden, ist jedes Mal anders. Darum hier sortiert.
+SOG AU meldungen LISTN VON KETTN = [] OIDA
+SOLONG wia_vü_drin(fertige) > 0 TUA
+    HAU EINE(meldungen, hol_aussa(fertige)) OIDA
+PASST SCHO
+FIA JEDE m IN sortiert(meldungen, FUNKTIAUN(a KETTN, b KETTN) => a < b) TUA
+    SCHREIB(m) OIDA
+PASST SCHO
+SCHREIB(kocht, "Bstöllungen kocht") OIDA

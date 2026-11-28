@@ -31,7 +31,7 @@ const NUR_WINDOWS: [&str; 2] = ["fensta", "ton"];
 
 /// Die mitgelieferte Bibliothek: in OIDA geschrieben und in den Compiler
 /// eingebaut. `BRAUCH listen OIDA` holt den Teil mit diesem Namen dazu.
-pub const BIBLIOTHEK: [(&str, &str); 9] = [
+pub const BIBLIOTHEK: [(&str, &str); 10] = [
     ("listen", include_str!("../../bibliothek/listen.oida")),
     ("texte", include_str!("../../bibliothek/texte.oida")),
     ("mathe", include_str!("../../bibliothek/mathe.oida")),
@@ -39,6 +39,7 @@ pub const BIBLIOTHEK: [(&str, &str); 9] = [
     ("programm", include_str!("../../bibliothek/programm.oida")),
     ("json", include_str!("../../bibliothek/json.oida")),
     ("netz", include_str!("../../bibliothek/netz.oida")),
+    ("nebnbei", include_str!("../../bibliothek/nebnbei.oida")),
     ("fensta", include_str!("../../bibliothek/fensta.oida")),
     ("ton", include_str!("../../bibliothek/ton.oida")),
 ];

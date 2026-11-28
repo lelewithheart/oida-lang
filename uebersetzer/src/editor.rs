@@ -570,6 +570,7 @@ fn sammle_namen(
         match &token.art {
             TokenArt::Schluessel(S::Import) => match tokens.get(i + 1).map(|t| &t.art) {
                 Some(TokenArt::Name(ziel)) => brauch.push((true, ziel.clone(), raum_hinter(i + 2))),
+                Some(TokenArt::Schluessel(S::Spawn)) => brauch.push((true, "nebnbei".to_string(), raum_hinter(i + 2))),
                 Some(TokenArt::Text(ziel)) => brauch.push((false, ziel.clone(), raum_hinter(i + 2))),
                 _ => {}
             },
@@ -1032,7 +1033,7 @@ fn schnipsel(wb: &Woerterbuch) -> String {
             w(Import).to_string(),
             w(Import).to_string(),
             vec![format!(
-                "{} ${{1|listen,texte,mathe,dateien,programm,json,netz,fensta,ton,\"datei.oida\"|}} {}",
+                "{} ${{1|listen,texte,mathe,dateien,programm,json,netz,nebnbei,fensta,ton,\"datei.oida\"|}} {}",
                 w(Import),
                 w(Oida)
             )],
@@ -1090,6 +1091,15 @@ fn schnipsel(wb: &Woerterbuch) -> String {
                 w(End).to_string(),
             ],
             "Ein Fenster aufmachen und in einer Schleife zeichnen",
+        ),
+        (
+            w(Spawn).to_string(),
+            w(Spawn).to_string(),
+            vec![
+                format!("{} ${{1:aufgab}} = {} ${{2:funktion}}($3) {}", w(Declare), w(Spawn), w(Oida)),
+                format!("{} ${{4:ergebnis}} = {} ${{1:aufgab}} {}", w(Declare), w(Await), w(Oida)),
+            ],
+            "Eine Funktion in einem eigenen Thread laufen lassen und auf ihr Ergebnis warten",
         ),
         (
             w(Print).to_string(),
