@@ -387,6 +387,41 @@ fn pakete_holen_und_brauchen() {
     assert!(text(&lauf.stderr).contains("franz/gibtsned/archive/HEAD.tar.gz"), "{}", text(&lauf.stderr));
     let lauf = hol(&["irgendwos"]);
     assert!(text(&lauf.stderr).contains("'irgendwos' vasteh i ned. So geht's: oida hol wer/paket"), "{}", text(&lauf.stderr));
+
+    // Zwei Pakete auf einmal und eine Option, die es nicht gibt.
+    let lauf = hol(&["franz/kortn", "franz/wuerfel"]);
+    assert_eq!(lauf.status.code(), Some(2));
+    assert!(text(&lauf.stderr).contains("I hoi nur a Paket auf amoi ('franz/wuerfel' is z'vü)."), "{}", text(&lauf.stderr));
+    let lauf = hol(&["franz/kortn", "--schnö"]);
+    assert_eq!(lauf.status.code(), Some(2));
+    assert!(text(&lauf.stderr).contains("De Option --schnö kenn i bei 'hol' ned."), "{}", text(&lauf.stderr));
+
+    // Ein neuer Stand ersetzt den alten ganz: Was es im neuen nicht mehr gibt, bleibt nicht liegen.
+    paket_ablegen(&basis, "franz", "kortn", "v2", &[("oide.oida", "FUNKTIAUN ziag() GIBT ZRUCK KETTN\n    GIB ZRUCK \"neiche Kortn\" OIDA\nPASST SCHO\n")]);
+    assert!(projekt.join("pakete/oide/paket.oida").is_file());
+    let lauf = hol(&["franz/kortn@v2", "--ois", "oide"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(projekt.join("pakete/oide/oide.oida").is_file());
+    assert!(!projekt.join("pakete/oide/paket.oida").exists(), "die Datei aus dem alten Stand liegt noch da");
+    assert!(lies(&projekt.join("pakete.txt")).contains("oide = franz/kortn@v2 sha256:"));
+
+    // Ein Paket, das selbst etwas aus einem Ordner braucht: Den gibt es nur bei dem, der es geschrieben hat.
+    // (Hier gibt es den Ordner zufällig; geholt wird er trotzdem nicht.)
+    paket_ablegen(
+        &basis,
+        "franz",
+        "schlecht",
+        "HEAD",
+        &[("paket.oida", "FUNKTIAUN nix_do()\nPASST SCHO\n"), ("pakete.txt", "fremd = ../mei-paket sha256:00\n")],
+    );
+    let lauf = hol(&["franz/schlecht"]);
+    assert_eq!(lauf.status.code(), Some(2));
+    assert!(
+        text(&lauf.stderr).contains("Des Paket 'schlecht' braucht 'fremd' aus an Ordner (../mei-paket), den's nur beim Schreiba gibt."),
+        "{}",
+        text(&lauf.stderr)
+    );
+    assert!(!projekt.join("pakete/fremd").exists());
 }
 
 #[test]

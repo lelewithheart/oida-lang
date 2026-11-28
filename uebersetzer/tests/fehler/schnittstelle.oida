@@ -33,3 +33,19 @@ SOG AU k Bella = Katz("Mitzi") OIDA
 SOG AU olle LISTN VON Bella = [] OIDA
 SCHREIB(olle[0].ruaf) OIDA
 olle[0].miau() OIDA
+
+KLASSE Aundas KAUN Bella
+    FUNKTIAUN bell(wia_oft ZOI) GIBT ZRUCK ZOI
+        GIB ZRUCK wia_oft OIDA
+    PASST SCHO
+    FUNKTIAUN nam() GIBT ZRUCK KETTN
+        GIB ZRUCK "x" OIDA
+    PASST SCHO
+PASST SCHO
+
+KLASSE Kistn VON T KAUN Bella
+    drin T
+PASST SCHO
+
+# Wem etwas fehlt, der kann es nicht: Er passt auch nicht, wo es verlangt ist.
+SOG AU s Bella = Stumm() OIDA

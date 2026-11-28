@@ -3,6 +3,8 @@
 
 BRAUCH "ordnung/wüafl.oida" OIS w OIDA
 BRAUCH "ordnung/kortn" OIS k OIDA
+BRAUCH "ordnung/zwa/kortn" OIS k2 OIDA
+BRAUCH "ordnung/schochtl" OIS schochtl OIDA
 BRAUCH "ordnung/gemeinsam.oida" OIDA
 BRAUCH mathe OIS m OIDA
 
@@ -65,6 +67,14 @@ becha.schüttl() OIDA
 SCHREIB(becha.wia_oft(), becha.wuaf >= 1) OIDA
 SOG AU stapl k.Stapl VON ZOI = k.Stapl VON ZOI([3, 5, 8]) OIDA
 SCHREIB(k.obastes(stapl, 0), k.obastes(k.Stapl VON KETTN([]), "laar")) OIDA
+
+SCHREIB("--- zwa Dateien mit demsöwn Nom, a Ordner") OIDA
+SCHREIB(k.wuaf(), k2.wuaf(), schochtl.drin()) OIDA
+
+SCHREIB("--- hinta an Punkt haaßt's, wia's dosteht") OIDA
+SOG AU blott = k.blott() OIDA
+SCHREIB(blott.wuaf, blott.obastes, blott, k.Wos.SEITN, k.Wos.RUCKN == k.Wos.SEITN) OIDA
+SCHREIB(k.Spüla("Resi").wuaf()) OIDA
 
 SCHREIB("--- übaroi und im Raum is desöwe") OIDA
 SCHREIB(rahmen("do"), w.gruass()) OIDA

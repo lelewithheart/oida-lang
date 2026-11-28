@@ -1,0 +1,4 @@
+# Ein Ordner als Bibliothek: BRAUCH "ordnung/schochtl" nimmt die Datei paket.oida darin.
+FUNKTIAUN drin() GIBT ZRUCK KETTN
+    GIB ZRUCK "aus da Schochtl" OIDA
+PASST SCHO

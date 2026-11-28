@@ -12,4 +12,5 @@
 :16:11: Des Föd 'gschüttlt' is GHEIM: Do kumman nur de Methodn von 'wüafl.Becha' söwa dazua.
 ordnung/konto.oida:13:23: Des Föd 'stand' is GHEIM: Do kumman nur de Methodn von 'Konto' söwa dazua.
 ordnung/konto.oida:13:35: De Methode 'prüf' is GHEIM: De kennan nur de Methodn von 'Konto' söwa aufruafn.
-Na, des wird nix: 14 Fehler.
+ordnung/konto.oida:27:19: 'hüf' wü ois 1. Wert a ZOI, du gibst eam a KETTN.
+Na, des wird nix: 15 Fehler.

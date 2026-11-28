@@ -17,3 +17,12 @@ PASST SCHO
 GHEIM STRUKTUR Zettl
     text KETTN
 PASST SCHO
+
+# In einer Meldung heißt auch etwas mit GHEIM so, wie es dasteht.
+GHEIM FUNKTIAUN hüf(n ZOI) GIBT ZRUCK ZOI
+    GIB ZRUCK n OIDA
+PASST SCHO
+
+FUNKTIAUN braucht_hüf() GIBT ZRUCK ZOI
+    GIB ZRUCK hüf("ans") OIDA
+PASST SCHO

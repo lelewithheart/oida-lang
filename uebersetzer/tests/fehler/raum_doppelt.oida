@@ -1,0 +1,4 @@
+# Derselbe Name hinter OIS für zwei verschiedene Dateien.
+BRAUCH "ordnung/wüafl.oida" OIS w OIDA
+BRAUCH "ordnung/konto.oida" OIS w OIDA
+SCHREIB(w.wuaf()) OIDA

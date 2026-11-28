@@ -16,3 +16,26 @@ PASST SCHO
 FUNKTIAUN obastes VON T(s Stapl VON T, ersotz T) GIBT ZRUCK T
     GIB ZRUCK s.drin[LÄNGN(s.drin) - 1] ODA HOID ersotz OIDA
 PASST SCHO
+
+# Felder, Methoden und Werte einer Aufzählung dürfen so heißen wie etwas von ganz außen
+# (wuaf, obastes, SEITN): An sie kommt man nur über einen Punkt.
+STRUKTUR Blott
+    wuaf KETTN
+    obastes ZOI
+PASST SCHO
+
+FUNKTIAUN blott() GIBT ZRUCK Blott
+    GIB ZRUCK Blott(wuaf(), SEITN) OIDA
+PASST SCHO
+
+AUFZÖHLUNG Wos
+    SEITN, RUCKN
+PASST SCHO
+
+KLASSE Spüla
+    nam KETTN
+
+    FUNKTIAUN wuaf() GIBT ZRUCK KETTN
+        GIB ZRUCK MEI.nam + " spüt " + wuaf() OIDA
+    PASST SCHO
+PASST SCHO

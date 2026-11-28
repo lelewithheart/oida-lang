@@ -1,0 +1,3 @@
+# Die Datei, die übersetzt wird, holt sich selbst als Namensraum dazu.
+BRAUCH "raum_selbst.oida" OIS i_söwa OIDA
+SCHREIB(1) OIDA

@@ -1,0 +1,5 @@
+# Heißt wie die Datei einen Ordner weiter oben (kortn.oida) und wird auch als Namensraum
+# dazugeholt: Die zwei kommen einander trotzdem nicht in die Quere.
+FUNKTIAUN wuaf() GIBT ZRUCK KETTN
+    GIB ZRUCK "de zweitn Kortn" OIDA
+PASST SCHO
