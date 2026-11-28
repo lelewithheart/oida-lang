@@ -290,9 +290,19 @@ fn pakete_holen_und_brauchen() {
     // "Das Netz": zwei Pakete. wuerfel braucht selbst kortn (seine eigene pakete.txt).
     paket_ablegen(&basis, "franz", "kortn", "HEAD", &[("paket.oida", "FUNKTIAUN ziag() GIBT ZRUCK KETTN\n    GIB ZRUCK \"Herz Ass\" OIDA\nPASST SCHO\n")]);
     // Erst einmal ohne die Liste holen, um die Prüfsumme von kortn zu erfahren.
+    // Zwischendateien kommen in einen eigenen Ordner: Am Ende darf dort nichts mehr liegen.
+    let zwischen = arbeit.join("zwischen");
+    fs::create_dir_all(&zwischen).unwrap();
     let hol = |argumente: &[&str]| {
         let quelle = format!("file:///{}", basis.display().to_string().replace('\\', "/").trim_start_matches('/'));
-        oida().arg("hol").args(argumente).current_dir(&projekt).env("OIDA_PAKET_QUELLE", quelle).output().unwrap()
+        oida()
+            .arg("hol")
+            .args(argumente)
+            .current_dir(&projekt)
+            .env("OIDA_PAKET_QUELLE", quelle)
+            .envs([("TMP", &zwischen), ("TEMP", &zwischen), ("TMPDIR", &zwischen)])
+            .output()
+            .unwrap()
     };
     let lauf = hol(&["franz/kortn"]);
     assert!(lauf.status.success(), "{}", text(&lauf.stderr));
@@ -422,6 +432,52 @@ fn pakete_holen_und_brauchen() {
         text(&lauf.stderr)
     );
     assert!(!projekt.join("pakete/fremd").exists());
+    // Geht etwas schief, bleibt alles, wie es war: Auch das Paket selbst liegt dann nicht halb da.
+    assert!(!projekt.join("pakete/schlecht").exists(), "das Paket liegt da, obwohl das Holen gescheitert ist");
+
+    // Dasselbe, wenn erst das zweite von zwei Paketen scheitert, die ein Paket braucht: Auch das
+    // erste, das schon geholt und geprüft war, kommt dann nicht an seinen Platz. (Geholt wird
+    // nach dem Alphabet: Darum heißt das gute "ans" und das, das es nicht gibt, "zwa".)
+    let liste = lies(&projekt.join("pakete.txt"));
+    let summe_kortn = liste.lines().find_map(|z| z.strip_prefix("kortn = franz/kortn ")).expect("kortn steht in der Liste").to_string();
+    paket_ablegen(
+        &basis,
+        "franz",
+        "hoib",
+        "HEAD",
+        &[
+            ("paket.oida", "FUNKTIAUN nix_do()\nPASST SCHO\n"),
+            ("pakete.txt", &format!("zwa = franz/gibtsned sha256:00\nans = franz/kortn {summe_kortn}\n")),
+        ],
+    );
+    let lauf = hol(&["franz/hoib"]);
+    assert_eq!(lauf.status.code(), Some(2));
+    let ausgabe = text(&lauf.stdout);
+    let (kortn, gibtsned) = (ausgabe.find("franz/kortn/archive/HEAD.tar.gz"), ausgabe.find("franz/gibtsned/archive/HEAD.tar.gz"));
+    assert!(matches!((kortn, gibtsned), (Some(a), Some(b)) if a < b), "erst das gute, dann das, das es nicht gibt:\n{ausgabe}");
+    assert!(text(&lauf.stderr).contains("franz/gibtsned/archive/HEAD.tar.gz"), "{}", text(&lauf.stderr));
+    for ordner in ["pakete/hoib", "pakete/ans", "pakete/zwa"] {
+        assert!(!projekt.join(ordner).exists(), "{ordner} liegt da, obwohl das Holen gescheitert ist");
+    }
+    assert_eq!(lies(&projekt.join("pakete.txt")), liste);
+    // Ohne das, das es nicht gibt, geht es, und dann ist alles da und in der Liste.
+    paket_ablegen(
+        &basis,
+        "franz",
+        "hoib",
+        "HEAD",
+        &[("paket.oida", "FUNKTIAUN nix_do()\nPASST SCHO\n"), ("pakete.txt", &format!("ans = franz/kortn {summe_kortn}\n"))],
+    );
+    let lauf = hol(&["franz/hoib"]);
+    assert!(lauf.status.success(), "{}", text(&lauf.stderr));
+    assert!(projekt.join("pakete/hoib/paket.oida").is_file() && projekt.join("pakete/ans/paket.oida").is_file());
+    let liste = lies(&projekt.join("pakete.txt"));
+    assert!(liste.contains("hoib = franz/hoib sha256:") && liste.contains(&format!("ans = franz/kortn {summe_kortn}")), "{liste}");
+    // Von alldem bleibt nichts im Ordner für Zwischendateien liegen, auch nicht nach den Fehlern.
+    let reste: Vec<String> = fs::read_dir(zwischen.join("oida"))
+        .map(|ordner| ordner.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+        .unwrap_or_default();
+    assert!(reste.is_empty(), "liegen geblieben: {reste:?}");
 }
 
 #[test]

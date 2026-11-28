@@ -1139,6 +1139,8 @@ kleines Beispiel zum Ausprobieren und zum Abschauen, wie ein Paket aufgebaut ist
   geändert, wird es nicht genommen: `Des Paket 'wüafl' is nimma desöwe wia beim letztn Moi.`
   Erst `oida hol --neich` nimmt den neuen Stand.
 - Braucht ein Paket selbst andere Pakete (es hat eine eigene `pakete.txt`), werden die mitgeholt.
+- Ganz oder gar nicht: Erst wenn alles geholt und geprüft ist, kommt es in den Ordner `pakete`
+  und in die Liste. Geht vorher etwas schief, bleibt beides, wie es war.
 - `BRAUCH "name"` sucht zuerst eine Datei `name.oida` daneben, dann einen Ordner `name`, dann
   das Paket `pakete/name`.
 - Zum Holen werden `curl` und `tar` verwendet, die bei Windows 10 und 11 und bei Linux dabei sind.

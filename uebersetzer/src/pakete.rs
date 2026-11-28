@@ -17,6 +17,10 @@
 //! kommt er als Archiv (`.tar.gz`); zum Laden und Auspacken werden `curl` und `tar` verwendet,
 //! die bei Windows 10 und 11 und bei Linux dabei sind. Hat ein Paket selbst eine `pakete.txt`,
 //! wird auch geholt, was es braucht.
+//!
+//! Ganz oder gar nicht: Erst wird alles geholt, geprüft und bereitgelegt ([`holen`]), dann kommt
+//! es an seinen Platz und in die Liste ([`einsetzen`]). Geht beim Holen etwas schief, bleibt
+//! der Ordner `pakete` so, wie er war.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -74,8 +78,9 @@ pub fn hol(argumente: &[String]) -> Result<(), String> {
             let (quelle, vorschlag) = quelle_lesen(adresse)?;
             let name = name.unwrap_or(vorschlag);
             name_pruefen(&name)?;
-            let mut geholt = Vec::new();
-            holen(&hier, &name, adresse, &quelle, None, &mut liste, &mut geholt)?;
+            let mut bereit = Vec::new();
+            let geholt = holen(&name, adresse, &quelle, None, &liste, &mut bereit);
+            einsetzen(&hier, geholt, bereit, &mut liste)?;
             liste_schreiben(&hier, &liste)?;
             // Hinter OIS steht ein Name, wie er im Programm geht: ohne Bindestrich.
             let raum = name.replace('-', "_");
@@ -92,15 +97,20 @@ pub fn hol(argumente: &[String]) -> Result<(), String> {
             }
             // Alles aus der Liste wieder holen. Ohne --neich muss dabei genau das herauskommen,
             // was zuletzt geholt wurde: Sonst hat jemand das Paket geändert.
-            let mut geholt = Vec::new();
-            for (name, eintrag) in liste.clone() {
-                if geholt.contains(&name) {
+            let mut bereit: Vec<Bereit> = Vec::new();
+            let mut ergebnis = Ok(());
+            for (name, eintrag) in &liste {
+                if bereit.iter().any(|b| b.name == *name) {
                     continue;
                 }
-                let (quelle, _) = quelle_lesen(&eintrag.woher)?;
                 let erwartet = if neu { None } else { Some(eintrag.summe.as_str()) };
-                holen(&hier, &name, &eintrag.woher, &quelle, erwartet, &mut liste, &mut geholt)?;
+                ergebnis = quelle_lesen(&eintrag.woher)
+                    .and_then(|(quelle, _)| holen(name, &eintrag.woher, &quelle, erwartet, &liste, &mut bereit));
+                if ergebnis.is_err() {
+                    break;
+                }
             }
+            let geholt = einsetzen(&hier, ergebnis, bereit, &mut liste)?;
             liste_schreiben(&hier, &liste)?;
             println!("Passt! {} da: {}.", if geholt.len() == 1 { "A Paket is" } else { "De Pakete san" }, geholt.join(", "));
         }
@@ -151,22 +161,32 @@ fn name_pruefen(name: &str) -> Result<(), String> {
     if passt { Ok(()) } else { Err(format!("'{name}' geht ned ois Nom fia a Paket: nur Buchstobn, Ziffan, '_' und '-'.")) }
 }
 
-/// Holt ein Paket in `<wo>/pakete/<name>` und trägt es in die Liste ein. Steht `erwartet` da,
-/// muss der Inhalt diese Prüfsumme haben. Was das Paket selbst braucht, wird auch geholt.
+/// Ein Paket, das geholt und geprüft ist und in einem Arbeitsordner bereitliegt. An seinen Platz
+/// kommt es erst, wenn alles andere auch bereitliegt ([`einsetzen`]).
+struct Bereit {
+    name: String,
+    /// Der Arbeitsordner; er wird am Schluss wieder weggeräumt.
+    arbeit: PathBuf,
+    /// Darin: das Paket, so wie es nach `pakete/<name>` kommt.
+    inhalt: PathBuf,
+    eintrag: Eintrag,
+}
+
+/// Holt ein Paket und legt es bereit, samt allem, was es selbst braucht. Steht `erwartet` da,
+/// muss der Inhalt diese Prüfsumme haben. An dem, was schon da ist, ändert sich hier noch nichts.
 fn holen(
-    wo: &Path,
     name: &str,
     woher: &str,
     quelle: &Quelle,
     erwartet: Option<&str>,
-    liste: &mut BTreeMap<String, Eintrag>,
-    geholt: &mut Vec<String>,
+    liste: &BTreeMap<String, Eintrag>,
+    bereit: &mut Vec<Bereit>,
 ) -> Result<(), String> {
-    if geholt.len() > 200 {
+    if bereit.len() > 200 {
         return Err("Des san z'vü Pakete, de si gegnseitig brauchn. Do stimmt wos ned.".to_string());
     }
     let arbeit = arbeitsordner()?;
-    let ergebnis = (|| {
+    let geprueft = (|| {
         let inhalt = match quelle {
             Quelle::Ordner(ordner) => ordner.clone(),
             Quelle::Github { wer, repo, stand } => {
@@ -199,7 +219,7 @@ fn holen(
                 "Des is ka Paket fia OIDA: Do drin gibt's ka '{name}.oida' und ka 'paket.oida'. (Gschaut hob i in {woher}.)"
             ));
         }
-        // Erst daneben ablegen und prüfen, dann das alte ersetzen: So bleibt nie ein halbes Paket liegen.
+        // Nur was zum Paket gehört, kommt in den Ordner, der später an seinen Platz kopiert wird.
         let neu = arbeit.join("neu");
         kopier_ordner(&inhalt, &neu)?;
         let summe = pruefsumme(&neu)?;
@@ -212,32 +232,63 @@ fn holen(
                  Wüst den neichn Staund hom, daun: oida hol --neich"
             ));
         }
-        let ziel = wo.join(ORDNER).join(name);
-        if ziel.exists() {
-            fs::remove_dir_all(&ziel).map_err(|e| format!("I kaun des oide {} ned wegtuan: {e}", ziel.display()))?;
-        }
-        kopier_ordner(&neu, &ziel)?;
-        liste.insert(name.to_string(), Eintrag { woher: woher.to_string(), summe });
-        geholt.push(name.to_string());
-
-        // Was das Paket selbst braucht: seine eigene Liste. Was es hier schon gibt, bleibt.
-        for (innen_name, eintrag) in liste_lesen(&ziel)? {
-            if liste.contains_key(&innen_name) || geholt.contains(&innen_name) {
-                continue;
-            }
-            let (innen_quelle, _) = quelle_lesen(&eintrag.woher)?;
-            // Ein Ordner in der Liste eines Pakets wäre ein Ordner auf dem Rechner von wem anderen.
-            if matches!(innen_quelle, Quelle::Ordner(_)) {
-                return Err(format!(
-                    "Des Paket '{name}' braucht '{innen_name}' aus an Ordner ({}), den's nur beim Schreiba gibt. Des kaun i ned hoin.",
-                    eintrag.woher
-                ));
-            }
-            holen(wo, &innen_name, &eintrag.woher, &innen_quelle, Some(&eintrag.summe), liste, geholt)?;
-        }
-        Ok(())
+        Ok((neu, summe))
     })();
-    let _ = fs::remove_dir_all(&arbeit);
+    let (inhalt, summe) = match geprueft {
+        Ok(fertig) => fertig,
+        Err(meldung) => {
+            let _ = fs::remove_dir_all(&arbeit);
+            return Err(meldung);
+        }
+    };
+    // Ab hier liegt es bereit; wer es dann auch braucht (oder es selbst im Kreis), holt es nicht noch einmal.
+    let eigene_liste = liste_lesen(&inhalt);
+    bereit.push(Bereit { name: name.to_string(), arbeit, inhalt, eintrag: Eintrag { woher: woher.to_string(), summe } });
+
+    // Was das Paket selbst braucht: seine eigene Liste. Was es hier schon gibt, bleibt.
+    for (innen_name, eintrag) in eigene_liste? {
+        if liste.contains_key(&innen_name) || bereit.iter().any(|b| b.name == innen_name) {
+            continue;
+        }
+        let (innen_quelle, _) = quelle_lesen(&eintrag.woher)?;
+        // Ein Ordner in der Liste eines Pakets wäre ein Ordner auf dem Rechner von wem anderen.
+        if matches!(innen_quelle, Quelle::Ordner(_)) {
+            return Err(format!(
+                "Des Paket '{name}' braucht '{innen_name}' aus an Ordner ({}), den's nur beim Schreiba gibt. Des kaun i ned hoin.",
+                eintrag.woher
+            ));
+        }
+        holen(&innen_name, &eintrag.woher, &innen_quelle, Some(&eintrag.summe), liste, bereit)?;
+    }
+    Ok(())
+}
+
+/// Stellt alles, was bereitliegt, an seinen Platz in `<wo>/pakete` und trägt es in die Liste
+/// ein; gibt die Namen zurück. Ist beim Holen etwas schiefgegangen (`geholt` ist ein Fehler),
+/// wird nichts davon genommen: Dann bleibt alles so, wie es vorher war. Die Arbeitsordner
+/// werden in jedem Fall weggeräumt.
+fn einsetzen(
+    wo: &Path,
+    geholt: Result<(), String>,
+    bereit: Vec<Bereit>,
+    liste: &mut BTreeMap<String, Eintrag>,
+) -> Result<Vec<String>, String> {
+    let ergebnis = geholt.and_then(|()| {
+        let mut namen = Vec::new();
+        for paket in &bereit {
+            let ziel = wo.join(ORDNER).join(&paket.name);
+            if ziel.exists() {
+                fs::remove_dir_all(&ziel).map_err(|e| format!("I kaun des oide {} ned wegtuan: {e}", ziel.display()))?;
+            }
+            kopier_ordner(&paket.inhalt, &ziel)?;
+            liste.insert(paket.name.clone(), paket.eintrag.clone());
+            namen.push(paket.name.clone());
+        }
+        Ok(namen)
+    });
+    for paket in &bereit {
+        let _ = fs::remove_dir_all(&paket.arbeit);
+    }
     ergebnis
 }
 
